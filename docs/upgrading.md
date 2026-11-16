@@ -23,6 +23,10 @@ To see whether you are up to date: `<project-dir>/.scaffold-version` is the kit 
 
 There is no `<kit>/bin/upgrade.sh` any more: the kit is one binary and a checkout of it is not needed.
 
+## 2.1.1 -> 2.1.2: task `scope` is optional
+
+No manual step. `generate-tasks` no longer asks the analyst for paths and writes no `scope`; the developer finds the files in the repo at `spec-driven-dev`. The task contract accepts a task without `scope` (one that has it still works, and its `externalId` is unchanged). A new task without `scope` is keyed on its acceptance criteria (and `slug`) alone.
+
 ## 2.1.0 -> 2.1.1: `spec promote` opens the PR
 
 No manual step. `sdkit spec promote <id>` now commits the approval, pushes the branch and opens the promote PR itself (it checks that the PR host is ready first, and rolls the commit back when the push fails). It used to stop after the local commit.
