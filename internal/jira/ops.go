@@ -1,6 +1,7 @@
 package jira
 
 import (
+	"os"
 	"regexp"
 	"strings"
 )
@@ -47,10 +48,20 @@ func (c *Config) project(fallback string) string {
 }
 
 // Upsert creates or updates the subtask labelled sdkit-ext-<ext>; it never sets an assignee. warn gets non-fatal notes.
+func clip(s string) string {
+	if s = strings.TrimSpace(s); len(s) > 40 {
+		return s[:40] + "..."
+	}
+	return s
+}
+
 func (c *Config) Upsert(ext, in string, warn func(string)) (key, action string, err error) {
 	t, found, obj := TaskFrom(in)
 	if !found || !obj {
-		return "", "", fail(4, "task JSON is not an object")
+		if st, e := os.Stat(strings.TrimSpace(in)); e == nil && !st.IsDir() {
+			return "", "", fail(4, "task JSON is not an object: %q is a file path (pass the JSON text itself or use an object, not a path)", strings.TrimSpace(in))
+		}
+		return "", "", fail(4, "task JSON is not an object: expected the output of `sdkit tasks render <tasks.json> <ref> --json` (a JSON object with summary, description and the contract fields), got %q", clip(in))
 	}
 	if err = Check(t); err != nil {
 		return

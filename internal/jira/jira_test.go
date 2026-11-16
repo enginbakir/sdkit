@@ -24,3 +24,10 @@ func TestContractAndToken(t *testing.T) {
 		t.Error("token in sdkit.env accepted")
 	}
 }
+
+func TestUpsertErrorSaysWhatIsExpected(t *testing.T) {
+	_, _, err := (&Config{}).Upsert("s:t1", "not json at all", nil)
+	if err == nil || !strings.Contains(err.Error(), "render <tasks.json> <ref> --json") {
+		t.Fatalf("the message must name what to pass: %v", err)
+	}
+}

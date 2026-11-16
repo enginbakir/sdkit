@@ -133,6 +133,16 @@ func Run(env Env, args []string) int {
 		}
 		fmt.Fprintln(r.Out, ok)
 	case "ids":
+		if len(rest) > 0 && rest[0] == "--list" { // ref<TAB>externalId, one per line: what the name promises
+			if err := d.Keys(); err != nil {
+				fmt.Fprintln(r.Err, err)
+				return exitFail
+			}
+			for _, t := range d.Tasks {
+				fmt.Fprintf(r.Out, "%s\t%s\n", t.Ref, t.ExternalID)
+			}
+			return 0
+		}
 		out, err := d.IDs()
 		if err != nil {
 			fmt.Fprintln(r.Err, err)

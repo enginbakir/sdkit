@@ -66,10 +66,18 @@ func runJira(args []string) int {
 		}
 	case "upsert":
 		if arg(0) == "" || arg(1) == "" {
-			return usage("upsert EXTERNAL_ID JSON")
+			return usage("upsert EXTERNAL_ID JSON|FILE|-")
+		}
+		// the JSON may be given as text, as a file path, or as - for stdin (the `render --json` output)
+		body := a[1]
+		if body == "-" {
+			b, _ := io.ReadAll(os.Stdin)
+			body = string(b)
+		} else if b, rerr := os.ReadFile(body); rerr == nil {
+			body = string(b)
 		}
 		var key, act string
-		if key, act, err = c.Upsert(a[0], a[1], func(m string) { fmt.Fprintln(os.Stderr, "jira: "+m) }); err == nil {
+		if key, act, err = c.Upsert(a[0], body, func(m string) { fmt.Fprintln(os.Stderr, "jira: "+m) }); err == nil {
 			out = map[string]any{"key": key, "externalId": a[0], "action": act}
 		}
 	case "comment":
