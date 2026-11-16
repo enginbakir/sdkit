@@ -1,8 +1,10 @@
 # spec-driven-kit: server-side gate. Fails a pull request whose code change has no committed attestation for exactly that diff
 # (and, for medium/high risk, no independent verifier PASS). Local hooks can be skipped with --no-verify; this cannot.
-# The gate runs the base branch's own sdd.sh (and reads the base branch's settings), so a pull request cannot edit the check that judges it.
+# The gate installs the sdkit release pinned by the base branch's copy of this file (checksum verified) and reads the base branch's settings,
+# so a pull request cannot edit the check that judges it. Raise SDKIT_VERSION by merging a change to it into the base branch.
 # Protect __KIT_DIR__/ and this CI file with CODEOWNERS: the attestation is a committed file, it proves the flow ran for this diff, not who ran it.
 # Merge this into your existing bitbucket-pipelines.yml if you have one. Keep your own build/test steps next to it.
+# SDKIT_VERSION: __SDKIT_VERSION__ (the version of sdkit the gate runs; read from the base branch)
 pipelines:
   pull-requests:
     '**':
@@ -12,11 +14,13 @@ pipelines:
           clone:
             depth: full
           script:
-            - apk add --no-cache bash jq coreutils perl-utils
+            - apk add --no-cache curl
             - git fetch origin "$BITBUCKET_PR_DESTINATION_BRANCH"
             - BASE="origin/$BITBUCKET_PR_DESTINATION_BRANCH"
             - |
-              gate="$(mktemp -d)"; mkdir -p "$gate/scripts"
-              if git cat-file -e "$BASE:__KIT_DIR__/scripts/sdd.sh" 2>/dev/null; then for f in sdd.sh env.sh resolve-base.sh; do git show "$BASE:__KIT_DIR__/scripts/$f" > "$gate/scripts/$f" 2>/dev/null || rm -f "$gate/scripts/$f"; done
-              else echo "first adoption: the base branch has no gate yet, running this branch's"; cp __KIT_DIR__/scripts/sdd.sh __KIT_DIR__/scripts/env.sh __KIT_DIR__/scripts/resolve-base.sh "$gate/scripts/"; fi
-              VERIFY_BASE="$BASE" CLAUDE_PROJECT_DIR="$PWD" bash "$gate/scripts/sdd.sh" ci-check
+              v="$(git show "$BASE:bitbucket-pipelines.yml" 2>/dev/null || cat "bitbucket-pipelines.yml")"; v="$(printf '%s\n' "$v" | sed -n 's/^[# ]*SDKIT_VERSION: *"*\([0-9][^" ]*\).*/\1/p' | head -1)"
+              [ -n "$v" ] || { echo "no SDKIT_VERSION in the gate file"; exit 1; }
+              d="$(mktemp -d)"; u="https://github.com/wecii/sdkit/releases/download/v$v"; a="sdkit_${v}_linux_amd64.tar.gz"
+              curl -fsSL -o "$d/$a" "$u/$a" && curl -fsSL -o "$d/checksums.txt" "$u/checksums.txt"
+              (cd "$d" && grep " $a\$" checksums.txt | sha256sum -c - && tar -xzf "$a" sdkit)
+              PATH="$d:$PATH" VERIFY_BASE="$BASE" sdkit sdd ci-check

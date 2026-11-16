@@ -1,31 +1,113 @@
 # Upgrading projects
 
-The kit lives in two places, and each is updated separately.
+The kit lives in three places, and each is updated separately.
 
 | Part | Where | How it is updated |
 |---|---|---|
-| **Plugin side** (skills, roles, hooks, scripts) | Claude Code's plugin cache | The version is bumped in the kit repo and the change reaches the marketplace source (the kit's git remote); the plugin is refreshed in the project |
-| **Project side** (`<project-dir>`: `project.md`, `project.env`, `rules/`, ...) | The project's own repo | `bin/upgrade.sh`: adds new files, does not touch your files |
+| **The `sdkit` binary** | Your machine (on `PATH`) | macOS/Linux: `brew upgrade sdkit`. Windows: `scoop update sdkit`, or unpack the release zip over the old one. |
+| **Plugin side** (skills, roles, hook wiring) | Claude Code's plugin cache | The version is bumped in the kit repo and reaches the marketplace source; refresh it with `/plugin` |
+| **Project side** (`<project-dir>`: `project.md`, `sdkit.env`, `rules/`, ...) | The project's own repo | `sdkit upgrade` in each repo: adds new files, does not touch your files |
 
-## Steps (Claude Code, plugin mode)
+## Steps (2.0 and later)
 
-1. **Release in the kit:** the changes must have landed on the branch the kit's marketplace watches (the default branch) and the `plugin.json` + `marketplace.json` version must have been bumped. Without a version bump Claude Code does not see the new version.
-2. **Refresh the plugin in the project:** in Claude Code, update the `spec-driven-kit` marketplace with `/plugin`, then update the plugin; then restart Claude Code (the session). Command names may change between versions; the `/plugin` menu always works.
-3. **Upgrade the project side:** from a checkout of the kit
+1. **Update the binary:** `brew upgrade sdkit` (macOS, Linux), `scoop update sdkit` (Windows), or download the zip of the release and replace `sdkit.exe`. `sdkit version` prints the version.
+2. **Refresh the plugin in Claude Code:** `/plugin`, update the `spec-driven-kit` marketplace, then the plugin; restart the session. Other hosts have no plugin; step 3 is enough.
+3. **Upgrade each repo:** `cd` into it and run
    ```bash
-   <kit>/bin/upgrade.sh /path/to/project
+   sdkit upgrade
    ```
-   It finds the host, mode and stack by itself. It adds new files (e.g. `rules/test-first.md`), adds missing lines to `.gitignore`, runs `sync.sh` in copy mode, and runs `doctor.sh` at the end.
-4. Check "Manual steps per version" below, review with `git diff`, commit.
+   It finds the host, mode and stack by itself, adds new files (e.g. a new rule), adds missing lines to `.gitignore`, rewrites the wiring (see "2.0.0" below) and ends with `sdkit doctor`. Several repos: run it once in each.
+4. Read "2.0.0" and the later "Manual steps per version" sections, review with `git diff`, commit.
 
-To see whether you are up to date: `<project-dir>/.scaffold-version` is the kit version the project was last upgraded to; the plugin side's version is shown in the `/plugin` menu.
+To see whether you are up to date: `<project-dir>/.scaffold-version` is the kit version the repo was last upgraded to; the plugin version is shown in the `/plugin` menu.
 
-Copy mode and non-Claude hosts (Codex, OpenCode, Cursor, Gemini): there is no plugin; step 3 is enough (`sync.sh` updates the managed files and shows a diff for conflicts where you edited them locally).
+There is no `<kit>/bin/upgrade.sh` any more: the kit is one binary and a checkout of it is not needed.
 
-Several projects: run `upgrade.sh` once for each. To do it in bulk:
+## 2.0.0: one Go binary, no bash, Windows support
+
+2.0.0 replaces every bash script, hook and git hook with the `sdkit` binary (`sdkit hook <event>`, `sdkit sdd ...`, `sdkit run-role`, ...). The files, the formats and the verifier's `DOD / FINDINGS / VERIFY / VERDICT` block are unchanged. Windows (amd64, arm64) is supported next to macOS and Linux.
+
+### What to do
+
+| Step | Where | Why |
+|---|---|---|
+| Install or update `sdkit` and keep it on `PATH` | each machine | hooks, git hooks and CI call `sdkit`, not a path |
+| `sdkit upgrade` | each repo | removes the 1.x copies, rewrites the wiring |
+| `git config core.hooksPath .githooks` | each clone | the shims are committed, the setting is per clone |
+| Refresh the plugin with `/plugin` | Claude Code | `hooks.json` now calls `sdkit hook` |
+| Re-init or copy the CI job from `templates/ci/` | each repo with the gate | pinned version and checksum, see below |
+| Re-verify tasks that were open before the upgrade | open tasks | see "Fingerprint" |
+
+### `spec-driven-dev` no longer uses OpenSpec
+
+The skill writes no spec and calls no `openspec-*` skill: the spec comes from `generate-specs` (analyst repo, approved through the PR) or, standalone, is the approved `plan.md`. Standalone, the orchestrator now writes `proposal.md`, `tasks.md` and `design.md` from the plan into `<project-dir>/work/<slug>/` instead of `openspec/changes/<change>/`; pass that `proposal.md` to `sdkit sdd start --proposal`. Closeout no longer runs `openspec-sync-specs` / `openspec-archive-change`.
+
+Only an analyst repo needs the `openspec` CLI and `openspec/` now. `sdkit init` and `sdkit doctor` set up and check them for `SDKIT_ENV=analyst` only, and `check-tools` asks for the CLI only when `openspec/` exists. In a developer or standalone repo an existing `openspec/` and the `openspec-*` skills are harmless; delete them if you do not use them. Nothing is removed for you.
+
+### What `sdkit upgrade` removes, rewrites and keeps
+
+| Action | Files |
+|---|---|
+| **Removes** (only when unedited, i.e. identical to the 1.x copy it installed) | `.sdkit/scripts/`, `.sdkit/hooks/`, `.sdkit/adapters.d/`, `.claude/hooks/` |
+| **Rewrites** | the kit's own hook entries in `.claude/settings.local.json` / `settings.json`, Cursor `.cursor/hooks.json` and Gemini CLI `.gemini/settings.json`: an old 1.x entry (`.../hooks/<name>.sh`, `adapt.sh`) is replaced by `sdkit hook <event>`; your own entries stay. The managed copies (the `.githooks/` shims, the OpenCode guard plugin) are updated by the sync step when you have not edited them; an edited one is reported as a CONFLICT and kept (`sdkit sync --force` takes the kit's) |
+| **Codex** | has no hook wiring (`.codex/config.toml` only holds the role definitions); its backstop is the git hooks, so set `core.hooksPath` below |
+| **Keeps and reports** | a retired copy you edited: it is listed as `kept` so you can port the change, then delete it yourself |
+| **Edits settings files** | `sdkit init` (run by upgrade) appends settings that are missing from `sdkit.env` and `sdkit.local.env` and never overwrites a value. For a repo last upgraded before 1.3.2, upgrade also turns an empty `TELEMETRY=` into `TELEMETRY=1` and `ROUTING=off` into `ROUTING=on` in both files, once |
+| **Never touches** | `project.md`, `rules/`, `settings.json` (the project's own files) |
+
+Upgrade does not scan for old wiring. It prints `removed` / `kept` for the retired files and ends with `sdkit doctor`, which checks that the Claude settings are valid JSON and enable the plugin (or, in copy mode, that the copied hooks are executable and wired), that the git hooks are active (`core.hooksPath`), and that CI runs the gate. A leftover 1.x hook entry you wrote yourself is not reported: search your settings for `.sh`.
+
+### Git hooks path
+
+The shims in `.githooks/` are committed; the path is a per-clone git setting. Every developer runs once per clone:
+
 ```bash
-for p in ~/code/projectA ~/code/projectB; do <kit>/bin/upgrade.sh "$p"; done
+git config core.hooksPath .githooks
 ```
+
+`sdkit install` is dropped (D3): it registered the kit's home so a git hook could find the scripts. The hook now runs `sdkit` from `PATH`, and `sdkit where` prints the data directory when you need it.
+
+### CI template change
+
+The shipped CI job no longer vendors scripts from the base branch. It downloads a **pinned** `sdkit` release and checks its **checksum** before running `sdkit sdd ci-check`. The pinned version is read from the **base branch's** committed file, so a pull request cannot change the gate it is judged by. Re-run `sdkit init --ci <host>` or copy the job from `templates/ci/`, and set the pin to the version you installed. Keep CODEOWNERS on `.sdkit/` and the CI file.
+
+### jq is not needed
+
+The kit no longer needs `jq`; it stays optional for your own `VERIFY_CMD`.
+
+### Pre-1.0 layouts (D2)
+
+`bin/migrate.sh` is gone. A repo on `.agentkit`, `.claude` or `.codex` with `project.env` must first run the **last 1.x** `<kit-1.x>/bin/upgrade.sh --migrate` (it moves the files to `.sdkit/`, `project.env` to `sdkit.env`), commit, and only then run `sdkit upgrade` with 2.0. `sdkit` 2.0 stops on a pre-1.0 layout and says so.
+
+### Windows
+
+Hooks exit only 0 or 2 and guards normalise backslashes, so Claude Code works with or without Git Bash. `VERIFY_CMD` and the other command settings run through `sh` when Git for Windows is present, else `cmd /C`; PowerShell and cmd are supported, write the command for the shell you have. **Caveat per host:** the Windows hook wiring for Codex, Gemini CLI and OpenCode is unverified until the first Windows CI run; Report what you see.
+
+### Behaviour changes
+
+| Area | Change |
+|---|---|
+| Settings files | `$NAME` expands only from settings read earlier; process variables such as `$HOME` no longer expand. |
+| State lock | A lock wait gives up after 30 s with an error; 1.x waited forever. |
+| Verify policies | `.sh` policies in `verify.d/` run through `sh` without the executable bit, so `chmod -x` no longer disables one: rename it to start with `_`. Passing steps no longer echo their output. |
+| Fingerprint, `audit.jsonl` | `<project-dir>/audit.jsonl` is no longer part of the diff fingerprint, so a Jira or litellm call no longer makes evidence stale (it did in 1.x). |
+| Fingerprint, sort order | Same algorithm (D11), but file names sort by byte (C locale). 1.x used the locale's `sort`: for mixed-case paths under a non-C locale the fingerprint differs once, so re-verify an open task after the upgrade. |
+| Usage | Prices resolve by model id from `pricing.json` only; provider- and date-windowed rates and the flat v1 table are gone. `usage live pull` (Codex rollout) is not ported. Invalid JSON lines are skipped instead of failing the report. |
+| Hook output | The Claude Code hook JSON is compact, not pretty-printed. |
+| Managed mode | `SDD_JIRA_CMD` is gone; Jira calls use the built-in client (`JIRA_BASE_URL` can point at a bridge). |
+| Guards | `guard-phase` and `guard-pr` do nothing in a repo without `.sdkit/sdkit.env`; 1.x denied there. |
+
+### Kept on purpose, fixed after 2.0
+
+- `guard-readonly` denies `sed -n`, strips only one `env`/`sudo` prefix; `guard-secrets` matches the raw path. `advance red` only needs a non-zero exit.
+- **Known bug (also in 1.x):** `sdkit upgrade` re-runs `init`, which records the hash of a locally edited managed copy, so the next `sdkit sync` overwrites that edit. Until it is fixed, commit or copy aside a local edit of a managed file before `upgrade`.
+
+### Cut from 2.0
+
+- `scripts/test-select.sh` and `tests/test-map.conf`: `go test ./...` runs the whole suite.
+- The `bench/` harness (costbase, tbench, history) is kept as is under `attic/bench/`, unmaintained and out of the build.
+
+The "2.0.0 (bash era notes)" section below was written during the bash era and describes the settings parser, risk floor and gate hardening that shipped in 2.0.0; its script names (`scripts/env.sh`, `sdd.sh`, ...) are now `sdkit` subcommands.
 
 ## Jira and pull-request defaults (1.8.0)
 
@@ -108,9 +190,9 @@ In 1.0.0 the settings file was personal and git-ignored, which left the team's o
 - `sdkit upgrade --migrate` from a pre-1.0 repo does the same split while moving `project.env` to `sdkit.env` (the file stays in git, renamed).
 - A pre-1.0 layout keeps a single `project.env` with every setting; both templates' new settings are appended to it.
 
-## 2.0.0 (not yet released): settings files are parsed, not run; optional risk floor
+## 2.0.0 (bash era notes): settings files are parsed, not run; optional risk floor
 
-This is a breaking change, so it targets 2.0.0 (the version files are not bumped yet). Settings files are parsed (below); everything else in this section needs no action.
+This is a breaking change, so it shipped in 2.0.0. Settings files are parsed (below); everything else in this section needs no action.
 
 ### Settings files are parsed, not run
 

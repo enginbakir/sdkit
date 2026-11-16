@@ -1,0 +1,33 @@
+# captured from the 1.x scripts/redact.sh and scripts/audit.sh (oracle)
+== in
+plain line stays
+key AKIA<>ABCDEFGHIJKLMNOP end
+ghp_<>abcdefghijklmnopqrstuvwx and github_pat_<>abcdefghij0123456789ab
+xoxb<>-1234567890-abcdef
+sk<>-ant-abcdefghijklmnop12 sk<>-abcdefghijklmnopqrst
+eyJhbGciOiJI.eyJzdWIiOiIx.SflKxwRJSMeK
+Authorization: Bearer abcdefghij.klmnop-QRS=
+Bearer short
+Password = "hunter22x" and API_KEY: abc123def
+token=abc=defghi
+--<>---BEGIN RSA PRIVATE KEY-----
+MIIBOgIBAAJBAK
+--<>---END RSA PRIVATE KEY-----
+after key
+== out
+plain line stays
+key [REDACTED:aws-key-id] end
+[REDACTED:github-token] and [REDACTED:github-token]
+[REDACTED:slack-token]
+[REDACTED:api-key] [REDACTED:api-key]
+[REDACTED:jwt]
+Authorization: Bearer [REDACTED:bearer]
+Bearer short
+Password = "[REDACTED:value]" and API_KEY: [REDACTED:value]
+token=abc=[REDACTED:value]
+[REDACTED:private-key]
+after key
+== chain
+{"ts":"2026-11-13T15:04:24Z","type":"egress","prev":"0000","host":"gw.corp","bytes":"5","h":"8cf76404802d89e8c8e47c337de97c43735769aab9c0e1d9f6679f9045e9fa17"}
+{"ts":"2026-11-13T15:04:24Z","type":"adapter.exec","prev":"8cf76404802d89e8c8e47c337de97c43735769aab9c0e1d9f6679f9045e9fa17","role":"verifier","note":"[REDACTED:api-key] \"q\"","h":"602ce6b7f9c639921d8156b9f24445e316f2aec2500dfe0f9a72fdf3bfe7e5c3"}
+{"ts":"2026-11-13T15:04:24Z","type":"policy.fail","prev":"602ce6b7f9c639921d8156b9f24445e316f2aec2500dfe0f9a72fdf3bfe7e5c3","reason":"é✓","h":"408e92d9eb37b47dc57af1d0fa7e34a914412cdec15d1237374ba12903ce7699"}

@@ -1,0 +1,22 @@
+# cmd: sdkit version
+# env: BASH_ENV=.probe.sh
+# env: PROBE_MODE=report
+exit: 0
+sdkit: sdkit.env:20: ignored (unsupported syntax; see docs/upgrading.md, "Settings files are parsed")
+sdkit: sdkit.env:21: ignored (unsupported syntax; see docs/upgrading.md, "Settings files are parsed")
+sdkit: sdkit.env:22: ignored (unsupported syntax; see docs/upgrading.md, "Settings files are parsed")
+sdkit: sdkit.env:23: ignored (unsupported syntax; see docs/upgrading.md, "Settings files are parsed")
+sdkit: sdkit.env:24: ignored (unsupported syntax; see docs/upgrading.md, "Settings files are parsed")
+sdkit: sdkit.env:25: ignored (unsupported syntax; see docs/upgrading.md, "Settings files are parsed")
+sdkit: sdkit.env:26: ignored (unsupported syntax; see docs/upgrading.md, "Settings files are parsed")
+sdkit: sdkit.env:27: ignored (unsupported syntax; see docs/upgrading.md, "Settings files are parsed")
+sdkit: sdkit.env:28: ignored (unsupported syntax; see docs/upgrading.md, "Settings files are parsed")
+sdkit: sdkit.env:29: ignored (unsupported syntax; see docs/upgrading.md, "Settings files are parsed")
+sdkit: sdkit.env:30: ignored (unsupported syntax; see docs/upgrading.md, "Settings files are parsed")
+sdkit: sdkit.env:31: ignored (unsupported syntax; see docs/upgrading.md, "Settings files are parsed")
+sdkit: sdkit.env:32: ignored (unsupported syntax; see docs/upgrading.md, "Settings files are parsed")
+sdkit: sdkit.env:33: ignored (unsupported syntax; see docs/upgrading.md, "Settings files are parsed")
+sdkit: sdkit.env:34: ignored (unsupported syntax; see docs/upgrading.md, "Settings files are parsed")
+sdkit: sdkit.env:35: ignored (unsupported syntax; see docs/upgrading.md, "Settings files are parsed")
+sdkit: sdkit.env:36: ignored (unsupported syntax; see docs/upgrading.md, "Settings files are parsed")
+bad=17

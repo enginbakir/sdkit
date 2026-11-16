@@ -1,0 +1,5 @@
+DOD
+- D1: parser keeps the format | PASS | verdict_test.go:12
+FINDINGS
+- none
+VERDICT: PASS

@@ -1,0 +1,35 @@
+# sh: printf 'BASE_BRANCH=main\nRISK_FLOOR_GLOBS=high:src/*\n' > .sdkit/sdkit.env
+# sdd: floor --validate
+# sdd: floor
+# sh: echo change >> src/app.go
+# sdd: floor
+# sdd: start t1 --risk medium --proposal docs/proposal.md
+# sdd: advance proposed
+# sdd: advance red --test-cmd 'test -f fixed'
+# sh: touch fixed
+# sdd: advance green
+# sh: printf 'BASE_BRANCH=main\nRISK_FLOOR_GLOBS=high:\n' > .sdkit/sdkit.env
+# sdd: floor --validate
+$ sdd floor --validate
+exit: 0
+$ sdd floor
+low
+exit: 0
+$ sdd floor
+high src/app.go
+exit: 0
+$ sdd start t1 --risk medium --proposal docs/proposal.md
+task 't1' opened (risk=medium, profile=standard, phase=intake). Write the proposal with a Definition of Done, then: sdkit sdd advance proposed
+exit: 0
+$ sdd advance proposed
+phase: proposed
+exit: 0
+$ sdd advance red --test-cmd 'test -f fixed'
+phase: red
+exit: 0
+$ sdd advance green
+sdd: the diff touches 'src/app.go', which needs risk high or higher (RISK_FLOOR_GLOBS), but this task is 'medium'. A label cannot be lowered to fit a diff: ask the user to confirm the higher label, run 'sdkit sdd abort', and open the task again with --risk high.
+exit: 1
+$ sdd floor --validate
+'high:' is not <low|medium|high>:<glob>
+exit: 2

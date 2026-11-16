@@ -1,12 +1,14 @@
 # Structured agent contracts and trusted handoffs (F02)
 
+> **History.** This record was written for the 1.x (bash) kit. Commands are shown by their 2.0 names (`sdkit <command>`); the `tests/*.test.sh` suites, `bench/` and `jq` it names belong to 1.x (2.0 replaced the suites with a small Go test set, and the harness lives in `attic/bench/`, unmaintained). The design and the decisions still stand; see [guide.md](guide.md) for how 2.0 is built.
+
 Status: **implemented**, on 1.1.0, on top of the F00/F00.5/F01 changes; the version was not bumped. This document is F02's spec, design, task list and verification record. Goal: the work given to an agent (the handoff) and the answer the agent returns should be structured as far as **the machine can verify**, but without creating extra context, extra agent calls or duplicate state for the agents. Principle: *structured where the machine needs a guarantee, short where the agent needs context.*
 
 This release makes no token or cost savings claim: the simulated benchmark measures only **bytes, events and script calls** (section 7); the token impact cannot be stated until it is measured with a real run (`--real`, user approval), and it was not measured.
 
 ## 1. Spec
 
-Scope: a versioned handoff contract (call + result), a single script that validates it (`scripts/contract.sh`), hooking it into the supported boundaries (Claude Code hook, `run-role.sh`), a `contract.check` event in F01 telemetry, contract benchmark fixtures, tests.
+Scope: a versioned handoff contract (call + result), a single script that validates it (`sdkit contract`), hooking it into the supported boundaries (Claude Code hook, `sdkit run-role`), a `contract.check` event in F01 telemetry, contract benchmark fixtures, tests.
 Out of scope (deliberately): changes to agent behaviour, model routing, risk policy or the phase machine; validation by an extra agent/LLM; a JSON schema library or an external service; hook claims for Cursor/Gemini/OpenCode/Codex that are not verified live.
 
 Acceptance criteria (DoD) and their evidence (`tests/contract.test.sh`, 197 cases, all pass; section 8):
@@ -14,10 +16,10 @@ Acceptance criteria (DoD) and their evidence (`tests/contract.test.sh`, 197 case
 | # | Criterion | Evidence section (test) |
 |---|---|---|
 | D1 | The contract is versioned and documented (`CONTRACT: 1`, `HANDOFF-RESULT/1`); an unsupported version is refused | "malformed output", "handoff validation" |
-| D2 | The supported boundaries (Claude hook, `run-role.sh`, `contract.sh` by hand) validate the contract deterministically | "the Claude Code hook", "run-role.sh" |
+| D2 | The supported boundaries (Claude hook, `sdkit run-role`, `sdkit contract` by hand) validate the contract deterministically | "the Claude Code hook", "sdkit run-role" |
 | D3 | A broken/inconsistent contract can never count as valid: broken JSON/prose, missing field, unknown/duplicate field, role, task, ID, unsafe path, missing artifact, out of scope | "malformed output", "identity", "artifacts of a result" |
 | D4 | Success reported by the agent cannot bypass independent verification: a valid contract grants no phase transition and records no verdict | "the verifier stays independent" |
-| D5 | Existing gates stay intact: `sdd.sh`, `parse-verdict.sh` and `record-verdict.sh` do not know about the contract | same section (`grep` tests) + existing suites unchanged |
+| D5 | Existing gates stay intact: `sdkit sdd`, `sdkit verdict` and `record-verdict` do not know about the contract | same section (`grep` tests) + existing suites unchanged |
 | D6 | Telemetry records contract results (valid/invalid, version, role, ID, status, category, size); no second ledger; missing data is not counted as 0 | "telemetry" |
 | D7 | Benchmark fixtures are reproducible; the F01 baseline is bit-for-bit identical | "contract benchmarks" + section 7 |
 | D8 | Backward compatibility: a handoff/answer without a `CONTRACT:` line works as before; off by default | "backward compatibility" |
@@ -28,13 +30,13 @@ Acceptance criteria (DoD) and their evidence (`tests/contract.test.sh`, 197 case
 | Existing boundary | In F02 |
 |---|---|
 | `references/handoff.md` (ROLE, TASK, READ, SCOPE, OUT, DONE WHEN, ...) | **This already is the call contract.** No new schema/file: only the `CONTRACT: 1`, `ID:` and fixed `REPLY-END:` lines (and `RETRY-OF:` when needed) are added; the existing lines are validated |
-| `parse-verdict.sh` + `record-verdict.sh` (verifier block) | **Untouched.** The single authority on the verdict. The contract validates only the envelope (identity/role/status) and does not look at DOD/VERDICT |
-| `sdd.sh` (phase, gate, verdict binding) | **Untouched.** The word `contract` does not appear in this file (test) |
-| `state.sh retry` (single retry) | The same single chance applies to an invalid/incomplete contract; a second retry goes to the user |
-| `check-writes.sh` (scope: file or directory prefixes) | The same prefix rule for artifact scope (`in_scope`); the real write check is still in `check-writes.sh`/git hooks |
-| `telemetry.sh` (`events.jsonl`, `q` quality label, failure categories) | New event type `contract.check` + `failure/contract`; same file, same `errs` schema |
-| `run-role.sh` (separate-process execution point) | On a contracted handoff, `issue` before the call and `check-result` after; `close` on a host error |
-| `hooks/guard-budget.sh` (PreToolUse Agent) | `check-contract.sh` was added to the same matcher group; not a separate mechanism |
+| `sdkit verdict` + `record-verdict` (verifier block) | **Untouched.** The single authority on the verdict. The contract validates only the envelope (identity/role/status) and does not look at DOD/VERDICT |
+| `sdkit sdd` (phase, gate, verdict binding) | **Untouched.** The word `contract` does not appear in this file (test) |
+| `sdkit state retry` (single retry) | The same single chance applies to an invalid/incomplete contract; a second retry goes to the user |
+| `sdkit plan writes` (scope: file or directory prefixes) | The same prefix rule for artifact scope (`in_scope`); the real write check is still in `sdkit plan writes`/git hooks |
+| `sdkit telemetry` (`events.jsonl`, `q` quality label, failure categories) | New event type `contract.check` + `failure/contract`; same file, same `errs` schema |
+| `sdkit run-role` (separate-process execution point) | On a contracted handoff, `issue` before the call and `check-result` after; `close` on a host error |
+| `sdkit hook guard-budget` (PreToolUse Agent) | `check-contract` was added to the same matcher group; not a separate mechanism |
 | `bench/` | New scenarios in the same driver; `--contracts` and `overhead` commands |
 
 No new state file; only `work/<slug>/contracts/<label>.json` (one small record per ID: role, scope, status). This is the "was this handoff issued, was it answered" information, which is kept nowhere else; git state, the SDD phase, token data and verification evidence are **not copied**.
@@ -49,7 +51,7 @@ No new state file; only `work/<slug>/contracts/<label>.json` (one small record p
 | JSON payload inside the answer | high | good | escape characters, multiple lines; risk of LLM JSON syntax errors; hurts prose readability | Rejected |
 | **One-line marker** (`HANDOFF-RESULT/1 \| key: value ...`) | sufficient (fixed fields, strict parsing) | **best**: the final text, present on every host and in `last_assistant_message` | ~120 bytes | **Chosen**: humans can read it, `awk`/bash parse it, no jq needed |
 
-The existing `parse-verdict.sh` is the proven form of the same approach (text block + strict parser).
+The existing `sdkit verdict` is the proven form of the same approach (text block + strict parser).
 
 ### 3.2 Call contract
 
@@ -83,7 +85,7 @@ RETRY-OF: t1/dev-a                # only on a retry
 ### 3.4 Validation categories
 
 `no-result` `malformed` `unsupported-version` `missing-field` `bad-value` `inconsistent` `id-mismatch` `role-mismatch` `task-mismatch` `unknown-id` `duplicate` `stale` `unsafe-path` `missing-artifact` `out-of-scope`. The output is one line: `CONTRACT=valid|invalid stage=handoff|result id=.. role=.. [status=..] [reason=..: detail]`.
-Exit code (the same triple as `parse-verdict.sh`): **0** valid and `done`, **1** valid but `partial/blocked/failed`, **2** invalid. Exit 0 never means "verified".
+Exit code (the same triple as `sdkit verdict`): **0** valid and `done`, **1** valid but `partial/blocked/failed`, **2** invalid. Exit 0 never means "verified".
 
 ### 3.5 Record and lifecycle
 
@@ -95,11 +97,11 @@ Four concepts stay separate and are kept in separate places:
 
 | Concept | Where | Relation to the contract |
 |---|---|---|
-| Contract validity | `contract.sh` (this feature) | only the envelope: format, identity, role, path |
+| Contract validity | `sdkit contract` (this feature) | only the envelope: format, identity, role, path |
 | Execution result | `status` in the result line | the agent's claim; not evidence |
-| Test evidence | `sdd.sh advance red/green --test-cmd` (runs the tests itself) | untouched |
-| Independent verification | `parse-verdict.sh` / `record-verdict.sh` / `sdd.sh advance verified` | untouched; a verdict is recorded without a contract too, and a verdict is required even when the contract is valid |
-| Workflow completion | `sdd.sh` phases | `contract.sh` does not call the phase machine, `_verdict` or `parse-verdict` (test) |
+| Test evidence | `sdkit sdd advance red/green --test-cmd` (runs the tests itself) | untouched |
+| Independent verification | `sdkit verdict` / `record-verdict` / `sdkit sdd advance verified` | untouched; a verdict is recorded without a contract too, and a verdict is required even when the contract is valid |
+| Workflow completion | `sdkit sdd` phases | `sdkit contract` does not call the phase machine, `_verdict` or `parse-verdict` (test) |
 
 `next:` is only suggestion text; no script runs it.
 
@@ -107,28 +109,28 @@ Four concepts stay separate and are kept in separate places:
 
 | Boundary | What it does | Does it block? |
 |---|---|---|
-| `hooks/check-contract.sh`, PreToolUse `Agent\|Task` (Claude Code) | If `tool_input.prompt` contains `CONTRACT:`, runs `contract.sh issue` (validate + record). If invalid: **ask** in `strict`, a warning in `guided`, silent in `off` | only `ask`; a hook error never blocks |
-| `hooks/check-contract.sh`, SubagentStop (Claude Code) | Validates the last message (otherwise the last text of the transcript) with `check-result --record --legacy-ok`; if invalid, a `systemMessage` to the orchestrator | no; independent of the verdict path |
-| `scripts/run-role.sh` (any host) | If `CONTRACT:` is present, `issue` before the call (invalid: exit 2, **the agent is not started**, the budget is not counted), then `check-result`; the answer is still printed/stored. Exit 4: broken contract, 5: valid but `partial/blocked/failed`; `close` on a host error | yes (exit code) |
-| `contract.sh issue / check-result / pending / close / status` by hand | For the orchestrator on hosts without hooks | — |
+| `sdkit hook check-contract`, PreToolUse `Agent\|Task` (Claude Code) | If `tool_input.prompt` contains `CONTRACT:`, runs `sdkit contract issue` (validate + record). If invalid: **ask** in `strict`, a warning in `guided`, silent in `off` | only `ask`; a hook error never blocks |
+| `sdkit hook check-contract`, SubagentStop (Claude Code) | Validates the last message (otherwise the last text of the transcript) with `check-result --record --legacy-ok`; if invalid, a `systemMessage` to the orchestrator | no; independent of the verdict path |
+| `sdkit run-role` (any host) | If `CONTRACT:` is present, `issue` before the call (invalid: exit 2, **the agent is not started**, the budget is not counted), then `check-result`; the answer is still printed/stored. Exit 4: broken contract, 5: valid but `partial/blocked/failed`; `close` on a host error | yes (exit code) |
+| `sdkit contract issue / check-result / pending / close / status` by hand | For the orchestrator on hosts without hooks | — |
 
-When it is off (`CONTRACTS` empty, no `CONTRACT:` line), none of these does anything; the `run-role.sh` prompt is byte-for-byte identical (the extra sentence appears only on a contracted handoff, test).
+When it is off (`CONTRACTS` empty, no `CONTRACT:` line), none of these does anything; the `sdkit run-role` prompt is byte-for-byte identical (the extra sentence appears only on a contracted handoff, test).
 
 ### Research findings about Claude Code (none of them made up)
 
 - The `Agent` tool's input was seen as `{description, prompt, subagent_type}` in real transcripts; so the PreToolUse hook can see the handoff (`prompt`).
 - In the repo and in the transcripts at hand, **no shared ID linking** PreToolUse(`Agent`) and SubagentStop was seen (SubagentStop has `agent_id`, `agent_type`, `last_assistant_message`, `agent_transcript_path`; PreToolUse has `tool_use_id`). So the match is made not through host metadata but through **`ID:` in the handoff and `id:` in the answer**. If the answer has no marker, the hook counts it as a finding only if there is a pending (`issued`) handoff for that role; otherwise it is an old (uncontracted) call and the hook stays silent. Concurrent contracted and uncontracted agents in the same role can produce a false warning in this case (warning only).
 - Can the `ID:` be read from the first user message of the subagent transcript? **Could not be verified** (no subagent transcript at hand); not used.
-- The SubagentStop hook's field names rely on the same assumptions as the existing hooks in the repo (`record-verdict.sh`, `usage-log.sh`); **this F02 hook was not run in a live Claude Code session**, and the tests feed the hook sample JSON.
+- The SubagentStop hook's field names rely on the same assumptions as the existing hooks in the repo (`record-verdict`, `usage-log`); **this F02 hook was not run in a live Claude Code session**, and the tests feed the hook sample JSON.
 
 ## 5. Host compatibility status
 
 | Host | Call validation | Answer validation | Status |
 |---|---|---|---|
-| Claude Code, `Agent` tool | PreToolUse hook (`check-contract.sh`) | SubagentStop hook | Tested with sample hook JSON; **not verified live** |
-| Claude Code, `run-role.sh --host claude` | `run-role.sh` | `run-role.sh` (from the `result` JSON) | Tested with a stub host; no live CLI |
-| Codex, OpenCode, Cursor, Gemini — `run-role.sh` | `run-role.sh` | `run-role.sh` | Tested with a stub host (codex format included); live CLI flags **not verified**, as in F00 §8.8 |
-| Codex, OpenCode, Cursor, Gemini — the host's own subagent | none | none | The kit has no subagent result hook (`adapt.sh` only translates tool calls; the OpenCode plugin does not carry the contract hook). **Safe fallback:** the orchestrator calls the `contract.sh issue/check-result` commands by hand (`references/contract.md`) or opens the role as a separate process with `run-role.sh` |
+| Claude Code, `Agent` tool | PreToolUse hook (`check-contract`) | SubagentStop hook | Tested with sample hook JSON; **not verified live** |
+| Claude Code, `sdkit run-role --host claude` | `sdkit run-role` | `sdkit run-role` (from the `result` JSON) | Tested with a stub host; no live CLI |
+| Codex, OpenCode, Cursor, Gemini — `sdkit run-role` | `sdkit run-role` | `sdkit run-role` | Tested with a stub host (codex format included); live CLI flags **not verified**, as in F00 §8.8 |
+| Codex, OpenCode, Cursor, Gemini — the host's own subagent | none | none | The kit has no subagent result hook (`sdkit hook --host` only translates tool calls; the OpenCode plugin does not carry the contract hook). **Safe fallback:** the orchestrator calls the `sdkit contract issue/check-result` commands by hand (`references/contract.md`) or opens the role as a separate process with `sdkit run-role` |
 | Other | — | — | Playing the role in the main session: again by hand |
 
 ## 6. Telemetry integration (reuse of F01)
@@ -152,45 +154,45 @@ Baseline integrity: the `deterministic` part of the `bench/run.sh run all` outpu
 | `contract-invalid-handoff` | dev-a's handoff is incomplete (no `SCOPE`): refused **before the agent starts** (`missing-field`), fixed and reissued; dev-b's answer has no marker (`malformed`) and is fixed by the single retry (new ID + `RETRY-OF`); independent verifier PASS | 2 invalid (`malformed`, `missing-field`), 1 retry, `failure/contract` 2; completed |
 | `contract-multi-chain` | 7 agents, all contracted; later handoffs name earlier outputs in `READ` (the artifact chain is validated); reviewer+verifier on another host | 7 handoffs, 7 answers, 0 invalid; completed |
 | `contract-interrupted` | the agent process crashes (exit 7); the ID is closed as `interrupted`, the single retry succeeds | `host-error` 1, `no-result` 1, 1 retry; tokens measured in 1/2 runs (the crashed run is not counted as 0); completed |
-| `contract-verifier-evidence` | the verifier handoff contains only the artifacts/diff base (**no implementer output**); its contract is valid, and the verdict is decided separately by `parse-verdict.sh` | PASS comes only from the verdict; completed |
+| `contract-verifier-evidence` | the verifier handoff contains only the artifacts/diff base (**no implementer output**); its contract is valid, and the verdict is decided separately by `sdkit verdict` | PASS comes only from the verdict; completed |
 
 **Overhead, F01 scenarios with/without contracts** (`bench/run.sh overhead`, deterministic columns):
 
-| Scenario | Agents | Handoff bytes (plain → contracted) | Answer bytes (plain → contracted) | Events (plain → contracted) | `contract.sh` calls |
+| Scenario | Agents | Handoff bytes (plain → contracted) | Answer bytes (plain → contracted) | Events (plain → contracted) | `sdkit contract` calls |
 |---|---|---|---|---|---|
 | low-single-file | 1 | 293 → 456 | 29 → 154 | 13 → 15 | 2 |
 | medium-multi-file | 2 | 879 → 985 | 209 → 482 | 15 → 19 | 4 |
 | high-independent-verify | 5 | 2934 → 3085 | 649 → 1334 | 24 → 34 | 10 |
 | multi-agent-handoff | 7 | 4225 → 4515 | 282 → 1164 | 25 → 39 | 14 |
 
-Reading notes: (a) in a contracted handoff some existing prose lines turn into structured lines, so the "plain → contracted" difference is not only added text; the **fixed** added text is 202 bytes per handoff (`CONTRACT`, `ID`, `REPLY-END`) and typically 119 bytes per answer. (b) The large ratio in answer bytes comes from the fixture answers already being very short (`low`: 29 bytes). (c) 2 `contract.sh` calls per agent (`issue` before the call, `check-result` after), and 1 `telemetry.sh emit` per call when `TELEMETRY=1` (+1 if invalid); extra agent calls are **zero**. (d) In simulation the token columns are fixture values; a token/cost difference **cannot be read** from this table.
+Reading notes: (a) in a contracted handoff some existing prose lines turn into structured lines, so the "plain → contracted" difference is not only added text; the **fixed** added text is 202 bytes per handoff (`CONTRACT`, `ID`, `REPLY-END`) and typically 119 bytes per answer. (b) The large ratio in answer bytes comes from the fixture answers already being very short (`low`: 29 bytes). (c) 2 `sdkit contract` calls per agent (`issue` before the call, `check-result` after), and 1 `sdkit telemetry emit` per call when `TELEMETRY=1` (+1 if invalid); extra agent calls are **zero**. (d) In simulation the token columns are fixture values; a token/cost difference **cannot be read** from this table.
 
-**Validation latency** (measured on this machine, varies; not in the deterministic part of the result files): averaged over 100 calls, `contract.sh issue --check-only` ≈ 189 ms, `contract.sh check-result` ≈ 180 ms, and `parse-verdict.sh` ≈ 153 ms for comparison. The time is mostly process start-up cost (CPU ≈ 5%); negligible next to the seconds an LLM call takes, but not zero.
+**Validation latency** (measured on this machine, varies; not in the deterministic part of the result files): averaged over 100 calls, `sdkit contract issue --check-only` ≈ 189 ms, `sdkit contract check-result` ≈ 180 ms, and `sdkit verdict` ≈ 153 ms for comparison. The time is mostly process start-up cost (CPU ≈ 5%); negligible next to the seconds an LLM call takes, but not zero.
 
 **Real LLM measurement: not done.** All numbers come from fixtures or local script measurements.
 
 ## 8. Backward compatibility and migration
 
 - Off by default: `CONTRACTS` is empty (`templates/sdkit.env`, a team setting; `init`/`upgrade` add the new setting to existing files and do not overwrite existing values).
-- A handoff without a `CONTRACT:` line is a **legacy handoff**: the `run-role.sh` prompt is byte-for-byte identical, the hook is silent, no record, no event (tests). A legacy answer (no marker) is silent too.
-- Consumer review for legacy formats: the only code that reads the handoff is `run-role.sh` (puts the file into the prompt as is) and the bench driver; the only code that reads the answer is `parse-verdict.sh`/`record-verdict.sh` (verifier block). Neither changed. A verifier answer may now carry an extra `HANDOFF-RESULT` line at the end; `parse-verdict.sh` is not affected because it does not look for that line among the `DOD/FINDINGS/VERIFY/VERDICT` sections (test: the same text passes both parsers).
+- A handoff without a `CONTRACT:` line is a **legacy handoff**: the `sdkit run-role` prompt is byte-for-byte identical, the hook is silent, no record, no event (tests). A legacy answer (no marker) is silent too.
+- Consumer review for legacy formats: the only code that reads the handoff is `sdkit run-role` (puts the file into the prompt as is) and the bench driver; the only code that reads the answer is `sdkit verdict`/`record-verdict` (verifier block). Neither changed. A verifier answer may now carry an extra `HANDOFF-RESULT` line at the end; `sdkit verdict` is not affected because it does not look for that line among the `DOD/FINDINGS/VERIFY/VERDICT` sections (test: the same text passes both parsers).
 - Structured but broken is never silently accepted: **if** there is a `CONTRACT:` line, the handoff is fully validated; an answer whose marker is missing/broken/duplicated/has unknown fields becomes `invalid`.
-- No migration step is needed. To turn it on: `CONTRACTS=1` in `sdkit.env`, and add the three lines from `references/contract.md` to handoffs (the skill knows this when `CONTRACTS=1`). Copy mode: `templates/settings.copy.json` includes the hook; `migrate.sh` added `check-contract` to the hook name pattern.
+- No migration step is needed. To turn it on: `CONTRACTS=1` in `sdkit.env`, and add the three lines from `references/contract.md` to handoffs (the skill knows this when `CONTRACTS=1`). Copy mode: `templates/settings.copy.json` includes the hook; the 1.x migrate step added `check-contract` to the hook name pattern.
 - Note (a hidden bug found in the F01 driver): `make_handoff` in `bench/run.sh` used `$label` before assigning it, in a single `local` line; the `fix` step's handoff was written to the file of the caller's label. Fixed; the F01 `deterministic` output was not affected (verified).
 
 ## 9. Tasks and verification record
 
 | Task | Status |
 |---|---|
-| T1 `scripts/contract.sh` (issue, check-result, close, pending, status, id) | done |
-| T2 boundary integration: `hooks/check-contract.sh` (+ `hooks.json`, `settings.copy.json`, `migrate.sh`), `run-role.sh` | done |
+| T1 `sdkit contract` (issue, check-result, close, pending, status, id) | done |
+| T2 boundary integration: `sdkit hook check-contract` (+ `hooks.json`, `settings.copy.json`, the 1.x migrate step), `sdkit run-role` | done |
 | T3 telemetry: `contract.check`, `failure/contract`, `contracts` summary | done |
 | T4 setting: `CONTRACTS` (`templates/sdkit.env`) | done |
 | T5 bench: 5 fixtures, `--contracts`, `overhead`, stub host (`fail/`, automatic marker) | done |
 | T6 `tests/contract.test.sh` (197 cases) | done |
 | T7 docs: this file, `references/contract.md`, `handoff.md`, `hosts.md`, `SKILL.md`, `guide.md`, `cheatsheet.md`, `README.md`, `CONTRIBUTING.md`, `upgrading.md`, `design-telemetry.md` | done |
 
-Checks run: `tests/smoke.test.sh` 109, `sdd` 52, `shared` 29, `memory` 38, `budget` 45, `sdkit-dir` 64, `risk-floor` 76, `hardening` 53, `telemetry` 118 (all with the same counts as before F02, none broken), **`contract` 197**; all pass. `bin/build-adapters.sh --check` is up to date (role files not touched). `bash -n` and `jq .` are clean; `shellcheck` is not installed on this machine and was not run.
+Checks run: `tests/smoke.test.sh` 109, `sdd` 52, `shared` 29, `memory` 38, `budget` 45, `sdkit-dir` 64, `risk-floor` 76, `hardening` 53, `telemetry` 118 (all with the same counts as before F02, none broken), **`contract` 197**; all pass. `sdkit dev adapters --check` is up to date (role files not touched). `bash -n` and `jq .` are clean; `shellcheck` is not installed on this machine and was not run.
 
 ## 10. Known limits and remaining risks
 
@@ -198,7 +200,7 @@ Checks run: `tests/smoke.test.sh` 109, `sdd` 52, `shared` 29, `memory` 38, `budg
 - The Claude Code hook was not run live (sections 4/5). Matching relies on the `ID` text; reading the ID from the subagent transcript was not verified.
 - If an uncontracted and a contracted instance of the same role run at the same time in the hook, a false warning can appear for the answer without a marker (warning only).
 - The `READ:` field must be a comma-separated list of paths; prose with explanations gives `unsafe-path`/`missing-artifact`. A file that does not exist yet goes in `SCOPE: writes:`, not in `READ`.
-- The scope check compares only the *declared* artifacts with `writes:`; what the agent actually changed is checked by `check-writes.sh` and the git hooks (the agent's claim is not trusted).
+- The scope check compares only the *declared* artifacts with `writes:`; what the agent actually changed is checked by `sdkit plan writes` and the git hooks (the agent's claim is not trusted).
 - The `bytes` count loses trailing newlines through the shell's `$(...)` (1-2 bytes).
 - The validation latency measurement depends on the machine; process start-up dominates.
 - Whether the orchestrator actually adds the contract lines to the handoff depends on the skill instruction (the machine does not enforce it); if it does not, the handoff counts as a legacy handoff and stays out of scope.

@@ -1,0 +1,10 @@
+# cmd: sdkit capped --lines 6 -- sh ./noisy.sh
+# captured from oracle scripts/capped.sh (bin/sdkit has no such command); log name normalised to <LOG>
+exit: 3
+[capped] exit 3, 32 lines. Full output: .sdkit/work/_misc/out/cmd-<LOG>.log
+--- failure lines (line: text)
+31:FAIL: boom
+--- last 3 lines
+line 29
+FAIL: boom
+line after

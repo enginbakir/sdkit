@@ -1,0 +1,9 @@
+# cmd: sdkit verify --no-cache
+exit: 1
+==> fast check
+==> policy 10-warn
+WARN: 1 changed file(s)
+==> policy 20-forbidden
+FAIL: forbidden pattern in new.txt
+
+verify: 1 failure(s), 1 warning(s)

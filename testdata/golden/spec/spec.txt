@@ -1,0 +1,351 @@
+# captured from scripts/spec-change.sh, spec-apply.sh and spec.sh check by capture-spec.sh; the Go test replays the # cmd: lines
+# cmd: change parse $b
+$ change parse $b
+{
+  "acs": [
+    {
+      "id": "AC-social-1",
+      "capability": "social",
+      "section": "ADDED",
+      "requirement": "Social sign-in",
+      "withdrawn": false,
+      "hash": "3ab549f0f0c38a0a36c0d6864a71d681148f6bdfaeda8ea1a318d56f402c0064"
+    },
+    {
+      "id": "AC-social-3",
+      "capability": "social",
+      "section": "ADDED",
+      "requirement": "Social sign-in",
+      "withdrawn": false,
+      "hash": "5e931592ca961f4fb79ba805e8577f08efa505ef2e59b2afc45a7f940dae7344"
+    },
+    {
+      "id": "AC-social-2",
+      "capability": "social",
+      "section": "ADDED",
+      "requirement": "Provider errors",
+      "withdrawn": false,
+      "hash": "1b12c7780062c2f16ce73cb4d3b7f1563bef1b1e5d01b535eed51f0a8b0c8049"
+    },
+    {
+      "id": "AC-social-9",
+      "capability": "social",
+      "section": "ADDED",
+      "requirement": "Provider errors",
+      "withdrawn": false,
+      "hash": "83e63ff538e410b46bfd0603027f4228444450746abbe324bbdb044d17c90332"
+    },
+    {
+      "id": "AC-social-4",
+      "capability": "social",
+      "section": "ADDED",
+      "requirement": "Legacy merge",
+      "withdrawn": false,
+      "hash": "8308de791c3df161f70c3ee47180dd4e48350f25a534d4d84c182b8aff1ecf16"
+    },
+    {
+      "id": "AC-social-5",
+      "capability": "social",
+      "section": "ADDED",
+      "requirement": "Legacy merge",
+      "withdrawn": true,
+      "hash": "ca233d70c347746963f256613a4ae3f6222e2d8cb2502212a1ec6eced7a5ecc3"
+    }
+  ],
+  "noId": [],
+  "requirements": [
+    {
+      "capability": "social",
+      "section": "ADDED",
+      "title": "Social sign-in",
+      "acs": [
+        "AC-social-1",
+        "AC-social-3"
+      ]
+    },
+    {
+      "capability": "social",
+      "section": "ADDED",
+      "title": "Provider errors",
+      "acs": [
+        "AC-social-2",
+        "AC-social-9"
+      ]
+    },
+    {
+      "capability": "social",
+      "section": "ADDED",
+      "title": "Legacy merge",
+      "acs": [
+        "AC-social-4",
+        "AC-social-5"
+      ]
+    }
+  ]
+}
+exit: 0
+# cmd: change compute $b/changes/fix-a --base $b
+$ change compute $b/changes/fix-a --base $b
+{
+  "added": [
+    "AC-social-10"
+  ],
+  "modified": [
+    "AC-social-2"
+  ],
+  "removed": [],
+  "unchanged": [
+    "AC-social-9"
+  ],
+  "touches": [
+    "AC-social-10",
+    "AC-social-2"
+  ],
+  "expects": {
+    "AC-social-2": "1b12c7780062c2f16ce73cb4d3b7f1563bef1b1e5d01b535eed51f0a8b0c8049"
+  },
+  "problems": []
+}
+exit: 0
+# cmd: change compute $b/changes/feat-b --base $b
+$ change compute $b/changes/feat-b --base $b
+{
+  "added": [
+    "AC-social-10"
+  ],
+  "modified": [
+    "AC-social-2"
+  ],
+  "removed": [
+    "AC-social-4"
+  ],
+  "unchanged": [
+    "AC-social-9"
+  ],
+  "touches": [
+    "AC-social-10",
+    "AC-social-2",
+    "AC-social-4"
+  ],
+  "expects": {
+    "AC-social-2": "1b12c7780062c2f16ce73cb4d3b7f1563bef1b1e5d01b535eed51f0a8b0c8049",
+    "AC-social-4": "8308de791c3df161f70c3ee47180dd4e48350f25a534d4d84c182b8aff1ecf16"
+  },
+  "problems": []
+}
+exit: 0
+# cmd: change overlap $b/changes/fix-a $b/changes/feat-b --base $b
+$ change overlap $b/changes/fix-a $b/changes/feat-b --base $b
+{
+  "collisions": [
+    {
+      "id": "AC-social-10",
+      "same": false,
+      "changes": [
+        "fix-a",
+        "feat-b"
+      ]
+    }
+  ],
+  "shared": [
+    {
+      "id": "AC-social-2",
+      "changes": [
+        "fix-a",
+        "feat-b"
+      ]
+    }
+  ]
+}
+exit: 0
+# cmd: change plan $b
+$ change plan $b
+{
+  "baseAcs": 6,
+  "changes": [
+    {
+      "slug": "fix-a",
+      "title": "Timeout",
+      "kind": "fix",
+      "label": "1.1",
+      "createdAt": "<TS>",
+      "base": {
+        "version": "1.0",
+        "contentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "resolutions": null,
+      "added": [
+        "AC-social-10"
+      ],
+      "modified": [
+        "AC-social-2"
+      ],
+      "removed": [],
+      "problems": [],
+      "expectsMoved": [],
+      "cites": {
+        "acs": [
+          "AC-social-10",
+          "AC-social-2",
+          "AC-social-9"
+        ],
+        "adrs": []
+      },
+      "capabilities": [
+        "social"
+      ]
+    },
+    {
+      "slug": "feat-b",
+      "title": "Apple",
+      "kind": "feature",
+      "label": "1.1",
+      "createdAt": "<TS>",
+      "base": {
+        "version": "1.0",
+        "contentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "resolutions": null,
+      "added": [
+        "AC-social-10"
+      ],
+      "modified": [
+        "AC-social-2"
+      ],
+      "removed": [
+        "AC-social-4"
+      ],
+      "problems": [],
+      "expectsMoved": [
+        "AC-social-2"
+      ],
+      "cites": {
+        "acs": [
+          "AC-social-10",
+          "AC-social-2",
+          "AC-social-4",
+          "AC-social-9"
+        ],
+        "adrs": []
+      },
+      "capabilities": [
+        "social"
+      ]
+    }
+  ],
+  "collisions": [
+    {
+      "id": "AC-social-10",
+      "same": false,
+      "changes": [
+        "fix-a",
+        "feat-b"
+      ]
+    }
+  ],
+  "shared": [
+    {
+      "id": "AC-social-2",
+      "changes": [
+        "fix-a",
+        "feat-b"
+      ]
+    }
+  ]
+}
+exit: 0
+# cmd: apply renumber $b fix-a feat-b
+$ apply renumber $b fix-a feat-b
+feat-b AC-social-10 AC-social-11
+exit: 0
+# cmd: apply delta $b fix-a
+$ apply delta $b fix-a
+exit: 0
+# cmd: apply delta $b feat-b
+$ apply delta $b feat-b
+exit: 0
+# cmd: change moved $b/changes/feat-b --base $b
+$ change moved $b/changes/feat-b --base $b
+AC-social-2
+AC-social-4
+exit: 1
+# cmd: spec check bad
+$ spec check bad
+spec: check FAILED for bad:
+- not applied: feat-b
+- not applied: fix-a
+exit: 1
+# cmd: spec check ok
+$ spec check ok
+spec: check OK for 'ok'
+exit: 0
+$ cat specs/social/spec.md
+| # Social
+| 
+| ## ADDED Requirements
+| 
+| ### Requirement: Social sign-in
+| 
+| SHALL start the provider flow.
+| 
+| #### Scenario: AC-social-1 - Start flow
+| - **WHEN** the user taps a provider
+| - **THEN** the provider screen opens
+| 
+| #### Scenario: AC-social-3 - New user
+| - **WHEN** a new user returns from the provider
+| - **THEN** sign-up completion opens
+| 
+| ### Requirement: Provider errors
+| 
+| #### Scenario: AC-social-2 - Provider error
+| - **WHEN** the provider returns an error
+| - **THEN** a retry button is shown with the error message
+| 
+| #### Scenario: AC-social-9 - Last one
+| - **THEN** nothing else happens
+| 
+| ### Requirement: Legacy merge
+| 
+| #### Scenario: AC-social-4 (withdrawn) - Old merge
+| - **THEN** WITHDRAWN: removed by change feat-b. The id is kept and never reused
+| 
+| #### Scenario: AC-social-5 (withdrawn) - Older merge
+| - **THEN** WITHDRAWN: replaced by AC-social-4
+| 
+| ### Requirement: Provider timeout
+| 
+| #### Scenario: AC-social-10 -   Timeout shows the error
+| -   **WHEN** the provider does not answer
+| -	**THEN** the timeout error is shown
+| 
+| ### Requirement: Apple hidden e-mail
+| 
+| #### Scenario: AC-social-11 - Apple hidden e-mail sign-in
+| - **THEN** the relay address is stored
+| 
+$ cat changes/feat-b/change.json
+| {
+|   "slug": "feat-b",
+|   "title": "Apple",
+|   "kind": "feature",
+|   "label": "1.1",
+|   "status": "open",
+|   "createdAt": "<TS>",
+|   "base": {
+|     "version": "1.0",
+|     "contentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+|   },
+|   "expects": {
+|     "AC-social-2": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+|     "AC-social-4": "8308de791c3df161f70c3ee47180dd4e48350f25a534d4d84c182b8aff1ecf16"
+|   },
+|   "touches": [
+|     "AC-social-11",
+|     "AC-social-2",
+|     "AC-social-4"
+|   ],
+|   "renames": {
+|     "AC-social-10": "AC-social-11"
+|   }
+| }

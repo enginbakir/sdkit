@@ -1,0 +1,72 @@
+version: 2
+
+project_name: sdkit
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: sdkit
+    main: ./cmd/sdkit
+    binary: sdkit
+    env:
+      - CGO_ENABLED=0
+    goos: [darwin, linux, windows]
+    goarch: [amd64, arm64]
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+
+archives:
+  - id: default
+    formats: [tar.gz]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+
+checksum:
+  name_template: checksums.txt
+
+# Generated into dist/ only: dist/homebrew/Formula/sdkit.rb and dist/scoop/sdkit.json.
+# skip_upload keeps both local; there is no publish block and no token anywhere (06-release.md).
+# Publishing is the user's explicit step (P5-06): until then `release` stays disabled.
+brews:
+  - name: sdkit
+    ids: [default]
+    homepage: https://github.com/wecii/sdkit
+    description: Spec-driven development workflow and guards for AI coding agents (Claude Code, Codex, OpenCode, Cursor, Gemini)
+    license: MIT
+    url_template: "https://github.com/wecii/sdkit/releases/download/v{{ .Version }}/{{ .ArtifactName }}"
+    skip_upload: true
+    repository:
+      owner: wecii
+      name: sdkit
+    directory: Formula
+    dependencies:
+      - name: node
+    caveats: |
+      Set a repo up (once per repo, by one person):
+        cd your-repo && sdkit init
+      Check a repo any time:  sdkit doctor
+      Upgrade a repo after "brew upgrade":  sdkit upgrade
+    test: |
+      assert_match "sdkit", shell_output("#{bin}/sdkit version")
+      refute_empty shell_output("#{bin}/sdkit where").strip
+
+scoops:
+  - name: sdkit
+    ids: [default]
+    homepage: https://github.com/wecii/sdkit
+    description: Spec-driven development workflow and guards for AI coding agents
+    license: MIT
+    url_template: "https://github.com/wecii/sdkit/releases/download/v{{ .Version }}/{{ .ArtifactName }}"
+    skip_upload: true
+    repository:
+      owner: wecii
+      name: sdkit
+
+release:
+  disable: true

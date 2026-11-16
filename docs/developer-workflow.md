@@ -3,14 +3,13 @@
 This guide follows one developer through one feature, end to end, and says for every step **what happens, why, and what you see**.
 It describes the kit as it is in this repository. Where something is not automated, not observable or not shipped, it says so
 (look for **Limit** and **Proposed**). Short entry point: [README.md](../README.md). Reference for every setting, hook and role:
-[guide.md](guide.md) (Turkish).
+[guide.md](guide.md).
 
 Conventions used below:
 
-- `KIT="$(sdkit where)"` is the kit's root. The workflow scripts live in `$KIT/scripts/`. (Claude Code plugin mode: the same files are
-  `${CLAUDE_PLUGIN_ROOT}/scripts/`. Other hosts also get copies in `.sdkit/scripts/`.) Run them from inside your repo.
+- Every command is `sdkit <command>` (one binary, on `PATH`; the same text works in bash, PowerShell and cmd). Run them from inside your repo. `sdkit where` prints where the binary lives.
 - `<project-dir>` is `.sdkit/`. `<slug>` is the task id (for example `rate-limit`).
-- Output blocks marked *captured* were produced by running the real scripts in a scratch repository without any model call.
+- Output blocks marked *captured* were produced by running the kit in a scratch repository without any model call (most of them on a 1.x build; the wording of a line can differ slightly in 2.x, the commands and exit codes are the same).
   Values inside them that came from fixtures are fictional.
 
 ## Contents
@@ -31,7 +30,7 @@ It has three parts:
 | Part | What it is | Where |
 |---|---|---|
 | The workflow skill | `spec-driven-dev`: the orchestrator's instructions (intake, plan, propose, test-first, verify, PR, closeout) | `skills/spec-driven-dev/` |
-| The phase machine and guards | `sdd.sh` decides what may change when; hooks and git hooks ask it on every edit, push and PR | `scripts/sdd.sh`, `hooks/`, `adapters/git/` |
+| The phase machine and guards | `sdkit sdd` decides what may change when; hooks and git hooks ask it on every edit, push and PR | `sdkit sdd`, `sdkit hook`, `adapters/git/` |
 | Roles and tooling | Ten neutral role definitions turned into agent files for five hosts; routing, usage ledger, telemetry, reports | `core/roles/`, `scripts/` |
 
 It works with Claude Code, Codex, OpenCode, Cursor and Gemini CLI. The Claude Code integration is the one exercised on live installs;
@@ -54,12 +53,12 @@ the others follow each tool's documented format ([hosts and limits](#15-troubles
 ```
 brew tap wecii/sdkit https://github.com/wecii/sdkit.git
 brew trust wecii/sdkit
-brew install sdkit                 # brings jq and node
-sdkit version                      # e.g. "sdkit 1.3.0"
+brew install sdkit
+sdkit version                      # e.g. "sdkit 2.0.0"
 ```
 
-No Homebrew: clone the repo and run `<kit>/bin/sdkit`; `sdkit install` registers a cloned kit for the git hooks.
-Requirements: `git`, `jq`, `node` (OpenSpec) and your stack's toolchain.
+Windows: `scoop install` from `packaging\scoop\sdkit.json`, or put the release `sdkit.exe` on `PATH` (PowerShell or cmd). No package manager: download the archive for your platform or `go install github.com/wecii/sdkit/cmd/sdkit@<tag>`.
+Requirements: `git` and your stack's toolchain (`node` only for an analyst repo's OpenSpec); `sdkit` must be on `PATH` (the plugin hooks and git-hook shims call it).
 
 ### Set up a repo (once, by one person)
 
@@ -67,7 +66,7 @@ Requirements: `git`, `jq`, `node` (OpenSpec) and your stack's toolchain.
 cd your-repo
 sdkit init                          # Claude Code (default)
 sdkit init --host codex             # or opencode | cursor | gemini | claude,codex,...
-sdkit init --ci github              # optional: also install the server-side gate (bitbucket | github)
+sdkit init --ci github              # optional: also install the server-side gate (bitbucket | github | gitlab)
 ```
 
 *Captured* (abridged), `sdkit init` in a Go repo:
@@ -81,17 +80,11 @@ project profile (project-owned: fill in)
   wrote  .sdkit/sdkit.env (project-owned: edit it)
   wrote  .sdkit/project.md (project-owned: edit it)
   wrote  .sdkit/known-pitfalls.md (project-owned: edit it)
-ci gate scripts (managed: sync.sh updates them)
-  wrote  .sdkit/scripts/env.sh
-  wrote  .sdkit/scripts/sdd.sh
 settings
   wrote  .claude/settings.local.json
   wrote  .claude/CLAUDE.md (new; your own text goes outside the kit block)
-openspec (required by the workflow)
-  11 skills and 11 commands in .claude/
-  wrote  openspec/ and OpenSpec skills for: claude
 done. next: fill in .sdkit/project.md and review .sdkit/sdkit.env, rename the verify.d/*.example files you want, then run:
-  .../bin/doctor.sh /tmp/sc
+  sdkit doctor /tmp/sc
 ```
 
 What it installs:
@@ -101,13 +94,10 @@ What it installs:
 | `.sdkit/sdkit.env` | the team's settings (stack, base branch, `SDD_MODE`, protected paths, `ROUTING`, `REPORT_BASELINE_MODEL` ...), committed | team |
 | `.sdkit/sdkit.local.env` | your personal settings (usage log, telemetry, budgets, hosts, `VALUE_REPORT`), git-ignored, read after `sdkit.env` | you |
 | `.sdkit/project.md`, `known-pitfalls.md`, `rules/`, `verify.d/*.example`, `adr/`, `memory/` | project facts: **risk rubric (mandatory)**, tracker and PR tooling, release flow, test layout, rules | you |
-| `.sdkit/scripts/sdd.sh`, `env.sh`, `resolve-base.sh` | the only kit scripts the server-side CI gate needs | kit |
 | `.claude/settings.local.json`, `.claude/CLAUDE.md` (kit block) | host wiring: plugin enabled, `permissions.deny`; the kit owns only its marked block | shared |
-| `openspec/` and the `openspec-*` skills / `opsx` commands | the spec engine `spec-driven-dev` drives (`--install-openspec` installs its CLI if missing) | OpenSpec |
 | `AGENTS.md`, `.githooks/` (hosts other than Claude Code), `.codex/`, `.opencode/`, `.cursor/`, `.gemini/` | per-host files, hidden from git in this clone via `.git/info/exclude` | kit |
 
-Skills available after init: `spec-driven-dev` (the workflow), `scaffold-init`, `scaffold-doctor`, `incident-to-rule`, plus the OpenSpec
-skills. Agents (roles) and adapters: [section 6](#6-how-sdkit-orchestrates-agents-and-roles). `init` never overwrites `project.md`, `sdkit.env`
+Skills available after init: `spec-driven-dev` (the workflow), `scaffold-init`, `scaffold-doctor`, `incident-to-rule`. (An analyst repo, `--env analyst`, also gets `openspec/` and the OpenSpec skills for `generate-specs`.) Agents (roles) and adapters: [section 6](#6-how-sdkit-orchestrates-agents-and-roles). `init` never overwrites `project.md`, `sdkit.env`
 (it only appends new settings), `rules/` or an existing `settings.json`, not even with `--force`. Hooks that need a setting stay silent
 while the setting is empty; **the phase gate is on by default** (`SDD_MODE=strict`).
 
@@ -117,12 +107,12 @@ while the setting is empty; **the phase gate is on by default** (`SDD_MODE=stric
 sdkit doctor
 ```
 
-*Captured* (abridged): `ok` lines for settings, risk rubric, hooks wiring, CLI tools, OpenSpec; then
+*Captured* (abridged): `ok` lines for settings, risk rubric, hooks wiring, CLI tools; then
 
 ```
   FAIL  project.md still has TODO placeholders
   warn  no active verify.d policy (rename .example files to enable the ones you want)
-  warn  no server-side gate in CI: local hooks can be skipped with --no-verify (init.sh --ci bitbucket|github)
+  warn  no server-side gate in CI: local hooks can be skipped with --no-verify (sdkit init --ci bitbucket|github)
 doctor: 1 failure(s), 2 warning(s)
 ```
 
@@ -135,7 +125,7 @@ Every other developer installs `sdkit` on their machine and, for Claude Code, ac
 | Setting (file) | Default after `init` | Effect |
 |---|---|---|
 | `SDD_MODE` (`sdkit.env`) | `strict` | phase gate denies out-of-phase edits, push, PR; `guided` asks/warns; `off` disables |
-| `ROUTING` (`sdkit.env`) | `off` | route.sh decisions are not applied by `run-role.sh` ([section 9](#9-routing-and-cost-controls)) |
+| `ROUTING` (`sdkit.env`) | `off` | sdkit route decisions are not applied by `sdkit run-role` ([section 9](#9-routing-and-cost-controls)) |
 | `CONTRACTS` (`sdkit.env`) | empty (off) | handoff contracts are optional and unchecked |
 | `USAGE_LOG` (`sdkit.local.env`) | `1` | token ledger on |
 | `USAGE_LINE` (`sdkit.local.env`) | `1` | one usage line (in, out, cache hit) when a subagent finishes |
@@ -161,14 +151,14 @@ asks you to write it (it never invents criteria).
 **What the orchestrator does first** (SKILL.md "Resume" and step 0):
 
 1. Reads `sdkit.env`, `project.md`, `known-pitfalls.md`, memory index (if `MEMORY=1`) and `rules/*.md`.
-2. If `state.sh <slug> show` already has a state for this task, continues from its `step` instead of starting over.
+2. If `sdkit state <slug> show` already has a state for this task, continues from its `step` instead of starting over.
 3. Fetches the ticket (when applicable) and runs the **`analyst`** role: `READINESS`, a brief, `GAPS`, `ASSUMPTIONS`, a proposed risk label.
    On `NEEDS-INFO` it asks you (at most 4 questions per round, each with a suggested default).
 4. Shows the brief and the proposed risk label. **You confirm or override the label**; risk is independent of ticket priority.
-5. Opens the gate: `sdd.sh start <slug> --risk <label> [--profile ...] --proposal openspec/changes/<change>/proposal.md`.
+5. Opens the gate: `sdkit sdd start <slug> --risk <label> [--profile ...] --proposal .sdkit/work/<slug>/proposal.md`.
 
 **Task identity** is the `<slug>` you and the orchestrator choose here. It names `.sdkit/work/<slug>/` (resume record, plan, ledger,
-events, reports) and the open task in `.sdkit/.sdd/state.json`. One task is open at a time (`sdd.sh task` prints its slug).
+events, reports) and the open task in `.sdkit/.sdd/state.json`. One task is open at a time (`sdkit sdd task` prints its slug).
 
 **Workflow policy** is two independent choices, both fixed for the task once started:
 
@@ -180,9 +170,9 @@ events, reports) and the open task in `.sdkit/.sdd/state.json`. One task is open
 *Captured:*
 
 ```
-$ sdd.sh start rate-limit --risk medium --proposal openspec/changes/rate-limit/proposal.md
-task 'rate-limit' opened (risk=medium, profile=standard, phase=intake). Write the proposal with a Definition of Done, then: sdd.sh advance proposed
-$ sdd.sh policy
+$ sdkit sdd start rate-limit --risk medium --proposal .sdkit/work/rate-limit/proposal.md
+task 'rate-limit' opened (risk=medium, profile=standard, phase=intake). Write the proposal with a Definition of Done, then: sdkit sdd advance proposed
+$ sdkit sdd policy
 task=rate-limit risk=medium profile=standard verifier=independent-verifier contracts=off (scout/analyst: off) automatic-retries=1
 ```
 
@@ -192,8 +182,8 @@ task=rate-limit risk=medium profile=standard verifier=independent-verifier contr
 | `medium` | the same, plus a **mandatory independent verifier PASS** for the current diff |
 | `high` | `design.md` has a race/ordering/timing scenario; test-writer, developer and verifier are separate runs; **PASS from each of verifier, reviewer and security-auditor**, produced by a registered run on this diff |
 
-`sdd.sh transitions` prints the rules; `sdd.sh policy` prints what this task needs. Created now: `.sdkit/.sdd/state.json` (the gate) and,
-once the orchestrator runs `state.sh <slug> init <risk> <branch>`, `.sdkit/work/<slug>/state.json` (the resume record).
+`sdkit sdd transitions` prints the rules; `sdkit sdd policy` prints what this task needs. Created now: `.sdkit/.sdd/state.json` (the gate) and,
+once the orchestrator runs `sdkit state <slug> init <risk> <branch>`, `.sdkit/work/<slug>/state.json` (the resume record).
 
 ## 5. The development lifecycle
 
@@ -203,20 +193,20 @@ SDKit has **no phase called "specification", "planning", "implementation" or "te
 
 - the **skill's steps** 0 to 8, which the orchestrator follows (it records `step` in `work/<slug>/state.json`; this is a convention, not
   enforced by a script), and
-- the **phase machine**, which `sdd.sh` enforces: `intake → proposed → red → green → verified → pr → done` (plus `aborted`).
+- the **phase machine**, which `sdkit sdd` enforces: `intake → proposed → red → green → verified → pr → done` (plus `aborted`).
 
 | You think of | Skill step | Gate phase while it happens | Moves on when |
 |---|---|---|---|
 | Specification (brief, risk, explore) | 0 Intake, 1 Explore | `intake` | you confirmed the risk label; the orchestrator moves to the plan gate |
 | Planning (plan gate) | 2 Plan gate | `intake` | you chose **Approve and propose** |
-| Specification artifact (proposal + DoD) | 3 Propose | `intake` → `proposed` | `sdd.sh advance proposed` finds a DoD list (high: race section too) |
+| Specification artifact (proposal + DoD) | 3 Propose | `intake` → `proposed` | `sdkit sdd advance proposed` finds a DoD list (high: race section too) |
 | Testing, RED | 4 | `proposed` → `red` | `advance red --test-cmd CMD`: CMD **fails** |
 | Implementation, GREEN | 4 | `red` → `green` | `advance green`: CMD **passes** (and, at high-assurance, no agent is still in flight) |
 | Verification | 5 (6 on failure) | `green` → `verified` | low: verify command passes; medium/high: independent PASS for this exact diff |
 | PR | 7 | `verified` → `pr` | you (the orchestrator) opened the PR; `advance pr` |
 | Closeout | 8 | `pr` → `done` | PR merged; `advance done` |
 
-*Captured*, `sdd.sh transitions`:
+*Captured*, `sdkit sdd transitions`:
 
 ```
 intake > proposed  proposal.md has a Definition of Done list (high risk: design.md has a race/ordering/timing section)
@@ -226,7 +216,7 @@ green > verified   the risk floor holds; low: the verify command passes; medium/
 verified > pr      none beyond verified: the push gate already holds the diff to the verified one before a PR exists
 pr > done          none (the PR is merged: the user's call)
 verified|pr > verified re-verification, only while the verified diff is stale: the same checks as verified
-any > (aborted)    sdd.sh abort; the only way back, and it ends the task
+any > (aborted)    sdkit sdd abort; the only way back, and it ends the task
 ```
 
 ### Diagram 1: the developer journey
@@ -254,7 +244,7 @@ flowchart TD
   P["phase: green"] --> V{"risk"}
   V -->|low| VC["verify command passes?"]
   V -->|medium or high| RUN["run verifier<br/>high: also reviewer and security-auditor"]
-  RUN --> RT{"route.sh decision<br/>only when ROUTING=on"}
+  RUN --> RT{"sdkit route decision<br/>only when ROUTING=on"}
   RT -->|"exit 7: valid evidence for this diff"| REUSE["reuse it, run nothing"]
   RT -->|"exit 3: budget exhausted"| BUD["stop and tell you:<br/>continue, raise limit, or stop"]
   RT -->|"exit 8: declined, nothing valid"| STOP["blocked: read the printed reason"]
@@ -264,23 +254,23 @@ flowchart TD
   VC --> VD
   VD -->|PASS| OK["phase: verified"]
   VD -->|"BLOCK, 1st time"| CL{"cause"}
-  CL -->|implementation bug| RETRY["developer retries once<br/>state.sh retry"]
+  CL -->|implementation bug| RETRY["developer retries once<br/>sdkit state retry"]
   CL -->|spec gap| PLAN["back to the plan gate, tell you"]
   RETRY --> P
   VD -->|"BLOCK, 2nd time"| HALT["automatic retries stop, you decide"]
   OK -->|"edit after verified"| STALE["verdict is stale:<br/>verify again"]
   STALE --> RUN
-  X["crash or interruption"] --> REC["recover.sh scan, then apply<br/>state.sh show resumes the task"]
+  X["crash or interruption"] --> REC["sdkit recover scan, then apply<br/>sdkit state show resumes the task"]
   REC --> P
 ```
 
-Every box maps to a real mechanism: `advance`, `route.sh` exit codes (7, 8, 3), `state.sh retry`, the stale verdict, `recover.sh`. Nothing in
+Every box maps to a real mechanism: `advance`, `sdkit route` exit codes (7, 8, 3), `sdkit state retry`, the stale verdict, `sdkit recover`. Nothing in
 the diagrams is a state the code does not have.
 
 ### Step by step: what happens, why, what you see
 
 **Intake and explore (steps 0 and 1).** Analyst and risk label as in [section 4](#4-starting-spec-driven-development); then
-`openspec-explore` grounds the problem in code (`scout` answers "where is X" cheaply and its answers are cached per code state). You see the
+the problem is grounded in code (`scout` answers "where is X" cheaply and its answers are cached per code state). You see the
 brief, the questions and the explore findings in the conversation. Gate phase: `intake`, so only docs, specs and project files can change.
 
 **Plan gate (step 2).** Before any proposal, for `medium`/`high` the `engineer` role drafts design, test strategy and task split; the
@@ -288,28 +278,28 @@ orchestrator assembles `.sdkit/work/<slug>/plan.md` (scope, assumptions, DoD, de
 `size:`, cost shape, risks, decision log) and walks you through it in batched questions: one round for low, three for medium, five for high.
 You see questions quoting the plan text; the last one is exactly `Approve and propose` / `Edit a section` / `Stop here`. Only the first
 continues. Dependencies between tasks are `after:` links; tasks with overlapping `writes:` are never run in parallel
-(`plan-waves.sh` computes the waves). You can ask to update the plan later; only affected rounds re-run.
+(`sdkit plan waves` computes the waves). You can ask to update the plan later; only affected rounds re-run.
 
-**Propose (step 3).** `openspec-propose` turns `plan.md` into `proposal.md`, `design.md`, `specs/`, `tasks.md`. The proposal must contain a
+**Proposal (step 3).** No OpenSpec skill runs: the orchestrator transcribes the approved `plan.md` into `.sdkit/work/<slug>/proposal.md`, `tasks.md` and (`medium`/`high`) `design.md` (managed mode: `start` already wrote the proposal from the task). The proposal must contain a
 **Definition of Done** section with list items shaped `D<n>: <testable condition> | Verified by: <unit test|integration test|manual check|none: reason>`.
-`sdd.sh advance proposed` is the exit condition and checks that a section named "Definition of Done" has at least one list item.
-`check-plan-parity.sh plan.md proposal.md tasks.md` compares plan and proposal. `dod-check.sh <proposal.md>` is a standalone helper that
+`sdkit sdd advance proposed` is the exit condition and checks that a section named "Definition of Done" has at least one list item.
+`sdkit plan parity plan.md proposal.md tasks.md` compares plan and proposal. `sdkit dod <proposal.md>` is a standalone helper that
 classifies the Verified-by methods (`dod ok: 2 item(s) automated=2 ...`); the skill does not call it for you. *Captured* refusal when the
 section is missing:
 
 ```
-sdd: openspec/changes/rate-limit/proposal.md has no 'Definition of Done' section with at least one list item. Each acceptance criterion needs a testable line.
+sdd: .sdkit/work/rate-limit/proposal.md has no 'Definition of Done' section with at least one list item. Each acceptance criterion needs a testable line.
 ```
 
 **Test first and implement (step 4).** Branch per `rules/git.md`, a testability check, then tests (`test-writer`), code (`developer`),
 pipeline files (`devsecops`); small `low` tasks may be done by the orchestrator itself. *Captured* gate behaviour in `proposed`:
 
 ```
-$ sdd.sh gate edit src/main.go
-Phase 'proposed' is test-first: only test files may change. Write the failing test, then run 'sdd.sh advance red --test-cmd <cmd>'. 'src/main.go' is not a test file (SDD_TEST_GLOBS).
-$ sdd.sh advance red --test-cmd "go test ./..."     # must FAIL, for the right reason
+$ sdkit sdd gate edit src/main.go
+Phase 'proposed' is test-first: only test files may change. Write the failing test, then run 'sdkit sdd advance red --test-cmd <cmd>'. 'src/main.go' is not a test file (SDD_TEST_GLOBS).
+$ sdkit sdd advance red --test-cmd "go test ./..."     # must FAIL, for the right reason
 phase: red
-$ sdd.sh advance green --test-cmd "go test ./..."   # must PASS
+$ sdkit sdd advance green --test-cmd "go test ./..."   # must PASS
 phase: green
 ```
 
@@ -331,7 +321,7 @@ phase: green
 
 Putting it together: *you* use the **host** Claude Code; its session is the **orchestrator**; for medium risk the orchestrator spawns a
 **subagent** of the **role** `verifier` (tier `standard`); `CLAUDE_MODEL_STANDARD=sonnet` selects the **model**; the **provider** behind that
-model is whatever your host account uses. With `run-role.sh --host codex` the same role can run on another host and vendor.
+model is whatever your host account uses. With `sdkit run-role --host codex` the same role can run on another host and vendor.
 
 ### Why not one agent
 
@@ -362,23 +352,23 @@ never run below their own tier, and `high` verification is always `strong`.
 
 A handoff is the brief a role receives (`references/handoff.md`): fixed lines first, per-spawn lines last (better prompt-cache reuse).
 With `CONTRACTS=1` it may carry `CONTRACT: 1` and an `ID:`, and the role ends with one `HANDOFF-RESULT/1 | id | role | status | artifacts | blockers | next`
-line. `contract.sh` checks identity, role, status, paths and scope deterministically, with no model. A valid contract says the exchange is
+line. `sdkit contract` checks identity, role, status, paths and scope deterministically, with no model. A valid contract says the exchange is
 well-formed; **it is never a verification**. `high-assurance` makes contracts mandatory for writing and deciding roles.
 
 ### Delegation, context, evidence reuse
 
 - **Spawn or not** (`references/delegation.md`): do it yourself for one or two files; spawn for independent checks, disjoint write sets, design.
 - **Results stay small**: roles answer in at most 15 lines plus a structured block; the long form goes to `work/<slug>/out/`.
-  `run-role.sh --envelope` stores the full answer and returns a compact `ENVELOPE/1` view that keeps every FAIL / CONFIRMED / BLOCKER line;
+  `sdkit run-role --envelope` stores the full answer and returns a compact `ENVELOPE/1` view that keeps every FAIL / CONFIRMED / BLOCKER line;
   verdicts are still computed from the full answer.
-- **Caches**: `lookup-cache.sh` (scout answers, valid for the exact code state), `knowledge.sh` (discovery notes valid while the covered
-  files' content hashes are unchanged; refused to independent roles), the verify command's green-per-tree cache, and `test-select.sh`'s cache.
+- **Caches**: `sdkit lookup` (scout answers, valid for the exact code state), `sdkit knowledge` (discovery notes valid while the covered
+  files' content hashes are unchanged; refused to independent roles), the verify command's green-per-tree cache, and Go's own test cache.
 - **Evidence reuse** means: a valid PASS verdict from a registered run of the same role on the **same diff and task** is reused instead of
-  running that role again. It is only available through `route.sh` (`ROUTING=on`), exit 7 ([section 9](#9-routing-and-cost-controls)). Any edit makes the evidence stale.
+  running that role again. It is only available through `sdkit route` (`ROUTING=on`), exit 7 ([section 9](#9-routing-and-cost-controls)). Any edit makes the evidence stale.
 
 ### Parallel work
 
-On by default (`PARALLEL=off` turns it off). With `dispatch.sh claim|done|release|status` is an idempotent ledger deciding whether a task may start (dependencies done, `writes:`
+On by default (`PARALLEL=off` turns it off). With `sdkit dispatch claim|done|release|status` is an idempotent ledger deciding whether a task may start (dependencies done, `writes:`
 disjoint, fewer than `MAX_PARALLEL` active). It starts nothing and claims no time saving. After a merge, every recorded verifier/reviewer/auditor
 PASS is stale until run again on the merged diff.
 
@@ -386,37 +376,37 @@ PASS is stale until run again on the merged diff.
 
 **Limit, stated plainly:** SDKit has **no single status screen or dashboard**. Progress is spread over state files and read-only commands.
 The gate phase is exact; the skill step is a best-effort record; "which role is running right now" is only visible in the host UI and
-indirectly in the ledgers. Run these from your repo; `S="$KIT/scripts/sdd.sh"`.
+indirectly in the ledgers. Run these from your repo; `$S` below stands for `sdkit sdd`.
 
 | Developer question | How to check | Expected information |
 |---|---|---|
 | Which phase am I in? | `$S status` (or `$S phase`) | `task=rate-limit risk=medium phase=green`; `no active task` when none |
 | Which task is active? | `$S task` | the slug (empty when none) |
-| Which workflow step (0 to 8) did the orchestrator reach? | `$KIT/scripts/state.sh <slug> show` or `get step` | `step`, `risk`, `branch`, task statuses, `retries`, last `verdict`. Written by the orchestrator following SKILL.md, so it is only as current as it kept it |
+| Which workflow step (0 to 8) did the orchestrator reach? | `sdkit state <slug> show` or `get step` | `step`, `risk`, `branch`, task statuses, `retries`, last `verdict`. Written by the orchestrator following SKILL.md, so it is only as current as it kept it |
 | What does this task require? | `$S policy` / `$S transitions` | profile, verifier mode, contract level, automatic-retry limit; the rule for each move |
-| What is running? | host UI (subagent panel); `$KIT/scripts/contract.sh pending` (contracted handoffs not yet answered); `$KIT/scripts/telemetry.sh summary <slug>` (`agents: N spawned, M finished`, needs `TELEMETRY=1`); `$KIT/scripts/route.sh log <slug>` (decisions and outcomes, needs `ROUTING=on`) | no "active role" field exists |
+| What is running? | host UI (subagent panel); `sdkit contract pending` (contracted handoffs not yet answered); `sdkit telemetry summary <slug>` (`agents: N spawned, M finished`, needs `TELEMETRY=1`); `sdkit route log <slug>` (decisions and outcomes, needs `ROUTING=on`) | no "active role" field exists |
 | Which verification gate is pending / did a role pass? | `$S evidence` (`--json`) | per role (`verifier`, `reviewer`, `security-auditor`): `valid`, `missing`, `block`, `stale`, `untrusted`, `wrong-task` or `conflict` |
-| Why did SDKit stop me? | the refusal text itself (every gate prints the reason and the next step); `$S gate edit <path>` / `$S gate push` to re-ask; `telemetry.sh summary` shows `gate rejections` and `rejections no-verdict=1` | blocker and reason |
-| Why did routing decline? | `$KIT/scripts/route.sh explain --role <role> [--host H]` (five readable lines, records nothing) | `Decision`, `Reason` code (for example `NO_ADAPTER`), `Budget`, `Policy` |
-| How much have I spent? | `$KIT/scripts/usage.sh report <slug>` | tokens per role and model, cache hit rate, API-equivalent cost, `PARTIAL` when a run is unpriced. Needs `USAGE_LOG=1` (default) and `pricing.json` for cost |
-| How close am I to the budget? | `$KIT/scripts/usage.sh budget [slug]` | `token budget for <slug>: 156700 of 1000000 used (15%)`; empty setting means no budget |
-| What remains? | `$S status` + `$S transitions` (next gate), `$S evidence` (missing roles), `state.sh <slug> show` (task statuses) | next phase and what its gate needs |
-| Did the task finish? | `$S status` (`no active task` after `done`/abort); `$KIT/scripts/report.sh task <slug>` or `sdkit report task <slug>` | `COMPLETED` / `FAILED` / `BLOCKED` / `PARTIAL` / `ABORTED`, or `IN-PROGRESS` live view |
-| Was something interrupted? | `$KIT/scripts/recover.sh scan [slug]` (read-only) | stale handoffs, spawns, claims, reservations and the single safe action for each |
-| Did the move succeed? | `sdd.sh advance` prints `phase: <new>` or `sdd: <reason>`; `telemetry.sh summary` lists `phases` with durations and `tests: green pass x1, red fail x1` | exit 0 and the new phase, or exit 1 with the reason |
+| Why did SDKit stop me? | the refusal text itself (every gate prints the reason and the next step); `$S gate edit <path>` / `$S gate push` to re-ask; `sdkit telemetry summary` shows `gate rejections` and `rejections no-verdict=1` | blocker and reason |
+| Why did routing decline? | `sdkit route explain --role <role> [--host H]` (five readable lines, records nothing) | `Decision`, `Reason` code (for example `NO_ADAPTER`), `Budget`, `Policy` |
+| How much have I spent? | `sdkit usage report <slug>` | tokens per role and model, cache hit rate, API-equivalent cost, `PARTIAL` when a run is unpriced. Needs `USAGE_LOG=1` (default) and `pricing.json` for cost |
+| How close am I to the budget? | `sdkit usage budget [slug]` | `token budget for <slug>: 156700 of 1000000 used (15%)`; empty setting means no budget |
+| What remains? | `$S status` + `$S transitions` (next gate), `$S evidence` (missing roles), `sdkit state <slug> show` (task statuses) | next phase and what its gate needs |
+| Did the task finish? | `$S status` (`no active task` after `done`/abort); `sdkit report task <slug>` | `COMPLETED` / `FAILED` / `BLOCKED` / `PARTIAL` / `ABORTED`, or `IN-PROGRESS` live view |
+| Was something interrupted? | `sdkit recover scan [slug]` (read-only) | stale handoffs, spawns, claims, reservations and the single safe action for each |
+| Did the move succeed? | `sdkit sdd advance` prints `phase: <new>` or `sdd: <reason>`; `sdkit telemetry summary` lists `phases` with durations and `tests: green pass x1, red fail x1` | exit 0 and the new phase, or exit 1 with the reason |
 
-*Captured*, a medium task right after GREEN, then `telemetry.sh summary` (`TELEMETRY=1`):
+*Captured*, a medium task right after GREEN, then `sdkit telemetry summary` (`TELEMETRY=1`):
 
 ```
-$ sdd.sh status
+$ sdkit sdd status
 task=rate-limit risk=medium phase=green
-$ sdd.sh advance verified
+$ sdkit sdd advance verified
 sdd: medium risk needs an independent verifier PASS (current: none). Run the verifier agent on a clean context; its verdict is recorded automatically.
-$ sdd.sh evidence
+$ sdkit sdd evidence
 verifier           missing    verdict=-     trust=-            run=-
 reviewer           missing    verdict=-     trust=-            run=-
 security-auditor   missing    verdict=-     trust=-            run=-
-$ telemetry.sh summary rate-limit
+$ sdkit telemetry summary rate-limit
 task rate-limit   run r20261101150427-468277986   mode live   risk medium
 status in-progress   verified false   wall 3s   events 7
 phases
@@ -434,23 +424,23 @@ On Claude Code the `SessionStart` hook also tells the *agent* (not you) the curr
 
 ### Proposed UX (not implemented)
 
-Nothing below exists today. It is a minimal enhancement suggestion, kept separate on purpose: a read-only `sdd.sh progress` that joins data
+Nothing below exists today. It is a minimal enhancement suggestion, kept separate on purpose: a read-only `sdkit sdd progress` that joins data
 the kit already records, without a new state store.
 
 ```
 SDKit Workflow: rate-limit                        (PROPOSED OUTPUT, NOT AN EXISTING COMMAND)
-Phase: green    Risk: medium    Profile: standard    Skill step: 5 (from state.sh)
+Phase: green    Risk: medium    Profile: standard    Skill step: 5 (from sdkit state)
 Gates:  proposed done · red done · green done · verified PENDING (verifier: missing)
-Budget: 156,700 / 1,000,000 tokens (usage.sh budget)    Blockers: none (last refusal: no-verdict)
+Budget: 156,700 / 1,000,000 tokens (sdkit usage budget)    Blockers: none (last refusal: no-verdict)
 ```
 
-The missing piece it would fill is "active role": that needs the spawn registration (`sdd.sh _spawn`) to be surfaced, which today only the hooks and
-`run-role.sh` write.
+The missing piece it would fill is "active role": that needs the spawn registration (`sdkit sdd _spawn`) to be surfaced, which today only the hooks and
+`sdkit run-role` write.
 
 ### Resuming after an interruption
 
-1. `sdd.sh status` and `state.sh <slug> show`: the gate phase and the step.
-2. `recover.sh scan` then `recover.sh apply`: closes stale contract handoffs, drops stale spawn registrations, releases stale dispatch
+1. `sdkit sdd status` and `sdkit state <slug> show`: the gate phase and the step.
+2. `sdkit recover scan` then `sdkit recover apply`: closes stale contract handoffs, drops stale spawn registrations, releases stale dispatch
    claims, expires stale budget reservations (stale = older than `RECOVER_STALE_S`, default 1800 s). It never re-runs a role, edits evidence or
    turns a BLOCK into anything else; each applied action is appended to `work/<slug>/recovery.jsonl`. An unreadable `state.json` is reported, not guessed.
 3. Start `/spec-driven-dev` again with the same task: the skill continues from the recorded `step`. Evidence that no longer matches the diff must be produced again.
@@ -460,10 +450,6 @@ The missing piece it would fill is "active role": that needs the spawn registrat
 **RED / GREEN.** `advance red --test-cmd CMD` runs CMD and refuses unless it fails; `advance green` re-runs it and refuses while it fails. In
 `proposed` only test files (`SDD_TEST_GLOBS`) can change; production code unlocks after RED. At `high` the regression test is written by
 `test-writer` against real infrastructure and appended to `.sdkit/.frozen`; the `frozen-tests` guard then denies edits to it.
-
-**Test selection.** `test-select.sh list|run` maps changed files to focused test commands from `test-map.conf` (an unmapped file or a shared
-module selects the full suite; green results are cached per exact tree; `run` prints `tests: tier=T1 commands=N ran=R cached=C ...`). It is a standalone
-tool: you can pass it as the `--test-cmd`, and `pr-check.sh` uses it. The phase machine does not call it by itself.
 
 **Verifier.** Independent, read-only, started fresh with only `proposal.md` (and `design.md` for high), the diff base and the risk label. It runs
 the verify command, judges every DoD item with evidence, scans `known-pitfalls.md`, and returns exactly:
@@ -478,15 +464,15 @@ VERIFY
 VERDICT: PASS|BLOCK
 ```
 
-`BLOCK` if any DoD item fails or any finding is `CONFIRMED`; `PLAUSIBLE` never blocks. `parse-verdict.sh` is the only validator (structure,
+`BLOCK` if any DoD item fails or any finding is `CONFIRMED`; `PLAUSIBLE` never blocks. `sdkit verdict` is the only validator (structure,
 every DoD item judged, verdict consistent with findings): exit 0 PASS, 1 BLOCK, 2 malformed (ask once for the format; not a retry). The verdict is
 **recorded against a fingerprint of the diff**: on Claude Code the `SubagentStop` hook records it; on other hosts the orchestrator passes `--record`
-or uses `run-role.sh`. Your own claim counts for nothing and any later edit makes it stale. DoD items verified by `manual check`, post-deploy or
-`none` cannot get a PASS on evidence alone; a named person can accept one with `dod-check.sh accept <proposal.md> D<n> --by ... --reason ...` (bound to the item's text).
+or uses `sdkit run-role`. Your own claim counts for nothing and any later edit makes it stale. DoD items verified by `manual check`, post-deploy or
+`none` cannot get a PASS on evidence alone; a named person can accept one with `sdkit dod accept <proposal.md> D<n> --by ... --reason ...` (bound to the item's text).
 
 **Reviewer and security auditor.** At `high` both run on the final diff (read-only, parallel) and each needs its own PASS; pipeline/infra changes
-always get `security-auditor`. For `high`, `sdd.sh advance verified|pr|done` need a PASS from **all three** roles, from a *registered* run (Claude Code hooks, or
-`run-role.sh` on any host). A hand-recorded verdict is kept but never counts, an edit makes evidence stale, and a newer BLOCK wins
+always get `security-auditor`. For `high`, `sdkit sdd advance verified|pr|done` need a PASS from **all three** roles, from a *registered* run (Claude Code hooks, or
+`sdkit run-role` on any host). A hand-recorded verdict is kept but never counts, an edit makes evidence stale, and a newer BLOCK wins
 ([design-evidence.md](design-evidence.md)).
 
 **Risk-dependent summary:**
@@ -509,8 +495,8 @@ Routing means *which adapter and model run a role, within which budget, and whet
 1. **Always on, by the skill:** the `size:` of each task (`small|medium|large`) maps to a tier (`light|standard|strong`); the orchestrator puts
    `TIER:` in the handoff; Claude Code passes the `Agent` tool's `model` from `CLAUDE_MODEL_<TIER>` (`core/tiers.env`: `haiku`, `sonnet`,
    `opus`). Floors: independent roles never go below their own tier; `high` verification is always `strong`. You see sizes and the tier mix in plan sections 5 and 6 and can change them at the plan gate.
-2. **Opt-in `ROUTING=on`:** `run-role.sh` becomes a consumer of `route.sh decide`, a deterministic function (no model call) of risk, profile, evidence,
-   settings, the model registry (`core/tiers.env` + `.sdkit/models.json`), the routing ledger and the usage ledger. Exit codes of `run-role.sh`/`route.sh decide`:
+2. **Opt-in `ROUTING=on`:** `sdkit run-role` becomes a consumer of `sdkit route decide`, a deterministic function (no model call) of risk, profile, evidence,
+   settings, the model registry (`core/tiers.env` + `.sdkit/models.json`), the routing ledger and the usage ledger. Exit codes of `sdkit run-role`/`sdkit route decide`:
 
 | Exit | Meaning | What you do |
 |---|---|---|
@@ -520,7 +506,7 @@ Routing means *which adapter and model run a role, within which budget, and whet
 | 3 | budget exhausted | tell the user: continue (`--ignore-budget` after they agree), raise the limit, or stop |
 | 2 | refused by policy or configuration | the reason names the setting |
 
-`route.sh explain --role verifier` shows the decision without recording it (*captured*, routing off):
+`sdkit route explain --role verifier` shows the decision without recording it (*captured*, routing off):
 
 ```
 Task: rate-limit
@@ -528,7 +514,7 @@ Risk: medium (profile standard)
 Role: verifier (gate, mandatory)
 Decision: stop
 Reason: NO_ADAPTER
-Policy: route-v1  Routing: off (run-role.sh ignores this decision until ROUTING=on)
+Policy: route-v1  Routing: off (sdkit run-role ignores this decision until ROUTING=on)
 Notes: no host: pass --host or set RUN_ROLE_HOST (VERIFIER_HOST for independent roles) in .sdkit/sdkit.env
 ```
 
@@ -540,7 +526,7 @@ Notes: no host: pass --host or set RUN_ROLE_HOST (VERIFIER_HOST for independent 
 | `MAX_SPAWNS` | counts subagent spawns; past it the next one needs you |
 | `ROUTE_ROLE_TOKENS`, `ROUTE_TIMEOUT_S`, `ROUTE_BUDGET_COST` | per-role token cap, per-run timeout, an advisory USD ceiling (never a stop) |
 
-Enforcement: Claude Code's `guard-budget` hook on every `Agent` call; elsewhere `run-role.sh` at the spawn (exit 3). Token limits are hard only
+Enforcement: Claude Code's `guard-budget` hook on every `Agent` call; elsewhere `sdkit run-role` at the spawn (exit 3). Token limits are hard only
 where the host reports usage (Claude Code: yes; Gemini: tokens but no cache; Codex, OpenCode, Cursor: no tokens, `core/adapters.json`); a
 running process is never cut off. A budget stop never shrinks verification. Risk floors, mandatory gates and evidence rules are never lowered by routing.
 
@@ -550,20 +536,19 @@ running process is never cut off. A budget stop never shrinks verification. Risk
 |---|---|---|
 | Phase move refused (no DoD, tests did not fail/pass, no verifier PASS) | state unchanged; reason on stderr; `phase.reject` event | the message names the missing thing; do that step |
 | Edit, push or PR out of phase | hook (Claude Code) or git hook denies; `SDD_MODE=guided` only asks/warns | do the step the message names; never work around it |
-| Verifier `BLOCK`, implementation bug | back to `developer` for **exactly one** retry with only the failing items (`state.sh <slug> retry <task>`: exit 0 go, exit 1 spent) | automatic, no question |
+| Verifier `BLOCK`, implementation bug | back to `developer` for **exactly one** retry with only the failing items (`sdkit state <slug> retry <task>`: exit 0 go, exit 1 spent) | automatic, no question |
 | Verifier `BLOCK`, spec gap (DoD inconsistent/unsatisfiable) | back to the plan gate; no retry against a broken target | the orchestrator tells you immediately |
 | Second `BLOCK` on the same task, any cause | automatic retries stop; summary of both failures, diff, branch state | you decide; no third automatic loop |
 | Malformed verdict (exit 2) | not recorded, not a retry; the format is asked for once | transparent |
 | Budget exhausted | stops before the spawn that goes over (strict) | continue, raise, or stop |
 | Diff edited after verification | verdict stale, push/PR refused | verify again (`advance verified`, re-verification is allowed while stale) |
 | Crash, killed session | records stay on disk | [resuming](#resuming-after-an-interruption) |
-| You abandon the task | `sdd.sh abort [failed\|blocked\|partial]` ends it and clears `.frozen` | `task aborted`; the Value Report (if on) is written with that terminal state, `aborted` by default |
+| You abandon the task | `sdkit sdd abort [failed\|blocked\|partial]` ends it and clears `.frozen` | `task aborted`; the Value Report (if on) is written with that terminal state, `aborted` by default |
 
 ## 11. How tasks and sessions complete
 
-**A task is done for the gate** when `sdd.sh advance done` succeeds after the PR is merged. The orchestrator then runs `openspec-sync-specs`
-and `openspec-archive-change`, promotes memory candidates if `MEMORY=1` (you pick), archives telemetry if on
-(`telemetry.sh archive <slug>`), deletes `.sdkit/work/<slug>/` and removes task worktrees (`worktree.sh clean`).
+**A task is done for the gate** when `sdkit sdd advance done` succeeds after the PR is merged. The orchestrator then promotes memory candidates if `MEMORY=1` (you pick), archives telemetry if on
+(`sdkit telemetry archive <slug>`), deletes `.sdkit/work/<slug>/` and removes task worktrees (`sdkit worktree clean`).
 
 What remains: the committed attestation `.sdkit/attestations/<slug>.json`, the merged code and specs, memory entries, ADRs, the
 Value Report under `.sdkit/work/_reports/` and archived telemetry/usage under `.sdkit/work/_archive/`.
@@ -572,32 +557,32 @@ Value Report under `.sdkit/work/_reports/` and archived telemetry/usage under `.
 releases for you without the phase checks: commit and push happen at step 7 (denied before `verified`), and the merge is **your** call. Post-merge release steps are relayed to you from
 `project.md`; the orchestrator does not run them. No version is bumped and nothing is published by the workflow.
 
-**Usage and cost reconciliation.** Hooks (Claude Code `SubagentStop`/`Stop`) and `run-role.sh` write one line per execution to
+**Usage and cost reconciliation.** Hooks (Claude Code `SubagentStop`/`Stop`) and `sdkit run-role` write one line per execution to
 `work/<slug>/usage.jsonl`. A later line with the same execution id and model replaces an earlier one unless it would lose data (a snapshot never replaces
-a final line; counters only grow). `usage.sh scan` reads host transcripts for runs the hooks never saw, with the same ids, so nothing is counted twice.
+a final line; counters only grow). `sdkit usage scan` reads host transcripts for runs the hooks never saw, with the same ids, so nothing is counted twice.
 Cost is `tokens × pricing.json` (API-equivalent estimate, never a bill; `sdkit init` copies a starting table from the public Bedrock list, `sdkit doctor --update-pricing` refreshes it).
 
-**Task report.** When `sdd.sh advance done` succeeds (`completed`) or `sdd.sh abort` runs (`aborted`, or the word you pass), and `VALUE_REPORT=on`, `report.sh finalize` writes the report
+**Task report.** When `sdkit sdd advance done` succeeds (`completed`) or `sdkit sdd abort` runs (`aborted`, or the word you pass), and `VALUE_REPORT=on`, `sdkit report finalize` writes the report
 **once** (a second call finds it and does nothing; `--force` rewrites) and prints a compact version on stderr. Read it later with `sdkit report task <slug>`.
 
 **Session end.** On Claude Code the `SessionEnd` hook marks the session ended and stores a session summary; the `SessionStart` hook recovers earlier sessions that
 never got an end signal and stores them as `interrupted`. The session report aggregates the usage ledger rows carrying that session id (the same distinct
 execution ids, so a run is counted once). It lists the tasks that ran fully inside the session; the avoided executions of a task spanning several sessions stay in its
-own task report and are not added again to any session. A session report is never stored while the session may still be running (`report.sh session current` builds it live).
-Other hosts have no end-of-session hook: use `report.sh session latest` / `report.sh recover`. The session report is a roll-up (tokens, cost, roles, tasks); a task report answers "what did this one task
+own task report and are not added again to any session. A session report is never stored while the session may still be running (`sdkit report session current` builds it live).
+Other hosts have no end-of-session hook: use `sdkit report session latest` / `sdkit report recover`. The session report is a roll-up (tokens, cost, roles, tasks); a task report answers "what did this one task
 achieve, with what, and what was avoided".
 
 ## 12. The SDKit Value Report
 
-`scripts/report.sh` (also `sdkit report ...`) is a **reader**: it combines records the kit already keeps (usage ledger and canonical price resolver,
+`sdkit report` is a **reader**: it combines records the kit already keeps (usage ledger and canonical price resolver,
 telemetry events, routing ledger, context and selection records). It keeps no second ledger, calls no model, and never fails the workflow.
 
 ```
 sdkit report task [slug|latest] [--run ID] [--detailed|--json|--markdown]   stored report of a finished task, else a live view of an open one
 sdkit report session [id|latest|current] [--detailed|--json|--markdown]
 sdkit report latest | history [--json]
-report.sh finalize --status completed|failed|blocked|partial|aborted [--slug S] [--force]   write the task's report once
-report.sh session-end | recover | regenerate task|session ID
+sdkit report finalize --status completed|failed|blocked|partial|aborted [--slug S] [--force]   write the task's report once
+sdkit report session-end | recover | regenerate task|session ID
 ```
 
 Stored (small, local, no prompts, no transcripts) in `.sdkit/work/_reports/{task,session}/`, with `index.jsonl`.
@@ -705,20 +690,20 @@ How to read it:
 |---|---|
 | Set up / check / refresh / upgrade a repo | `sdkit init`, `sdkit doctor`, `sdkit sync [--check]`, `sdkit upgrade` |
 | Kit version and location | `sdkit version`, `sdkit where` |
-| Current phase / task | `sdd.sh status`, `sdd.sh phase`, `sdd.sh task` |
-| Rules / next gate / required roles | `sdd.sh transitions`, `sdd.sh policy`, `sdd.sh evidence` |
-| Move forward | `sdd.sh advance proposed\|red\|green\|verified\|pr\|done` |
-| Would this edit/push be allowed? | `sdd.sh gate edit <path>`, `sdd.sh gate push` |
-| Resume record | `state.sh <slug> show\|get step` |
-| Run a role on any host | `run-role.sh <role> --handoff FILE --host H [--dry-run]` |
-| Validate a verdict | `parse-verdict.sh - --proposal <proposal.md>` |
-| Routing explanation / ledger | `route.sh explain --role R`, `route.sh log <slug>` |
-| Tokens, budget, cost | `usage.sh report <slug>`, `usage.sh budget`, `telemetry.sh summary <slug>` |
-| Interrupted work | `recover.sh scan`, `recover.sh apply` |
+| Current phase / task | `sdkit sdd status`, `sdkit sdd phase`, `sdkit sdd task` |
+| Rules / next gate / required roles | `sdkit sdd transitions`, `sdkit sdd policy`, `sdkit sdd evidence` |
+| Move forward | `sdkit sdd advance proposed\|red\|green\|verified\|pr\|done` |
+| Would this edit/push be allowed? | `sdkit sdd gate edit <path>`, `sdkit sdd gate push` |
+| Resume record | `sdkit state <slug> show\|get step` |
+| Run a role on any host | `sdkit run-role <role> --handoff FILE --host H [--dry-run]` |
+| Validate a verdict | `sdkit verdict - --proposal <proposal.md>` |
+| Routing explanation / ledger | `sdkit route explain --role R`, `sdkit route log <slug>` |
+| Tokens, budget, cost | `sdkit usage report <slug>`, `sdkit usage budget`, `sdkit telemetry summary <slug>` |
+| Interrupted work | `sdkit recover scan`, `sdkit recover apply` |
 | Reports | `sdkit report task <slug>`, `sdkit report latest`, `sdkit report history`, `sdkit report session latest` |
-| Abandon a task | `sdd.sh abort` |
+| Abandon a task | `sdkit sdd abort` |
 
-(`sdd.sh` etc. are in `$(sdkit where)/scripts/`.) Settings list: [guide.md](guide.md) §18 and §19; deeper designs: [design-workflow.md](design-workflow.md),
+Settings list: [guide.md](guide.md) §18 and §19; deeper designs: [design-workflow.md](design-workflow.md),
 [design-evidence.md](design-evidence.md), [design-routing.md](design-routing.md), [design-usage.md](design-usage.md), [design-telemetry.md](design-telemetry.md),
 [design-contracts.md](design-contracts.md), [design-adapters.md](design-adapters.md).
 
@@ -729,11 +714,11 @@ scripts and you do; not everything is automatic, and the orchestrator is an LLM 
 
 | # | You | SDKit | Artifact | Phase | Next |
 |---|---|---|---|---|---|
-| 1 | `sdkit init`, fill `project.md`, `sdkit doctor`, commit | installs project side | `.sdkit/`, `openspec/`, `AGENTS.md` | none (no task) | start a task |
+| 1 | `sdkit init`, fill `project.md`, `sdkit doctor`, commit | installs project side | `.sdkit/`, `AGENTS.md` | none (no task) | start a task |
 | 2 | `/spec-driven-dev add rate limiting to the public API` | reads config; analyst checks readiness | brief | none yet | answer gaps |
-| 3 | answer the analyst's questions (limit per client? per key or IP? window?); confirm risk `medium` | `sdd.sh start rate-limit --risk medium --proposal ...`; `state.sh rate-limit init` | `.sdkit/.sdd/state.json`, `work/rate-limit/state.json` | `intake` | explore, plan |
+| 3 | answer the analyst's questions (limit per client? per key or IP? window?); confirm risk `medium` | `sdkit sdd start rate-limit --risk medium --proposal ...`; `sdkit state rate-limit init` | `.sdkit/.sdd/state.json`, `work/rate-limit/state.json` | `intake` | explore, plan |
 | 4 | review and edit the plan in rounds; choose *Approve and propose* | `engineer` drafts design and test strategy; plan.md assembled | `work/rate-limit/plan.md` | `intake` | propose |
-| 5 | check the proposal's DoD (`D1`: 101st request in a minute gets 429, `D2`: `Retry-After` set, `D3`: other clients unaffected) | `openspec-propose`; `check-plan-parity.sh`; `advance proposed` | `openspec/changes/rate-limit/{proposal,design,tasks}.md` | `proposed` | write failing tests |
+| 5 | check the proposal's DoD (`D1`: 101st request in a minute gets 429, `D2`: `Retry-After` set, `D3`: other clients unaffected) | orchestrator writes the proposal from the plan; `sdkit plan parity`; `advance proposed` | `.sdkit/work/rate-limit/{proposal,design,tasks}.md` | `proposed` | write failing tests |
 | 6 | watch | `test-writer` writes tests; `advance red --test-cmd "go test ./api/..."` fails for the right reason | test files | `red` | implement |
 | 7 | watch; read the diff | `developer` implements; `advance green` re-runs the test | production code | `green` | verify |
 | 8 | watch; see the verdict | fresh `verifier` (host's `standard` tier) runs the verify command and checks D1 to D3; the hook records the verdict for this diff | verdict in `.sdd/` | `green` | on PASS `advance verified` |
@@ -757,13 +742,13 @@ If the verifier had returned `BLOCK` twice, step 8b would have stopped with a su
 | Workflow will not start | no risk rubric in `project.md`; `doctor` FAIL | `sdkit doctor`, fill `project.md` |
 | `Phase 'proposed' is test-first ...` | editing production code before RED | write the failing test, `advance red --test-cmd ...` |
 | `advance proposed` refuses | no `Definition of Done` section with a list item | add `- D1: ... \| Verified by: ...` lines |
-| `advance verified`: `needs an independent verifier PASS` | no verdict for this diff | run the verifier; `sdd.sh evidence` |
+| `advance verified`: `needs an independent verifier PASS` | no verdict for this diff | run the verifier; `sdkit sdd evidence` |
 | Push/PR denied | not `verified`, or diff changed after verification | re-verify |
-| `run-role.sh` exit 7 / 8 / 3 | reuse / declined / budget | [section 9](#9-routing-and-cost-controls) |
-| Report shows `N/A` usage | `USAGE_LOG` off, host reports no tokens, or no usage rows for the task | `usage.sh report <slug>` |
+| `sdkit run-role` exit 7 / 8 / 3 | reuse / declined / budget | [section 9](#9-routing-and-cost-controls) |
+| Report shows `N/A` usage | `USAGE_LOG` off, host reports no tokens, or no usage rows for the task | `sdkit usage report <slug>` |
 | Report cost `N/A (no pricing)` | no `.sdkit/pricing.json` | add your prices (USD per million tokens) |
 | Tests / gates `not recorded` | `TELEMETRY` empty | set `TELEMETRY=1` in `sdkit.local.env` |
-| No report at task end | `VALUE_REPORT` not `on` in your settings | `sdkit upgrade` adds it, or run `report.sh finalize --status completed --force` |
+| No report at task end | `VALUE_REPORT` not `on` in your settings | `sdkit upgrade` adds it, or run `sdkit report finalize --status completed --force` |
 
 Limitations:
 
@@ -771,9 +756,9 @@ Limitations:
 - The orchestrator is an LLM following `SKILL.md`; the **gates** are enforced by scripts and hooks, the **conversation** is not.
 - Guards are regex-based safety nets, not a security boundary. Git hooks can be skipped with `--no-verify`; CI cannot, so mark the CI check as required.
 - Adapters for Codex, OpenCode, Cursor and Gemini follow each tool's documentation but are not validated on live installs; Claude Code is.
-  Only Claude Code has the full hook set; other hosts rely on adapters, git hooks and `run-role.sh`.
+  Only Claude Code has the full hook set; other hosts rely on adapters, git hooks and `sdkit run-role`.
 - Host usage reporting differs (section 9); routing budgets and savings are as complete as the reported usage.
 - Routing, contracts, telemetry, parallel dispatch, test selection and the DoD helper are opt-in or standalone; they do nothing until enabled or called.
 - Pull requests: Bitbucket is implemented; for GitHub and GitLab see [hosts.md](hosts.md).
-- One stack per repo; Windows is not supported (the kit is bash).
+- One stack per repo; Windows is supported natively (`sdkit.exe`, no bash needed); the hook wiring for Codex, Gemini CLI and OpenCode on Windows is unverified until the first Windows CI run.
 - Savings are never guaranteed: orchestration adds agent runs, and the report says what the records show, including a negative routing effect.

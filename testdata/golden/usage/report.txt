@@ -1,0 +1,47 @@
+# captured from the 1.x oracle scripts/usage.sh report full|na (TELEMETRY_PRICES=pricing.json); only change: 'usage.sh scan' reads 'sdkit usage scan'
+usage: task full
+
+role          tier      runs  in    out   cache_read  cache_write  est_usd
+developer     standard  1     500   1200  10000       1000         $0.0263
+orchestrator  -         1     2000  900   30000       3000         $0.0398
+reviewer      light     1     300   400   2000        0            $0.0025
+TOTAL         -         3     2800  2500  42000       4000         $0.0685
+
+model                      provider  runs  in    out   cache_read  cache_write  est_usd
+claude-haiku-4-5-20251001  bedrock   1     300   400   2000        0            $0.0025
+claude-sonnet-4-5          bedrock   2     2500  2100  40000       4000         $0.0660
+
+cache hit rate: 86.1%  (cache_read 42000 of 48800 input-side tokens = in + cache_read + cache_write); saved about $0.1098 vs uncached input (API-equivalent)
+estimated cost (API-equivalent, tokens x pricing.json): $0.0685
+host-reported estimate: $0.0123 over 1 run(s) (Claude Code client-side estimate, not billed; kept apart from the line above)
+billed: unavailable - no source reports it; with a Claude Code subscription nothing is billed per token, so the figure above is only what the same tokens would cost at API rates
+coverage: 3 execution(s), 4 ledger line(s), 1 duplicate/superseded line(s) collapsed; origin observed 1, sdk 2
+totals complete for the data recorded (execution coverage cannot be proven for runs that never logged)
+usage: task na
+
+role       tier      runs  in   out  cache_read  cache_write  est_usd
+developer  -         1     100  50   400         0            $0.0012
+developer  standard  1     700  300  0           0            -
+reviewer   light     1     50   20   0           0            -
+verifier   standard  1     0    0    0           0            -
+TOTAL      -         4     850  370  400         0            $0.0012*
+
+model              provider  runs  in   out  cache_read  cache_write  est_usd
+(unknown)          -         2     50   20   0           0            -
+claude-sonnet-4-5  bedrock   1     100  50   400         0            $0.0012
+gpt-x              -         1     700  300  0           0            -
+
+session  origin  runs  in   out  cache_read  cache_write  est_usd
+(none)   sdk     1     100  50   400         0            $0.0012
+s2       sdk     3     750  320  0           0            -
+
+cache hit rate: 32.0%  (cache_read 400 of 1250 input-side tokens = in + cache_read + cache_write); saved about $0.0011 vs uncached input (API-equivalent)
+estimated cost (API-equivalent, tokens x pricing.json): $0.0012  PARTIAL: 1 of 4 run(s) priced; the total is a lower bound
+billed: unavailable - no source reports it; with a Claude Code subscription nothing is billed per token, so the figure above is only what the same tokens would cost at API rates
+coverage: 4 execution(s), 4 ledger line(s); origin sdk 4
+WARNING: 1 run(s) reported no token usage: their zeros above are unmeasured, not counted usage
+WARNING: 2 run(s) not priced (unknown_model): (none), gpt-x
+WARNING: session s2 has agent runs but no orchestrator record (turn never ended or hook off): orchestrator usage is missing; try sdkit usage scan
+WARNING: 1 agent run(s) carry no model id: they cannot be priced
+WARNING: 1 legacy line(s) have no execution id: they cannot be deduplicated
+TOTAL IS PARTIAL: see the warnings; token counts and cost are lower bounds

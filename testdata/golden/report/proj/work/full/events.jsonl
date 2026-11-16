@@ -1,0 +1,8 @@
+{"v":1,"ts":"2026-01-01T10:00:00Z","type":"task.start","task":"full","run":"r20260101100000-1","mode":"live","risk":"medium","profile":"standard","phase":"intake"}
+{"v":1,"ts":"2026-01-01T10:01:00Z","type":"phase.enter","task":"full","run":"r20260101100000-1","mode":"live","from":"intake","to":"red"}
+{"v":1,"ts":"2026-01-01T10:02:00Z","type":"test.result","task":"full","run":"r20260101100000-1","mode":"live","phase":"red","outcome":"fail","dur_ms":1000}
+{"v":1,"ts":"2026-01-01T10:02:30Z","type":"phase.reject","task":"full","run":"r20260101100000-1","mode":"live","reason":"need-red"}
+{"v":1,"ts":"2026-01-01T10:04:00Z","type":"phase.enter","task":"full","run":"r20260101100000-1","mode":"live","from":"red","to":"green"}
+{"v":1,"ts":"2026-01-01T10:08:00Z","type":"test.result","task":"full","run":"r20260101100000-1","mode":"live","phase":"green","outcome":"pass","dur_ms":2000}
+{"v":1,"ts":"2026-01-01T10:10:00Z","type":"verify.result","task":"full","run":"r20260101100000-1","mode":"live","outcome":"PASS","source":"verifier","role":"verifier"}
+{"v":1,"ts":"2026-01-01T10:12:30Z","type":"task.end","task":"full","run":"r20260101100000-1","mode":"live","outcome":"completed"}

@@ -1,6 +1,6 @@
 # Spec change request
 
-<!-- Developer to analyst. One request per defect. Needed fields mirror `jira.sh change-request` (reason, section, proposal, specId, specSha). -->
+<!-- Developer to analyst. One request per defect. Needed fields mirror `sdkit jira change-request` (reason, section, proposal, specId, specSha). -->
 
 - **Subtask key**: <!-- PROJ-123 -->
 - **specId**: <!-- id -->

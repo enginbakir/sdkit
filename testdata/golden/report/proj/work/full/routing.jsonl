@@ -1,0 +1,3 @@
+{"type":"decision","id":"d1","role":"verifier","action":"execute","reason":"ROLE_CAPABILITY_MATCH","budget":{"task":1}}
+{"type":"decision","id":"d2","role":"verifier","action":"reuse","reason":"EVIDENCE_REUSED","budget":{}}
+{"type":"decision","id":"d3","role":"reviewer","action":"stop","reason":"DUPLICATE_COMPLETED","budget":{}}

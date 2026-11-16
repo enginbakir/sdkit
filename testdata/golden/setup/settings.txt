@@ -1,0 +1,131 @@
+{
+  "model": "opus",
+  "env": {
+    "FOO": "bar"
+  },
+  "permissions": {
+    "allow": [
+      "Bash(npm test)",
+      "Edit",
+      "Write",
+      "MultiEdit",
+      "Bash(make *)",
+      "Bash(git status*)",
+      "Bash(git diff*)",
+      "Bash(git log*)",
+      "Bash(git show*)",
+      "Bash(git fetch*)",
+      "Bash(git branch*)",
+      "Bash(git add*)",
+      "Bash(git commit*)",
+      "Bash(git push*)",
+      "Bash(git checkout*)",
+      "Bash(git switch*)",
+      "Bash(kubectl get*)",
+      "Bash(kubectl describe*)",
+      "Bash(kubectl logs*)",
+      "Bash(openspec *)",
+      "Bash(jq *)",
+      "Bash(ls*)",
+      "Bash(cat *)",
+      "Bash(sdkit *)",
+      "Bash(sdkit prespec *)",
+      "Bash(mkdir -p .sdkit/work/*)",
+      "Bash(mkdir -p specs/*)",
+      "Bash(mv .sdkit/work/*)",
+      "Bash(mv openspec/changes/*)",
+      "Bash(cp .sdkit/work/*)",
+      "Bash(ls .sdkit/work/*)",
+      "Bash(go *)",
+      "Bash(gofmt *)",
+      "Bash(golangci-lint *)"
+    ],
+    "ask": [
+      "Bash(curl *)"
+    ],
+    "deny": [
+      "Bash(rm -rf *)",
+      "Bash(git push --force*)",
+      "Bash(git push -f*)",
+      "Bash(git reset --hard*)",
+      "Read(**/.env*)",
+      "Read(**/*.pem)",
+      "Read(**/*credentials*)"
+    ]
+  },
+  "hooks": {
+    "Notification": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "notify-send hi"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo mine"
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sdkit hook Stop",
+            "timeout": 180
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sdkit hook PostToolUse"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Agent|Task|Bash|Read|Edit|Write|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sdkit hook PreToolUse"
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sdkit hook SessionStart"
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sdkit hook SubagentStop"
+          }
+        ]
+      }
+    ]
+  },
+  "enabledPlugins": {},
+  "extraKnownMarketplaces": {}
+}

@@ -1,0 +1,36 @@
+# Example only (not installed by init): the server-side gate on a Windows runner (PowerShell). Same rules as github-actions.yml:
+# the pinned sdkit release (checksum verified) is read from the base branch's copy of the gate file, never from the pull request.
+# Use it as the .github/workflows/spec-driven-gate.yml of a repo whose CI must run on Windows; do not keep both under the same name.
+name: spec-driven gate
+# SDKIT_VERSION: __SDKIT_VERSION__ (the version of sdkit the gate runs; read from the base branch)
+on:
+  pull_request:
+jobs:
+  attestation:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: sdkit sdd ci-check
+        shell: pwsh
+        env:
+          BASE: origin/${{ github.base_ref }}
+        run: |
+          $gate = '.github/workflows/spec-driven-gate.yml'
+          $text = git show "${env:BASE}:$gate" 2>$null
+          if ($LASTEXITCODE -ne 0 -or -not $text) { $text = Get-Content $gate -Raw }
+          $m = [regex]::Match(($text -join "`n"), '(?m)^[# ]*SDKIT_VERSION: *"?([0-9][^" \r\n]*)')
+          if (-not $m.Success) { throw 'no SDKIT_VERSION in the gate file' }
+          $v = $m.Groups[1].Value
+          $d = Join-Path $env:RUNNER_TEMP 'sdkit'; New-Item -ItemType Directory -Force $d | Out-Null
+          $u = "https://github.com/wecii/sdkit/releases/download/v$v"; $a = "sdkit_${v}_windows_amd64.zip"
+          Invoke-WebRequest "$u/$a" -OutFile "$d/$a"; Invoke-WebRequest "$u/checksums.txt" -OutFile "$d/checksums.txt"
+          $want = ((Get-Content "$d/checksums.txt" | Where-Object { $_ -match " $([regex]::Escape($a))$" }) -split '\s+')[0]
+          if (-not $want) { throw "no checksum for $a" }
+          if ((Get-FileHash "$d/$a" -Algorithm SHA256).Hash -ne $want.ToUpper()) { throw "checksum mismatch for $a" }
+          Expand-Archive "$d/$a" -DestinationPath $d -Force
+          $env:PATH = "$d;$env:PATH"; $env:VERIFY_BASE = $env:BASE
+          sdkit.exe sdd ci-check
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

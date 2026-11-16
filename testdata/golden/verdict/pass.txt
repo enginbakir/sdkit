@@ -1,0 +1,3 @@
+# cmd: sdkit verdict parse -   (oracle: scripts/parse-verdict.sh)
+exit: 0
+VERDICT=PASS dod_pass=1 dod_fail=0 confirmed=0 plausible=0

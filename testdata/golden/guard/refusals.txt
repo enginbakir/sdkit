@@ -1,0 +1,44 @@
+# captured from the 1.x oracle: scripts/guard.sh pre-commit and pre-push messages, then hooks/guard-pr.sh denies (JSON compact in 2.0)
+guard: No spec-driven task is open, so '.env.local' may not change yet. Start one with the spec-driven-dev skill (it opens the task after you confirm the risk label). (SDD_SKIP=1 bypasses once)
+guard: '.env.local' matches SECRET_GLOBS; secrets must not be committed.
+guard: No spec-driven task is open, so 'a_test.go' may not change yet. Start one with the spec-driven-dev skill (it opens the task after you confirm the risk label). (SDD_SKIP=1 bypasses once)
+guard: 'a_test.go' is a frozen test (.sdkit/.frozen); fix the implementation, not the test.
+guard: No spec-driven task is open, so 'infra' may not change yet. Start one with the spec-driven-dev skill (it opens the task after you confirm the risk label). (SDD_SKIP=1 bypasses once)
+guard: 'infra' is under protected path 'infra' (see .sdkit/project.md). Re-run with ALLOW_PROTECTED=1 once you have approval.
+guard: Pushing or opening a PR outside a spec-driven task. Start one with the spec-driven-dev skill. (SDD_SKIP=1 bypasses once)
+guard: push to protected branch 'main' needs approval. Re-run with ALLOW_PROTECTED_PUSH=1.
+$ git push o f
+{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"Pushing or opening a PR outside a spec-driven task. Start one with the spec-driven-dev skill."}}
+$ env git push
+{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"Pushing or opening a PR outside a spec-driven task. Start one with the spec-driven-dev skill."}}
+$ command git push
+{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"Pushing or opening a PR outside a spec-driven task. Start one with the spec-driven-dev skill."}}
+$ nohup git push &
+{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"Pushing or opening a PR outside a spec-driven task. Start one with the spec-driven-dev skill."}}
+$ A=1 git push
+{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"Pushing or opening a PR outside a spec-driven task. Start one with the spec-driven-dev skill."}}
+$ x; git -C . push
+{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"Pushing or opening a PR outside a spec-driven task. Start one with the spec-driven-dev skill."}}
+$ ok && /usr/bin/git push
+{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"Pushing or opening a PR outside a spec-driven task. Start one with the spec-driven-dev skill."}}
+$ (git push)
+{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"Pushing or opening a PR outside a spec-driven task. Start one with the spec-driven-dev skill."}}
+$ gh api r/pulls -f a=b
+{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"Pushing or opening a PR outside a spec-driven task. Start one with the spec-driven-dev skill."}}
+$ git push --no-verify
+{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"Skipping the git hooks (--no-verify, core.hooksPath, SDD_SKIP, GUARD_SKIP_VERIFY) is the user's call, not the agent's."}}
+$ bash .sdkit/scripts/sdd.sh _spawn a
+{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"The workflow state and verdicts are written only by sdkit sdd and the verifier hook, never by hand."}}
+$ sdkit sdd _spawn a
+{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"The workflow state and verdicts are written only by sdkit sdd and the verifier hook, never by hand."}}
+$ S=_evidence; sdkit sdd $S a
+{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"The workflow state and verdicts are written only by sdkit sdd and the verifier hook, never by hand."}}
+$ sdkit sdd _spawn-close a
+{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"The workflow state and verdicts are written only by sdkit sdd and the verifier hook, never by hand."}}
+$ sdkit sdd _verdict a
+{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"The workflow state and verdicts are written only by sdkit sdd and the verifier hook, never by hand."}}
+$ echo {} > .sdkit/attestations/x.json
+{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"Attestations are written only by sdkit sdd. You may git add and commit one, but not edit, copy, move or delete it."}}
+$ git add .sdkit/attestations/x.json
+$ git commit -m 'fix push retry'
+$ ls

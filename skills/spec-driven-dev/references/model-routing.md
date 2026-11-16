@@ -14,10 +14,10 @@ a one-file rename and a new locking scheme should not run on the same model.
 | `medium` | `standard` | new logic inside a known design: a handler, a query, a table-driven test set; a few files in one area |
 | `large` | `strong` | needs judgement: a design decision, a race/ordering or concurrency problem, a security-sensitive path, a cross-module change |
 
-No `size:` means no override: the role's own tier applies (`AGENT_<ROLE>_TIER` in `sdkit.env`, else `core/roles/`), the behaviour before this field existed. With `ROUTING=on` and `ROUTE_POLICY=tiered` the size is required: `sdd.sh advance proposed` refuses a `tasks.md` line that names a `role:` and has no `size:` (`ROUTE_REQUIRE_SIZE=0` opts out).
+No `size:` means no override: the role's own tier applies (`AGENT_<ROLE>_TIER` in `sdkit.env`, else `core/roles/`), the behaviour before this field existed. With `ROUTING=on` and `ROUTE_POLICY=tiered` the size is required: `sdkit sdd advance proposed` refuses a `tasks.md` line that names a `role:` and has no `size:` (`ROUTE_REQUIRE_SIZE=0` opts out).
 
 ## Role tiers
-A role's own tier is `AGENT_<ROLE>_TIER` in `<project-dir>/sdkit.env` (`AGENT_ENGINEER_TIER=standard`; the file lists every role with its default). On Claude Code a role whose tier differs from the one in its agent file must be spawned with the `model` of that tier: the session start tells you which, and the `Agent` hook refuses a spawn with another model. `run-role.sh` and `route.sh` apply it themselves. The independent roles can go up, never below their own tier.
+A role's own tier is `AGENT_<ROLE>_TIER` in `<project-dir>/sdkit.env` (`AGENT_ENGINEER_TIER=standard`; the file lists every role with its default). On Claude Code a role whose tier differs from the one in its agent file must be spawned with the `model` of that tier: the session start tells you which, and the `Agent` hook refuses a spawn with another model. `sdkit run-role` and `sdkit route` apply it themselves. The independent roles can go up, never below their own tier.
 
 ## How to size
 Take the highest size any of these points to:
@@ -44,11 +44,11 @@ after approval; if a task turns out larger, tell the user and ask.
 - **Claude Code**: pass the `model` parameter of the `Agent` tool on every spawn, taken from `CLAUDE_MODEL_<TIER>` in `core/tiers.env`
   (`haiku`, `sonnet`, `opus` by default). The role file's own `model:` is only the default.
 - **Codex, OpenCode, Cursor, Gemini**: the model in the role file is fixed, so a task that needs another model runs as its own process:
-  `<kit>/scripts/run-role.sh <role> --handoff F --cwd D --host H --tier <light|standard|strong>`. The model is `--model`, else
+  `sdkit run-role <role> --handoff F --cwd D --host H --tier <light|standard|strong>`. The model is `--model`, else
   `RUN_ROLE_MODEL_<TIER>` (`sdkit.env`), else `<HOST>_MODEL_<TIER>` (`core/tiers.env`). Codex changes reasoning effort (`CODEX_EFFORT_<TIER>`) instead.
 - **Cursor and Gemini** have empty tier models in `core/tiers.env` (the kit does not guess model names); until you fill them in, `--tier` leaves the session's model in place.
 - Sizing only chooses the model. How many tasks run at once is `MAX_PARALLEL` (`parallel.md`).
 
 ## Deterministic routing (opt-in)
-With `ROUTING=on` (`sdkit.env`), `run-role.sh` takes host, model, tier, budget and retry/escalation from `scripts/route.sh` instead of the rules above, and `route.sh explain --role <role>` shows
-the decision without running anything. The floors above are enforced in code there. Exit 7 from `run-role.sh` means valid evidence already exists (success-like, nothing to retry); exit 8 means routing declined to run and no valid result exists (duplicate, a BLOCK that stands, retries exhausted, optional role skipped). Neither means verified by itself: the phase gate (`sdd.sh evidence`) decides. See `docs/design-routing.md`.
+With `ROUTING=on` (`sdkit.env`), `sdkit run-role` takes host, model, tier, budget and retry/escalation from `sdkit route` instead of the rules above, and `sdkit route explain --role <role>` shows
+the decision without running anything. The floors above are enforced in code there. Exit 7 from `sdkit run-role` means valid evidence already exists (success-like, nothing to retry); exit 8 means routing declined to run and no valid result exists (duplicate, a BLOCK that stands, retries exhausted, optional role skipped). Neither means verified by itself: the phase gate (`sdkit sdd evidence`) decides. See `docs/design-routing.md`.

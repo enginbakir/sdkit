@@ -4,7 +4,7 @@
   "managed_by": "sdkit pricing",
   "fetched_at": "2026-11-02T10:01:43Z",
   "price_list_date": "2026-10-12T08:40:08Z",
-  "note": "USD per million tokens, API-equivalent estimate, never a bill. cache_write is the 5-minute rate. Rebuilt by `sdkit doctor --update-pricing` (scripts/pricing.sh refresh); delete managed_by to take the table over by hand.",
+  "note": "USD per million tokens, API-equivalent estimate, never a bill. cache_write is the 5-minute rate. Rebuilt by `sdkit doctor --update-pricing` (sdkit pricing refresh); delete managed_by to take the table over by hand.",
   "models": [
     {
       "model": "claude-fable-5",

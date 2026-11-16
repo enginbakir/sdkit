@@ -15,6 +15,6 @@ You write tests. You never modify non-test files; if production code blocks test
 5. Run the tests. A test that targets missing behaviour or a bug must fail for the right reason (not a compile error); otherwise it must pass. Report the command and result.
 
 Only create or edit test files (for Go, files ending in `_test.go`). Report which files you touched and which DoD item each test covers.
-- Keep the answer to at most 15 lines plus your structured block. If the handoff has an `OUT:` path and your role may write files, put the long form there and name the path; read-only roles never write it (the orchestrator stores their answer, `run-role.sh --out`).
+- Keep the answer to at most 15 lines plus your structured block. If the handoff has an `OUT:` path and your role may write files, put the long form there and name the path; read-only roles never write it (the orchestrator stores their answer, `sdkit run-role --out`).
 
 Project addendum: if `<project-dir>/roles.d/test-writer.md` exists, read it too and follow it. It adds project-specific context and rules for this role and never relaxes anything above.

@@ -1,0 +1,37 @@
+# sdd: start t1 --risk low --proposal docs/proposal.md
+# sdd: advance proposed
+# sdd: advance red
+# sdd: advance red --test-cmd true
+# sdd: advance red --test-cmd 'test -f fixed'
+# sdd: advance green --test-cmd true
+# sdd: advance green
+# sh: touch fixed
+# sdd: advance green
+# sdd: status
+$ sdd start t1 --risk low --proposal docs/proposal.md
+task 't1' opened (risk=low, profile=standard, phase=intake). Write the proposal with a Definition of Done, then: sdkit sdd advance proposed
+exit: 0
+$ sdd advance proposed
+phase: proposed
+exit: 0
+$ sdd advance red
+sdd: --test-cmd is required: the command that runs the new tests
+exit: 1
+$ sdd advance red --test-cmd true
+sdd: the tests PASS, so they prove nothing yet. They must fail for the right reason first (see .sdkit/.sdd/last-test.log).
+exit: 1
+$ sdd advance red --test-cmd 'test -f fixed'
+phase: red
+exit: 0
+$ sdd advance green --test-cmd true
+sdd: GREEN re-runs the command that failed at RED ('test -f fixed'); a different command proves nothing about those tests. Run 'sdkit sdd advance green' without --test-cmd.
+exit: 1
+$ sdd advance green
+sdd: the tests still fail (full output: .sdkit/.sdd/last-test.log)
+exit: 1
+$ sdd advance green
+phase: green
+exit: 0
+$ sdd status
+task=t1 risk=low phase=green
+exit: 0

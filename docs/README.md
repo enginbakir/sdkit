@@ -5,10 +5,10 @@ Pick where to start by your role.
 | I am... | Read | Then |
 |---|---|---|
 | A **developer** working in a repo that is already set up | [cheatsheet.md](cheatsheet.md) | [guide.md](guide.md) §4 (flow), §7 (why did a hook block me?) |
-| About to **set up** a new repo | [../README.md](../README.md) "Quick start" | [guide.md](guide.md) §10 (settings), §11 (install), then `doctor.sh` |
+| About to **set up** a new repo | [../README.md](../README.md) "Quick start" | [guide.md](guide.md) §10 (settings), §11 (install), then `sdkit doctor` |
 | Someone who **fixed a bug** and wants to stop it recurring | [guide.md](guide.md) §5 (`incident-to-rule`) | §8 (`verify.d` protocol) |
 | Trying to understand **why a hook or guard ran / did not run** | [guide.md](guide.md) §7 | §12 (permission model), §13 (limits) |
-| Upgrading my project to a **new kit version** | [upgrading.md](upgrading.md) | `bin/upgrade.sh` |
+| Upgrading my project to a **new kit version** | [upgrading.md](upgrading.md) | `sdkit upgrade` |
 | Opening the PR on **GitHub/GitLab** | [hosts.md](hosts.md) | |
 | Going to use **Codex, OpenCode, Cursor or Gemini** (or mixed with Claude) | [guide.md](guide.md) §16 | §13 (host limits), [../skills/spec-driven-dev/references/hosts.md](../skills/spec-driven-dev/references/hosts.md) |
 | Learning what a **stack** provides / adding a new stack | [../stacks/README.md](../stacks/README.md) | [../CONTRIBUTING.md](../CONTRIBUTING.md), [guide.md](guide.md) §14 |
@@ -19,10 +19,11 @@ Pick where to start by your role.
 | Understanding workflow **profiles** (small/standard/high-assurance), phase transitions, the failure/retry policy | [design-workflow.md](design-workflow.md) | [../skills/spec-driven-dev/references/workflow.md](../skills/spec-driven-dev/references/workflow.md) |
 | Understanding reviewer/security-auditor enforcement at **high risk**, evidence validity and the host capability matrix | [design-evidence.md](design-evidence.md) | [design-workflow.md](design-workflow.md) |
 | Understanding which **agent/model** runs, the budget, retries and escalation (F06) | [design-routing.md](design-routing.md) | [design-evidence.md](design-evidence.md) |
-| Understanding how **token usage and cost** are computed, the price table (`pricing.json`), `usage.sh report/scan` output and missing-data warnings (F07) | [design-usage.md](design-usage.md) | [design-telemetry.md](design-telemetry.md) |
+| Understanding how **token usage and cost** are computed, the price table (`pricing.json`), `sdkit usage report/scan` output and missing-data warnings (F07) | [design-usage.md](design-usage.md) | [design-telemetry.md](design-telemetry.md) |
 | Understanding the correctness and cost comparison of the same task solved by **plain agentic development vs. SDKit** (benchmark infrastructure, F05-A) | [design-benchmark.md](design-benchmark.md) | [design-telemetry.md](design-telemetry.md) |
 | Working as an **analyst** (specs, review, Jira tasks) or a **developer** on Jira-driven tasks (`SDKIT_ENV`) | [role-aware.md](role-aware.md) | [design-role-aware.md](design-role-aware.md), [guide.md](guide.md) §10 |
 | Going to change **the kit itself** | [../CONTRIBUTING.md](../CONTRIBUTING.md) | [guide.md](guide.md) §14, §15 |
+| Doing the **Go port** (one `sdkit` binary for macOS, Linux and Windows): plan, contracts, task cards | [go-port/README.md](go-port/README.md) | [go-port/STATUS.md](go-port/STATUS.md) |
 
 ## Files
 
@@ -38,6 +39,7 @@ Pick where to start by your role.
 | [design-role-aware.md](design-role-aware.md) | Design contract of the role-aware work packages |
 | [design-adapters.md](design-adapters.md) | Execution adapter contract (F12) and optional LiteLLM (F13) |
 | [design-security.md](design-security.md) | Security hardening (F19): redaction, audit trail, static policy |
+| [go-port/](go-port/README.md) | Orchestrator brief, decisions, architecture, contracts, Windows rules, test budget, workflow, release and the phase task cards (P0 to P5) of the Go rewrite |
 | [design-benchmark.md](design-benchmark.md) | Task benchmark (F05-A): task registry, isolation and security boundary, strategies, metrics (per host), simulation, report, F05-B prerequisites |
 | [design-telemetry.md](design-telemetry.md) | Baseline measurement and telemetry (F01): event schema, which metric is reliable, benchmark framework, simulated results, limits, F02 recommendations |
 | [design-report.md](design-report.md) | Value Report: task/session report, measured vs estimated, savings methodology, one-shot generation, limits |
@@ -46,8 +48,8 @@ Pick where to start by your role.
 | [guide.md](guide.md) | Full guide: every skill, agent, hook, engine, setting, install flow, limit |
 | [upgrading.md](upgrading.md) | Upgrading projects to a new kit version, manual steps per version |
 | [hosts.md](hosts.md) | PR hosts (Bitbucket, GitHub, GitLab) and CI gates |
-| [../stacks/README.md](../stacks/README.md) | Stack contract: `detect.sh`, `steps.sh`, `tools.sh`, `permissions.txt` |
-| [../tests/smoke.test.sh](../tests/smoke.test.sh) | Script/hook/init smoke test for kit maintainers |
+| [../stacks/README.md](../stacks/README.md) | Stack contract: the `Stack` interface in `internal/stack`, `permissions.txt`, rules, `verify.d.example/` |
+| [../tests/windows-smoke.ps1](../tests/windows-smoke.ps1) | Windows smoke script run by the Windows CI job (the rest of the tests are Go: `go test ./...`) |
 
 ## Glossary
 
@@ -56,9 +58,9 @@ Pick where to start by your role.
 | **DoD** | Definition of Done: the acceptance criteria in `proposal.md` that a test or the diff can mark PASS/FAIL |
 | **Risk label** | `low` / `medium` / `high`. Proposed from the project's risk rubric, confirmed by the user; sets the depth of verification |
 | **Verifier** | The agent that never saw the implementation and judges the DoD and the diff independently |
-| **Diff base** | The ref the change is compared against (`resolve-base.sh`): the release branch or `origin/BASE_BRANCH` |
+| **Diff base** | The ref the change is compared against (`sdkit base`): the release branch or `origin/BASE_BRANCH` |
 | **Frozen test** | A regression test written at `high` risk and added to `<project-dir>/.frozen`, which the implementer cannot change |
-| **`verify.d`** | The project's own checks: executable scripts under `<project-dir>/verify.d/` that print `FAIL:`/`WARN:` |
+| **`verify.d`** | The project's own checks: scripts under `<project-dir>/verify.d/` (`.sh`, `.ps1`) that print `FAIL:`/`WARN:` |
 | **Role** | An agent responsibility defined tool-independently under `core/roles/`; generated into a subagent file for each host |
 | **Tier** | A role's cost class: `light` / `standard` / `strong`; `core/tiers.env` maps it to a model |
 | **Plan gate** | The step before `propose` where you are questioned on the plan in detail and approve it |

@@ -1,0 +1,26 @@
+# captured from hooks/adapt.sh by capture-adapt.sh; the Go test replays the # in: lines
+# in: gemini deny|gemini|{"tool_name":"run_shell_command","tool_input":{"command":"deny"}}
+== gemini deny
+exit: 2
+stdout: 
+stderr: reason deny
+# in: gemini ask|gemini|{"tool_name":"write_file","tool_input":{"file_path":"ask"}}
+== gemini ask
+exit: 2
+stdout: 
+stderr: needs explicit approval: reason ask
+# in: cursor shell deny|cursor|{"hook_event_name":"beforeShellExecution","command":"deny"}
+== cursor shell deny
+exit: 0
+stdout: {"permission":"deny","user_message":"reason deny","agent_message":"reason deny"}
+stderr: 
+# in: cursor shell ask|cursor|{"hook_event_name":"beforeShellExecution","command":"ask"}
+== cursor shell ask
+exit: 0
+stdout: {"permission":"ask","user_message":"reason ask","agent_message":"reason ask"}
+stderr: 
+# in: cursor edit ask|cursor|{"hook_event_name":"preToolUse","tool_name":"Write","tool_input":{"file_path":"ask"}}
+== cursor edit ask
+exit: 0
+stdout: {"permission":"deny","user_message":"needs explicit approval: reason ask","agent_message":"needs explicit approval: reason ask"}
+stderr: 

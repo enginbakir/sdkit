@@ -1,13 +1,13 @@
 ---
 name: spec-driven-dev
-description: End-to-end, project-agnostic spec-driven task workflow — analyst intake (tracker ticket or free text), risk classification, a detailed plan gate with the user before any proposal, propose with a test-verified Definition of Done, risk-branched test-first implementation by role, independent verification, PR, and closeout. Use this instead of manually chaining opsx:explore/propose/apply/verify/archive for any new task.
+description: End-to-end, project-agnostic spec-driven task workflow — analyst intake (tracker ticket or free text), risk classification, a detailed plan gate with the user before any proposal, a proposal with a test-verified Definition of Done, risk-branched test-first implementation by role, independent verification, PR, and closeout. Developer side of the kit: it implements an approved spec (a Jira subtask) or a standalone task; it never writes specs. Use this for any new implementation task.
 license: MIT
 metadata:
   author: spec-driven-kit
-  version: "3.0"
+  version: "4.0"
 ---
 
-Orchestrates the full task lifecycle by driving the existing `openspec-*` (`opsx:*`) skills in sequence and adding what they do not: a completeness check, a plan gate, role-based work (optionally parallel), a risk-scaled independent verification gate and a closing loop. It does not reimplement `opsx:explore`/`propose`/`apply`/`verify`/`archive`/`sync`.
+Orchestrates the full task lifecycle: a completeness check, a plan gate, role-based work (optionally parallel), a risk-scaled independent verification gate and a closing loop. It does not write or change specs and does not use the OpenSpec skills: the spec is written, reviewed and approved by `generate-specs` / `update-specs` / `merge-specs` (analyst side) and arrives here read-only; in a standalone repo the approved `plan.md` is the spec of record.
 
 You are the **orchestrator** (`core/roles/orchestrator.md`). Roles are agents named in `agents/`: `analyst`, `scout`, `engineer`, `developer`, `test-writer`, `devsecops`, `verifier`, `reviewer`, `security-auditor`. How to ask the user, run a role or run roles in parallel on your host: `references/hosts.md`. How to brief a role: `references/handoff.md`. Model per task (`size:` in tasks, `TIER` in the handoff): `references/model-routing.md`, read when you write the execution plan. Token rules: `rules/token-economy.md`; test rules: `rules/test-first.md`. Read a reference only at the step that names it.
 
@@ -15,7 +15,7 @@ You are the **orchestrator** (`core/roles/orchestrator.md`). Roles are agents na
 
 ## Resume
 
-State lives in a file, not in your head: `<kit>/scripts/state.sh <slug> show` prints `<project-dir>/work/<slug>/state.json` (step, risk, branch, task statuses, retries, verdict). If one exists for this task, continue from its `step` instead of starting over; update it at every step (`state.sh <slug> set step <n>`, `task <id> <status>`). Create it once the risk label is confirmed: `state.sh <slug> init <risk> <branch>`.
+State lives in a file, not in your head: `sdkit state <slug> show` prints `<project-dir>/work/<slug>/state.json` (step, risk, branch, task statuses, retries, verdict). If one exists for this task, continue from its `step` instead of starting over; update it at every step (`sdkit state <slug> set step <n>`, `task <id> <status>`). Create it once the risk label is confirmed: `sdkit state <slug> init <risk> <branch>`.
 
 ## Project configuration (read first)
 
@@ -32,15 +32,14 @@ This skill contains no project facts. Before step 0, read:
 | `<project-dir>/rules/*.md` | language and style conventions (branch naming, commits, tests) |
 
 If `project.md` has no risk rubric, stop and ask the user to define one; never invent criteria. Throughout this document:
-- `<kit>` is the kit's script root (see `references/hosts.md`).
-- `<verify>` is `VERIFY_CMD` from `sdkit.env`, or when empty `<kit>/stacks/<STACK>/scripts/verify.sh`. Pipe its output through `tail -40`; the summary line and failures are what matter.
-- `<diff-base>` is the output of `DIFF_BASE_CMD`, or when empty `<kit>/scripts/resolve-base.sh`.
-- `<sdd>` is `<kit>/scripts/sdd.sh`, the phase machine (`intake → proposed → red → green → verified → pr → done`). **You never decide that a phase is done: `<sdd> advance` checks the gate itself and refuses when it does not hold.** Hooks and the git hooks ask the same script (`<sdd> gate`) and block code changes, push and PR out of phase (`SDD_MODE` in `sdkit.env`: `strict` is the default and denies, `guided` asks or warns, `off` disables). Never write `<project-dir>/.sdd/` by hand. `state.sh` stays the resume record; `<sdd>` is the gate.
+- `<verify>` is `VERIFY_CMD` from `sdkit.env`, or when empty `sdkit verify`. Run it as `sdkit capped -- <verify>`; the summary line and failures are what matter.
+- `<diff-base>` is the output of `DIFF_BASE_CMD`, or when empty `sdkit base`.
+- `<sdd>` is `sdkit sdd`, the phase machine (`intake → proposed → red → green → verified → pr → done`). **You never decide that a phase is done: `<sdd> advance` checks the gate itself and refuses when it does not hold.** Hooks and the git hooks ask the same script (`<sdd> gate`) and block code changes, push and PR out of phase (`SDD_MODE` in `sdkit.env`: `strict` is the default and denies, `guided` asks or warns, `off` disables). Never write `<project-dir>/.sdd/` by hand. `sdkit state` stays the resume record; `<sdd>` is the gate.
 - `<branch-source>` is the ref new branches are cut from: the "Branch source" rule in `project.md`, defaulting to `<diff-base>`.
 
 ## Managed mode (SDD_MANAGED=on)
 
-When `sdkit.env` has `SDD_MANAGED=on` (developer env) the task is a Jira subtask and the approved spec is read-only: read `references/managed.md` now; it replaces steps 0, 1, 3 and 8 below (intake→done mapped to Jira). Open the task with `<sdd> start --ticket <KEY>`; never regenerate the PRD, architecture or spec, never invoke the OpenSpec skills. A spec defect is `<sdd> block --spec-change` (a change request); resume only with `<sdd> revalidate --sha <approved revision>`.
+When `sdkit.env` has `SDD_MANAGED=on` (developer env) the task is a Jira subtask and the approved spec is read-only: read `references/managed.md` now; it replaces steps 0, 1, 3 and 8 below (intake→done mapped to Jira). Open the task with `<sdd> start --ticket <KEY>`; never regenerate the PRD, architecture or spec. A spec defect is `<sdd> block --spec-change` (a change request); resume only with `<sdd> revalidate --sha <approved revision>`.
 
 ## 0. Intake: analyst and risk label
 
@@ -49,13 +48,13 @@ When `sdkit.env` has `SDD_MANAGED=on` (developer env) the task is a Jira subtask
 1. Fetch the ticket with the tracker tooling in `project.md` when a ticket ID is given and `TRACKER` is set; otherwise use the text as is.
 2. Run the `analyst` role on it (handoff: the raw task text or ticket body, paths `project.md` and the component areas if known). If the text already names code to look up (a component, endpoint or error), start one `scout` with those questions in the same message, so both run at once (`references/parallel.md`); the scout never waits for the analyst's brief. The analyst returns `READINESS`, a brief, `GAPS`, `ASSUMPTIONS` and a proposed risk label.
 3. `NEEDS-INFO`: put the gaps to the user with the host's question tool, at most 4 per round, each with the analyst's suggested default as the first option. Fold the answers into the brief and re-run the analyst only if the answers opened new gaps. Do not continue while a gap that affects the Definition of Done is open.
-4. Show the final brief and the proposed risk label, and let the user confirm or override the label. The confirmed label drives every branch below; never re-decide it without the user. Then open the gate: `<sdd> start <slug> --risk <label> [--profile small|standard|high-assurance] --proposal openspec/changes/<change>/proposal.md`; the profile is process weight, never a lower gate (`references/workflow.md`). Until the proposal passes `<sdd> advance proposed`, only docs, specs and project files can change.
+4. Show the final brief and the proposed risk label, and let the user confirm or override the label. The confirmed label drives every branch below; never re-decide it without the user. Then open the gate: `<sdd> start <slug> --risk <label> [--profile small|standard|high-assurance] --proposal <project-dir>/work/<slug>/proposal.md`; the profile is process weight, never a lower gate (`references/workflow.md`). Until the proposal passes `<sdd> advance proposed`, only docs, specs and project files can change.
 5. **Risk is independent of ticket priority.** A low-priority ticket can still be `medium`/`high` and gets that flow.
 6. Roles never call other roles. A role may end its answer with `NEEDS-LOOKUP: <question>` lines; run `scout` once for them and hand the answer back as a path.
 
 ## 1. Explore
 
-Invoke `openspec-explore` with the brief. Ground the problem in the real code. Use `scout` for "where is / who calls" questions instead of reading broadly; do not read a file over ~150 lines whole in this session, ask `scout` or read the range you need (`references/delegation.md`, "Keep this session thin"). Do not skip this for `low`; wrong assumptions get caught here.
+Ground the brief in the real code (managed: the pinned spec revision first, `references/managed.md`). Use `scout` for "where is / who calls" questions instead of reading broadly; do not read a file over ~150 lines whole in this session, ask `scout` or read the range you need (`references/delegation.md`, "Keep this session thin"). Do not skip this for `low`; wrong assumptions get caught here.
 
 ## 2. Plan gate (before any proposal)
 
@@ -63,11 +62,11 @@ Read `references/plan-gate.md` and run it. In short: for `medium`/`high` the `en
 
 ## 3. Propose (Definition of Done verified by tests)
 
-Invoke `openspec-propose` with `plan.md` as input to produce `proposal.md` / `design.md` / `specs/` / `tasks.md`. Then require in `proposal.md` a **Definition of Done**: one line per acceptance criterion in the form `D<n>: <testable condition> | Verified by: <unit test|integration test|manual check|none: reason>`. Tasks carry `role:` / `writes:` / `after:` and `size:` (`references/parallel.md`). With `ROUTING=on` (check `<project-dir>/sdkit.env`) read `references/model-routing.md` now and give **every delegated task** a `size:`: `<sdd> advance proposed` refuses a tasks.md with a `role:` task that has none.
+No OpenSpec skill runs here: the spec already exists (managed: `<sdd> start` wrote `<project-dir>/work/<slug>/proposal.md` from the task's acceptance criteria; refine it per `references/managed.md`) or, standalone, the user just approved it as `plan.md`. Standalone, you transcribe the approved plan, adding nothing new, into `<project-dir>/work/<slug>/`: `proposal.md` (scope and the DoD), `tasks.md` (plan section 5) and, for `medium`/`high`, `design.md` (the design section). Require in `proposal.md` a **Definition of Done**: one line per acceptance criterion in the form `D<n>: <testable condition> | Verified by: <unit test|integration test|manual check|none: reason>`. Tasks carry `role:` / `writes:` / `after:` and `size:` (`references/parallel.md`). With `ROUTING=on` (check `<project-dir>/sdkit.env`) read `references/model-routing.md` now and give **every delegated task** a `size:`: `<sdd> advance proposed` refuses a tasks.md with a `role:` task that has none.
 
 `high`: `design.md` must contain the **race/ordering/timing scenario**; if it is missing write it now or stop and ask.
 
-The proposal is **incomplete** (do not proceed) until the DoD with Verified-by entries is present. `<sdd> advance proposed` proves it (it fails without a DoD list, and for `high` without the race/ordering/timing section); from then on only test files can change until RED. Check it with `<kit>/scripts/check-plan-parity.sh <plan.md> <proposal.md> <tasks.md>`; any difference is fixed or reported to the user (see the end of `references/plan-gate.md`).
+The proposal is **incomplete** (do not proceed) until the DoD with Verified-by entries is present. `<sdd> advance proposed` proves it (it fails without a DoD list, and for `high` without the race/ordering/timing section); from then on only test files can change until RED. Check it with `sdkit plan parity <plan.md> <proposal.md> <tasks.md>`; any difference is fixed or reported to the user (see the end of `references/plan-gate.md`).
 
 ## 4. Branch and role-based, test-first implementation
 
@@ -75,7 +74,7 @@ Branch per `rules/git.md` and the "Release flow" section of `project.md`: `git f
 
 **Testability check before the first test** (`rules/test-first.md`). If the code under test cannot be exercised without real infrastructure (for example a handler takes a concrete, unmockable client), stop before writing throwaway tests, name exactly what blocks it, and give the user 2-3 options with the host's question tool (add a small interface scoped to the call site / skip automated coverage and record the gap / add integration-test infrastructure). Only then proceed; update the DoD item's Verified-by if coverage changes.
 
-Delegation: before the first spawn read `references/delegation.md` (spawn or not, result size, budgets, cache, keeping this session thin). Tests to `test-writer`, code to `developer`, pipeline/infra files to `devsecops`, each with a handoff brief (with `CONTRACTS=1` also the contract lines and the result line: `references/contract.md`; a valid contract is never a verification). Only a change of one file plus its test, at `low` risk, is yours to write in this session. Run tests, builds and linters through `<kit>/scripts/capped.sh -- <command>`: the log stays in a file, the conversation gets the failures and the tail. To run independent tasks at the same time follow `references/parallel.md` (`<kit>/scripts/plan-waves.sh` for waves, `<kit>/scripts/worktree.sh` for isolation); otherwise run tasks in order.
+Delegation: before the first spawn read `references/delegation.md` (spawn or not, result size, budgets, cache, keeping this session thin). Tests to `test-writer`, code to `developer`, pipeline/infra files to `devsecops`, each with a handoff brief (with `CONTRACTS=1` also the contract lines and the result line: `references/contract.md`; a valid contract is never a verification). Only a change of one file plus its test, at `low` risk, is yours to write in this session. Run tests, builds and linters through `sdkit capped -- <command>`: the log stays in a file, the conversation gets the failures and the tail. To run independent tasks at the same time follow `references/parallel.md` (`sdkit plan waves` for waves, `sdkit worktree` for isolation); otherwise run tasks in order.
 
 ### `low` risk
 1. Test(s) from the DoD. `<sdd> advance red --test-cmd "<command running them>"` runs it and refuses unless it FAILS; check the log for the right reason (not a compile error). Production code is editable only after this.
@@ -95,33 +94,33 @@ Delete `<project-dir>/.frozen` when the task is verified or abandoned.
 
 ## 5. Independent verification gate
 
-**Who**: the `verifier` role (`verifier-deep` for `high`), started fresh (never a fork), with `references/hosts.md` for how. For a different model family, set `VERIFIER_HOST` and run it with `<kit>/scripts/run-role.sh`. It receives only: the path to `proposal.md` (and `design.md` for `high`), `<diff-base>`, the risk label. Never the implementer's conversation or rationale.
+**Who**: the `verifier` role (`verifier-deep` for `high`), started fresh (never a fork), with `references/hosts.md` for how. For a different model family, set `VERIFIER_HOST` and run it with `sdkit run-role`. It receives only: the path to `proposal.md` (and `design.md` for `high`), `<diff-base>`, the risk label. Never the implementer's conversation or rationale.
 
 Run it with `verifier` (`medium`) or `verifier-deep` (`high`, strong tier). A BLOCK discards the other two runs' value for that diff, which is the price of the saved wall time; their findings still feed the retry. It runs `<verify>`, checks every DoD item and its Verified-by evidence, scans `known-pitfalls.md`, and returns the `DOD / FINDINGS / VERIFY / VERDICT` block defined in its role.
 
-`high` only: also run `reviewer` and `security-auditor` on the final diff, **started in the same message as the verifier** (all three read-only, none sees another's output; if `MAX_PARALLEL` is lower than three, the rest wait), plus the host skills named in `EXTRA_REVIEW_SKILLS` when that is set (empty by default; the roles already know the project's rules and pitfalls). Report findings as `CONFIRMED` or `PLAUSIBLE`. Changes to pipelines or infrastructure always get `security-auditor`. At `high`, `<sdd> advance verified|pr|done` need a PASS from each of the three roles, from a registered run on this diff (`<sdd> evidence`; other hosts: `run-role.sh`; details: `references/hosts.md`).
+`high` only: also run `reviewer` and `security-auditor` on the final diff, **started in the same message as the verifier** (all three read-only, none sees another's output; if `MAX_PARALLEL` is lower than three, the rest wait), plus the host skills named in `EXTRA_REVIEW_SKILLS` when that is set (empty by default; the roles already know the project's rules and pitfalls). Report findings as `CONFIRMED` or `PLAUSIBLE`. Changes to pipelines or infrastructure always get `security-auditor`. At `high`, `<sdd> advance verified|pr|done` need a PASS from each of the three roles, from a registered run on this diff (`<sdd> evidence`; other hosts: `sdkit run-role`; details: `references/hosts.md`).
 
-Check the verifier's output with `<kit>/scripts/parse-verdict.sh - --proposal <proposal.md>`; it is the only validator (structure, PASS/FAIL per DoD item, verdict consistent with the findings, every DoD item judged). A verdict is recorded against a fingerprint of the current diff, so your own claim counts for nothing and any later edit makes it stale. Recording depends on the host: **Claude Code: do not pass `--record`**; the `SubagentStop` hook runs the same validation and records a well-formed verdict itself (the `guard-pr` hook denies `--record` there), and a malformed one is reported back to you instead of recorded. **other hosts: pass `--record`** (`parse-verdict.sh - --proposal <proposal.md> --record`); they have no such hook, and a malformed block records nothing. Then `<sdd> advance verified` on PASS; it writes `<project-dir>/attestations/<slug>.json`, the proof the CI gate checks. **Commit it with the change** (any file edited after this makes it stale: re-verify and let it be rewritten). Exit codes: exit 0 = PASS, 1 = BLOCK, 2 = malformed or inconsistent (ask the verifier for the exact format once; this does not count as a retry).
+Check the verifier's output with `sdkit verdict parse - --proposal <proposal.md>`; it is the only validator (structure, PASS/FAIL per DoD item, verdict consistent with the findings, every DoD item judged). A verdict is recorded against a fingerprint of the current diff, so your own claim counts for nothing and any later edit makes it stale. Recording depends on the host: **Claude Code: do not pass `--record`**; the `SubagentStop` hook runs the same validation and records a well-formed verdict itself (the `guard-pr` hook denies `--record` there), and a malformed one is reported back to you instead of recorded. **other hosts: pass `--record`** (`sdkit verdict parse - --proposal <proposal.md> --record`); they have no such hook, and a malformed block records nothing. Then `<sdd> advance verified` on PASS; it writes `<project-dir>/attestations/<slug>.json`, the proof the CI gate checks. **Commit it with the change** (any file edited after this makes it stale: re-verify and let it be rewritten). Exit codes: exit 0 = PASS, 1 = BLOCK, 2 = malformed or inconsistent (ask the verifier for the exact format once; this does not count as a retry).
 
 **Blocking**: `VERDICT: BLOCK` (any DoD `FAIL` or any `CONFIRMED` finding) blocks the PR. `PLAUSIBLE` findings are recorded, never block. `PASS` goes to §7. `low` skips this section; `medium` and `high` cannot.
 
 ## 6. Failure routing and loop limit
 
 On `BLOCK`, classify the cause:
-- **Implementation bug** (sound DoD, code does not meet it): back to `developer` for **exactly one** retry, handing it only the failing items/findings. Take the retry with `state.sh <slug> retry <task>`: exit 0 means go ahead, exit 1 means the retry is spent, stop. No need to involve the user for this first retry.
+- **Implementation bug** (sound DoD, code does not meet it): back to `developer` for **exactly one** retry, handing it only the failing items/findings. Take the retry with `sdkit state <slug> retry <task>`: exit 0 means go ahead, exit 1 means the retry is spent, stop. No need to involve the user for this first retry.
 - **Spec gap** (DoD item inconsistent, unsatisfiable, or the brief was ambiguous): back to the plan gate for the affected rounds and **tell the user immediately**. Do not retry against a broken target.
 
 A **second** `BLOCK` on the same task, whatever the cause, stops automatic retries. Summarize what failed both times, the diff and branch state, and wait for the user. Never run a third automatic loop.
 
 ## 7. PR and merge
 
-`git push`, `gh pr create`, `glab mr create` and `open-pr.sh` are denied (hook) and blocked (git pre-push) unless the task is `verified` and the diff is unchanged since. After the PR is open: `<sdd> advance pr`.
+`git push`, `gh pr create`, `glab mr create` and `sdkit pr open` are denied (hook) and blocked (git pre-push) unless the task is `verified` and the diff is unchanged since. After the PR is open: `<sdd> advance pr`.
 
-Per `rules/git.md` and the PR tooling in `project.md`: commit in the conventional format, push, and **open the PR yourself** (never hand it back as a to-do; the kit ships `scripts/open-pr.sh` for Bitbucket, GitHub and GitLab, see `docs/hosts.md`) against the merge target in `project.md`. State what changed, why, and how to test, plus the verification result (DoD PASS summary; for `high` the findings with verdicts) and the last `<verify>` output. Relay the post-merge steps from `project.md`'s release flow to the user; do not run them.
+Per `rules/git.md` and the PR tooling in `project.md`: commit in the conventional format, push, and **open the PR yourself** (never hand it back as a to-do; the kit ships `sdkit pr open` for Bitbucket, GitHub and GitLab, see `docs/hosts.md`) against the merge target in `project.md`. State what changed, why, and how to test, plus the verification result (DoD PASS summary; for `high` the findings with verdicts) and the last `<verify>` output. Relay the post-merge steps from `project.md`'s release flow to the user; do not run them.
 
 ## 8. Closeout
 
-After merge, `<sdd> advance done` (closes the gate and clears `.frozen`), then invoke `openspec-sync-specs` (fold specs into `openspec/specs/`) and `openspec-archive-change` (close the change). If `openspec/` is gitignored, this runs locally only. If `MEMORY=1`, first promote what the task learned (`references/memory.md`: candidates from `notes.md`, the user picks). With `TELEMETRY=1`, run `<kit>/scripts/telemetry.sh archive <slug>` first. Then delete `<project-dir>/work/<slug>/` (it holds `state.json`) and remove task worktrees (`<kit>/scripts/worktree.sh clean`).
+After merge, `<sdd> advance done` (closes the gate and clears `.frozen`). Specs are never folded or archived from this side (the analyst side owns them). If `MEMORY=1`, first promote what the task learned (`references/memory.md`: candidates from `notes.md`, the user picks). With `TELEMETRY=1`, run `sdkit telemetry archive <slug>` first. Then delete `<project-dir>/work/<slug>/` (it holds `state.json`) and remove task worktrees (`sdkit worktree clean`).
 
 ## Guardrails
 

@@ -3,28 +3,35 @@
 A stack = the language/framework part of the kit: how to verify, format and detect a project, plus default rules and example
 policies. Everything else (roles, workflow, guards) is stack-independent. One `STACK` per repo (`STACK=` in `sdkit.env`).
 
+A stack has two parts: **code** in `internal/stack/<stack>.go` (one file per stack, registered from `init()`) and **data** in this directory.
+
 ```
+internal/stack/<stack>.go   implements the Stack interface (below) and calls Register
 stacks/<stack>/
-  detect.sh              exit 0 when <dir> ($1) is a project of this stack (init.sh probes stacks in order)
-  scripts/verify.sh      thin entry: finds scripts/verify-core.sh, sources steps.sh, calls verify_main "$@"
-  scripts/steps.sh       STACK_SOURCE_RE and stack_run (the stack's checks); see scripts/verify-core.sh
-  scripts/fmt.sh         format one file ($1); always exit 0 (used by the post-edit hook; no-op if the tool is missing)
-  scripts/tools.sh       tools the stack needs, one per line:  required|<command>|<install hint>   or   optional|<command>|<hint>
-                         ($1 = the repo root, passed by doctor and the check-tools hook; a stack may ignore it)
-  scripts/verify-lib.sh  (go only today) helpers for verify.d policies; shared by all stacks via scripts/verify-lib.sh when absent
   permissions.txt        Claude Code permission patterns (one per line) added to settings.json "allow" for this stack
   rules/*.md             default conventions copied into <project-dir>/rules/ (project-owned afterwards)
-  verify.d.example/*.example   example project policies (FAIL:/WARN: protocol, see verify-lib.sh)
+  verify.d.example/*.example   example project policies (FAIL:/WARN: protocol; installed with the .example extension)
   <config files>         e.g. golangci.yml, copied to <project-dir>/
   known-pitfalls.md      optional seed for <project-dir>/known-pitfalls.md (stack-specific bug classes); init uses
                          templates/known-pitfalls.md (header and format, no entries) when absent
 ```
 
-## stack_run contract (steps.sh)
-Variables from the core: `ROOT`, `KIT_DIR`, `FAST` (1 = cheap checks only), `CHANGED` (all changed files, one per line),
-`CHANGED_SRC` (those matching `STACK_SOURCE_RE`), `MERGE_BASE`, `BASE_REF`; project settings from `sdkit.env`.
-Helpers: `step "<title>"`, `fail "<msg>"`, `warn "<msg>"`. Rules:
+## The Stack interface (`internal/stack/stack.go`)
+
+| Method | Does |
+|---|---|
+| `Name()` | the id used by `STACK=` and `sdkit init --stack` |
+| `Detect(root)` | true when `root` looks like a project of this stack; `sdkit init` probes the stacks in order (go, spring-boot, react-native, jvm, nextjs, python; first match wins, `generic` if none), so it must not give false positives |
+| `Tools()` | the tools the stack needs: `Required` or optional, the executable name, an install hint. `sdkit doctor` and the `check-tools` hook report a missing one (a `warn`, a `fail` only for a required one) |
+| `IsSource(path)` | is `path` one of the stack's source files (decides which changed files count) |
+| `Fmt(file)` | format one file in place; used by the post-edit hook; nil when there is nothing to do or the tool is missing |
+| `Steps(ctx, env, reporter)` | the stack's checks; see below |
+
+## Steps contract
+`Env` carries `Root`, `KitDir`, `MergeBase`, `Fast` (true = cheap checks only), `Changed` (all changed files), `Source` (those `IsSource` accepts) and the project settings from `sdkit.env`. The `Reporter` gives `Step`, `Fail`, `Warn`, `Exec` and `Shell`. Rules:
 - verify only what changed (nearest build file / package of each changed source file), not the whole repo;
-- `FAST=1` must be cheap: typecheck/compile only, no tests, no lint, no full build;
-- a missing tool is a `warn` (skipped), never a `fail`, unless the check cannot run without it;
-- print little: the core appends the summary line, callers `tail -40`.
+- `Fast` must be cheap: typecheck/compile only, no tests, no lint, no full build;
+- a missing tool is a `Warn` (skipped), never a `Fail`, unless the check cannot run without it;
+- print little: the engine appends the summary line, callers read the tail.
+
+The shared engine (diff base, changed files, `verify.d` policies, the green-result cache) is `internal/verify`; the Node stacks (`nextjs`, `react-native`) share `internal/stack/node.go`. `verify.d` policies are `*.sh` (run through `sh`), `*.ps1`, and on Windows `*.cmd` and `*.exe`.

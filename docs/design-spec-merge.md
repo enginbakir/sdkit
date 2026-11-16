@@ -1,5 +1,7 @@
 # Design: parallel spec changes and the semantic merge
 
+> **History.** This record was written for the 1.x (bash) kit. Commands are shown by their 2.0 names (`sdkit <command>`); the `tests/*.test.sh` suites, `bench/` and `jq` it names belong to 1.x (2.0 replaced the suites with a small Go test set, and the harness lives in `attic/bench/`, unmaintained). The design and the decisions still stand; see [guide.md](guide.md) for how 2.0 is built.
+
 Status: **implemented** (see "Implementation notes" at the end for where the code deviates or decides). §2 was agreed, §11 lists what is still open. Every spec in the example repo is still a draft, so there is nothing to migrate.
 
 ## 1. Problem
@@ -53,7 +55,7 @@ specs/LOGIN/                         the base (living spec)
 }
 ```
 
-`base`, `expects`, `touches` and `createdAt` are computed by `update-specs`/`spec.sh`, not typed. An applied change keeps `status: applied` and its delta is never edited again.
+`base`, `expects`, `touches` and `createdAt` are computed by `update-specs`/`sdkit spec`, not typed. An applied change keeps `status: applied` and its delta is never edited again.
 
 ## 4. Identity and the "expects" check
 
@@ -69,23 +71,23 @@ There is no pipeline, and the Tech Lead merges in the host UI where no kit code 
 
 | Gate | Where | What |
 |---|---|---|
-| a | `update-specs` start and `spec.sh publish` | `spec.sh drift <id>` fetches `origin/spec/*` and finds the siblings: open changes of the same spec on the same base (and any revision merged since the change's base). It names them; for siblings `publish` still works (they are reviewed separately) but marks the PR. |
-| b | The spec PR itself | `publish` writes a status block into the PR body: `SIBLINGS: <slugs>: do not merge alone, merge-specs first`, or `applied against base <hash>`. `spec.sh check <id>` is the one command the Tech Lead runs before merging; it prints OK or what is missing. |
+| a | `update-specs` start and `sdkit spec publish` | `sdkit spec drift <id>` fetches `origin/spec/*` and finds the siblings: open changes of the same spec on the same base (and any revision merged since the change's base). It names them; for siblings `publish` still works (they are reviewed separately) but marks the PR. |
+| b | The spec PR itself | `publish` writes a status block into the PR body: `SIBLINGS: <slugs>: do not merge alone, merge-specs first`, or `applied against base <hash>`. `sdkit spec check <id>` is the one command the Tech Lead runs before merging; it prints OK or what is missing. |
 | c | Local git hooks (`.githooks`) | A local merge or push of a spec branch runs the same check. Does not cover a merge in the host UI. |
-| d | `generate-tasks` (via `spec.sh approved-sha`) | Refuses a spec revision with unmerged siblings or an inconsistent base. No task exists for an inconsistent spec, whoever merged it. |
-| e | Developer side: `sdd.sh start` and the push/PR gate | The task's pinned `specSha` is older than the latest approved revision of the same spec and that revision touches an AC of the task: the task is blocked with the existing `block --spec-change` → `revalidate --sha` path. |
+| d | `generate-tasks` (via `sdkit spec approved-sha`) | Refuses a spec revision with unmerged siblings or an inconsistent base. No task exists for an inconsistent spec, whoever merged it. |
+| e | Developer side: `sdkit sdd start` and the push/PR gate | The task's pinned `specSha` is older than the latest approved revision of the same spec and that revision touches an AC of the task: the task is blocked with the existing `block --spec-change` → `revalidate --sha` path. |
 
 (e) is "the code is going to be merged, so the spec must be too" made automatic. The Tech Lead and analyst must know about (b); (d) and (e) protect when they forget.
 
 ## 6. Applying and merging
 
-**One change, base unmoved.** `spec.sh apply <id> [<slug>]` writes the delta into the base on the change's own branch, sets label `1.1`, marks it `applied`, updates `spec.meta.json`, runs the coverage check (§7). Exit 0. No skill involved.
+**One change, base unmoved.** `sdkit spec apply <id> [<slug>]` writes the delta into the base on the change's own branch, sets label `1.1`, marks it `applied`, updates `spec.meta.json`, runs the coverage check (§7). Exit 0. No skill involved.
 
 **Siblings (or a base that moved).** Locally, by the analyst who merges:
 
 1. Review of each sibling PR proceeds as usual; the Tech Lead's OK on each is the signal that its content is accepted.
 2. The analyst starts from one sibling's branch and merges the other sibling branches in with git. This is clean, because each only added its own `changes/<slug>/`. The branches may be all N siblings at once.
-3. `merge-specs` does the mechanical preparation (renumbers id collisions, lists what each delta changed against the base, writes `work/spec-merge/<id>/plan.json`), then the semantic work (§6.1), then `spec.sh apply` writes all deltas into the base as the next revision (`1.2`).
+3. `merge-specs` does the mechanical preparation (renumbers id collisions, lists what each delta changed against the base, writes `work/spec-merge/<id>/plan.json`), then the semantic work (§6.1), then `sdkit spec apply` writes all deltas into the base as the next revision (`1.2`).
 4. The result is published as the update of that branch's PR and goes to review again; the merge decisions are what the reviewers look at. The other sibling PRs are closed by the kit with a note pointing at the merged one.
 5. A late sibling (written on an older base, finished after the merge landed) is merged the same way against the new base, producing the next revision.
 
@@ -110,7 +112,7 @@ Stages:
 2. **Judgement (fresh subagent).** It reads the base text of every touched capability, both deltas and both `intent.md`. Per pair: independent / complementary / contradicting / overlapping / superseding, with a proposed resolution and the alternatives.
 3. **Sweep.** The same pass reads the merged AC list of every touched capability once and reports any base AC now inconsistent with the new ones. Independent of the facts of stage 1, so a missed candidate is still found.
 4. **Decisions.** Batches of at most 4 questions, a safe default first, each naming the item it closes (as `generate-specs/references/triage.md`). Outcomes: keep both / A wins / B wins / write a combined AC / supersede through a new ADR / needs a business answer. The last one uses the existing OQ mechanism: the AC is marked `blocked by OQ-n` and the merge goes on.
-5. The decisions go into `change.json` (`resolutions`) and the merged text into the deltas; `spec.sh apply` runs and now applies. The merged revision gets its own EGM review (`review.sh`, fresh isolation, bound to the content hash).
+5. The decisions go into `change.json` (`resolutions`) and the merged text into the deltas; `sdkit spec apply` runs and now applies. The merged revision gets its own EGM review (`sdkit review`, fresh isolation, bound to the content hash).
 
 When the deltas touch nothing in common, the skill still does stages 3 and 5 but usually asks nothing.
 
@@ -123,7 +125,7 @@ An approved AC that the merged result reverses or weakens follows the existing `
 - every AC each sibling ADDED, MODIFIED or REMOVED (withdrawn) is in the base as intended, or has a recorded resolution (nothing from either change is lost);
 - no AC id lost or duplicated; a withdrawn id is never reused;
 - every reference to an AC id resolves;
-- the changes' tasks cover every AC they add or modify (the `tasks.sh trace` logic).
+- the changes' tasks cover every AC they add or modify (the `sdkit tasks trace` logic).
 
 A lone mechanical apply needs no new EGM round; a merge always gets one. A change's review evidence is bound to the change directory hash; the base `contentHash` covers base files only.
 
@@ -137,29 +139,29 @@ The spec never records completion; Jira does. A change's own `tasks.md` carries 
 
 ## 9. Developer side
 
-Unchanged contract: a task pins an **approved** `specSha` reachable from `origin/<base>`; approval is the Tech Lead's merge of the PR (an already applied base). New: gate (e), and `sdd.sh` can show which change introduced each AC of a task. The kit adds and removes no code in a merge: after it the developer `revalidate`s to the merged sha and the verifier checks the DoD against the merged ACs.
+Unchanged contract: a task pins an **approved** `specSha` reachable from `origin/<base>`; approval is the Tech Lead's merge of the PR (an already applied base). New: gate (e), and `sdkit sdd` can show which change introduced each AC of a task. The kit adds and removes no code in a merge: after it the developer `revalidate`s to the merged sha and the verifier checks the DoD against the merged ACs.
 
 ## 10. Impact on the kit
 
 | Area | Change |
 |---|---|
-| `scripts/spec.sh` | new `drift`, `apply`, `check`; change-aware `status`/`changed`/`publish`; base `contentHash` excludes `changes/`; PR-body status block |
-| `scripts/open-pr.sh` | update the PR body on Bitbucket (today only `gh pr edit` for GitHub is wired in `spec.sh publish`); close a sibling PR with a note |
+| `sdkit spec` | new `drift`, `apply`, `check`; change-aware `status`/`changed`/`publish`; base `contentHash` excludes `changes/`; PR-body status block |
+| `sdkit pr open` | update the PR body on Bitbucket (today only `gh pr edit` for GitHub is wired in `sdkit spec publish`); close a sibling PR with a note |
 | skills | `update-specs` writes a change instead of editing the base; new `merge-specs`; `generate-specs` creates the first base, and a feature on an existing base becomes a change |
-| `scripts/tasks.sh`, `sdd.sh` | per-change task generation, key includes the slug; gate (e) |
+| `sdkit tasks`, `sdkit sdd` | per-change task generation, key includes the slug; gate (e) |
 | hooks | `.githooks`: spec-branch check (gate c) |
 | docs | `README.md`, `docs/guide.md` (§2, §6, §7, §10, §15), `docs/cheatsheet.md`, `core/roles/README.md` counts and tables in the same change; version bump per `CLAUDE.md` |
 
 ## 11. Open points
 
-1. Closing a sibling PR and refreshing the PR-body block through the Bitbucket REST API (`open-pr.sh` creates and reuses PRs there but does not edit or close them).
+1. Closing a sibling PR and refreshing the PR-body block through the Bitbucket REST API (`sdkit pr open` creates and reuses PRs there but does not edit or close them).
 2. What the Tech Lead's first OK on a sibling means in the host when that PR is then closed unmerged; the merged revision carries a link to the sibling PRs and their reviews.
 3. A merge of many siblings at once versus pairwise: the model reads all N deltas in one judgement pass (cost grows with N); a fallback to pairwise when the context gets too large.
 4. Tuning the stage 2 and 3 prompts on the `LOGIN` / `google_login` pair as the first real input.
 
 ## 12. Implementation notes
 
-Code: `scripts/spec-change.sh` (facts), `scripts/spec-apply.sh` (renumber, delta writes), `spec.sh` (`change`, `drift`, `check`, `apply`, change-aware `publish`/`approved-sha`), `open-pr.sh` (`--update`, `--close`), `skills/merge-specs`, `tasks.sh` (`changes`, `acs --revision`, change in the task key), `sdd.sh` (gate e), `guard.sh` (gate c, `SPEC_CHECK_ON_PUSH`). Tests: `spec-change.test.sh`, `spec-merge.test.sh`.
+Code: `sdkit spec change` (facts), `sdkit spec apply` (renumber, delta writes), `sdkit spec` (`change`, `drift`, `check`, `apply`, change-aware `publish`/`approved-sha`), `sdkit pr open` (`--update`, `--close`), `skills/merge-specs`, `sdkit tasks` (`changes`, `acs --revision`, change in the task key), `sdkit sdd` (gate e), `sdkit guard` (gate c, `SPEC_CHECK_ON_PUSH`). Tests: `spec-change.test.sh`, `spec-merge.test.sh`.
 
 Decisions settled before the build: (1) change branches are `spec/<id>--<slug>` (git cannot hold `spec/<id>` and `spec/<id>/<slug>`); gate (a) lists `origin/spec/<id>--*`. (2) Edits before the base is approved stay in place (0.N, no change record); the change model starts once the base is approved on the base branch. (3) A change's label is the base version +0.1; no `--breaking` for a change.
 
@@ -168,7 +170,7 @@ Where the build decides something the design left open:
 - **Apply is sequential.** Deltas are applied in `createdAt` order, a later MODIFIED of the same requirement replaces the earlier text, and the coverage check rejects a result that lost an earlier change's text. So `merge-specs` must put the decided text into the deltas and record `resolutions`; `apply` exits 3 (plan written, nothing changed) until every change has a `resolutions` array.
 - **Withdrawn ids** are written as `AC-x-n (withdrawn) - title` with a fixed body; a MODIFIED requirement may leave a withdrawn AC out (apply keeps it) but not an active one.
 - **Renumbering** rewrites the later change's own `*.md` files and its `touches`, and records `renames`. The design's "refuse if a Jira task already pins the id" cannot occur: a task pins only ids that are already in an approved base, and then the later change collides with the base, not with a task; such an id is renumbered like any other.
-- **Review binding.** `review.sh` hashes exclude the top-level `changes/` directory (base) and every `change.json` (machine state), so applying a change does not stale its own review. A lone apply is published on the change's review; a merge needs a review of the whole base (`review.sh begin <id>`).
+- **Review binding.** `sdkit review` hashes exclude the top-level `changes/` directory (base) and every `change.json` (machine state), so applying a change does not stale its own review. A lone apply is published on the change's review; a merge needs a review of the whole base (`sdkit review begin <id>`).
 - **Gate (d)** (`approved-sha`) checks, for a spec that has `changes/`: no open change inside the revision, no open sibling branch written on that base or older and absent from it, coverage, and the recorded hash.
 - **Gate (e)** reads the specs checkout's HEAD: a later approved revision whose applied changes touch an AC of the task blocks `start`, the verified gate and the push gate, naming the AC and the change.
 - Still open as listed in §11: what a Tech Lead's OK on a closed sibling PR means in the record, one pass over N siblings versus pairwise, and prompt tuning of stages 2-3 on the LOGIN / google_login pair.

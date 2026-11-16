@@ -1,0 +1,8 @@
+$ run-role verifier --host claude --dry-run
+(cd <CWD> && claude -p <prompt:N chars> --output-format json --disallowedTools Edit\ Write\ NotebookEdit)
+$ run-role developer --host claude --dry-run
+(cd <CWD> && claude -p <prompt:N chars> --output-format json --permission-mode acceptEdits)
+$ run-role verifier --host codex --dry-run
+(cd <CWD> && codex exec -C <CWD> --sandbox read-only --output-last-message <OUT> <prompt:N chars>)
+$ run-role developer --host codex --dry-run
+(cd <CWD> && codex exec -C <CWD> --sandbox workspace-write --output-last-message <OUT> <prompt:N chars>)

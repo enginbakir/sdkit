@@ -1,0 +1,6 @@
+# cmd: sdkit plan waves tasks.md
+# env: MAX_PARALLEL=3
+exit: 0
+wave 1: T1(developer,S)  ||  T3(developer,M)
+wave 2: T2(developer,M)  ||  T4(writer)
+wave 3: T5(tester,L)

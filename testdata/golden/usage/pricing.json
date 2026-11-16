@@ -1,0 +1,3 @@
+{"version":2,"currency":"USD","models":[
+{"model":"claude-sonnet-4-5","provider":"bedrock","in":3,"out":15,"cache_read":0.3,"cache_write":3.75},
+{"model":"claude-haiku-4-5","provider":"bedrock","in":1,"out":5,"cache_read":0.1,"cache_write":1.25}]}

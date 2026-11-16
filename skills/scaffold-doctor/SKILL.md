@@ -7,8 +7,7 @@ metadata:
   version: "2.1"
 ---
 
-1. Locate the kit: `${CLAUDE_PLUGIN_ROOT}` when set; otherwise ask for the path to the `spec-driven-kit` checkout.
-2. Run `"<kit>/bin/doctor.sh" "$PWD"` and show the output.
-3. For each `FAIL`, say what to change and in which file. Do not edit `project.md` yourself: the risk rubric is the user's decision.
-4. `WARN` lines about a host CLI (`codex`, `opencode`, `cursor-agent`, `gemini`) only matter for `scripts/run-role.sh --host <host>`; mention them, do not treat them as failures.
-5. Copy-mode installs and non-Claude hosts: if the kit moved on (a version change: offer `bin/upgrade.sh` first), offer `"<kit>/bin/sync.sh" "$PWD"`; it keeps local edits and prints a diff for conflicts.
+1. Run `sdkit doctor` in the repo root (if `sdkit` is not found, tell the user to install it: `docs/guide.md`) and show the output.
+2. For each `FAIL`, say what to change and in which file. Do not edit `project.md` yourself: the risk rubric is the user's decision.
+3. `WARN` lines about a host CLI (`codex`, `opencode`, `cursor-agent`, `gemini`) only matter for `sdkit run-role --host <host>`; mention them, do not treat them as failures.
+4. Copy-mode installs and non-Claude hosts: if the kit moved on (a version change: offer `sdkit upgrade` first), offer `sdkit sync`; it keeps local edits and prints a diff for conflicts.

@@ -1,40 +1,32 @@
-# Homebrew distribution
+# Homebrew and Scoop distribution
 
-This repository is its own Homebrew **tap**: `Formula/sdkit.rb` is committed here. The formula installs the whole kit into
-brew's `libexec` and links one command, `sdkit`. There is no separate tap repository (a tap is any git repo with a `Formula/`
-directory; the `homebrew-` name prefix only matters for the short `brew tap user/repo` form, and we give the URL).
+`sdkit` is one Go binary. The formula downloads the release archive for the platform and installs it. It has no dependencies: `jq`, `bash`, `python3` and `node` are not needed. Only an analyst repo needs `node`, for the OpenSpec CLI that `sdkit init --env analyst` installs with npm.
+
+This repository is its own Homebrew **tap**: `Formula/sdkit.rb` is committed here.
 
 ## For developers
 ```
-brew tap wecii/sdkit https://github.com/wecii/sdkit.git                       # once
-brew trust wecii/sdkit                                                   # once; recent Homebrew refuses formulae from untrusted taps
-brew install sdkit                                                            # brings jq and node
-brew upgrade sdkit                                                            # later
+brew tap wecii/sdkit https://github.com/wecii/sdkit.git      # once
+brew trust wecii/sdkit                                       # once; recent Homebrew refuses formulae from untrusted taps
+brew install sdkit
+brew upgrade sdkit                                           # later
 ```
-Then, in a repo (one person, once): `sdkit init`. Every other developer just clones. `sdkit doctor` checks a repo,
-`sdkit upgrade` brings a repo up to the installed kit version after a `brew upgrade`.
+Windows (Scoop; a `winget` package may follow): `scoop install` from `packaging/scoop/sdkit.json`, or download the
+`sdkit_<version>_windows_<arch>.zip` release asset and put `sdkit.exe` on `PATH`. `git` is needed too.
 
-The git hook shims (`.githooks/`) find the installed kit by running `sdkit where`, so nothing has to be registered on the
-machine and brew upgrades do not break them.
-
-Until the first release is tagged the formula has only a `head` block: `brew install --HEAD sdkit` builds `master`.
+Then, in a repo (one person, once): `sdkit init`. `sdkit doctor` checks a repo; `sdkit upgrade` brings a repo up to the
+installed version after a `brew upgrade`. The git hook shims find the binary with `sdkit where`.
 
 ## For maintainers: every release
-0. Run `packaging/scan-publishable.sh --history` (no hard findings, and read the soft ones: identities, names, paths).
-1. Merge to `master`, bump the version in `.claude-plugin/plugin.json` (and `marketplace.json`).
-2. Tag the release commit and push the tag: `git tag v<version> <commit> && git push origin v<version>`.
-3. Regenerate the formula from that tag (it pins tag and revision): `packaging/homebrew/gen-formula.sh --write`.
-4. Commit `Formula/sdkit.rb` on `master` and push. Developers get it with `brew update && brew upgrade sdkit`.
-   (The formula commit comes after the tag, so the tag never contains its own revision; this is expected.)
+`.goreleaser.yaml` builds six targets (darwin, linux, windows; amd64, arm64): `tar.gz` archives (zip on Windows) and
+`checksums.txt`. The `brews` and `scoops` sections write `dist/homebrew/Formula/sdkit.rb` and `dist/scoop/sdkit.json`
+locally (`skip_upload: true`); nothing is published and no token is configured. `Formula/sdkit.rb` and
+`packaging/scoop/sdkit.json` are the committed templates with `__SHA256_*__` placeholders.
 
-Try an unreleased branch before merging, without touching your real brew setup more than needed: generate into a throwaway
-clone with `gen-formula.sh --head-only --head-branch <branch> --repo-url file:///path/to/bare-clone.git --write`, tap that
-clone (`brew tap you/test file:///...`), `brew trust` it, `brew install --HEAD you/test/sdkit`, then `brew uninstall` and `brew untap`.
+0. Run `sdkit dev scan --history` (no hard findings; read the soft ones).
+1. Bump the version in all five places (`plugin.json`, `marketplace.json`, README badge, `Formula/sdkit.rb`, `packaging/scoop/sdkit.json`).
+2. Try it locally: `goreleaser release --snapshot --clean --skip=publish`, then check `dist/` has six archives, `checksums.txt`, the formula and the manifest.
+3. Tag `v<version>` and push the tag (explicit user step). The `release` workflow builds the artifacts; publishing is enabled by the user later.
+4. Copy the generated `dist/homebrew/Formula/sdkit.rb` to `Formula/` and `dist/scoop/sdkit.json` to `packaging/scoop/`, commit on `master`.
 
-## Notes
-- `using: :git` is in the formula on purpose: brew does not recognise an ssh URL (`git@host:path`) or a `file://` URL as a
-  git repository and would download it as a file.
-- The repo is private, so brew clones over SSH with the developer's own key; no credentials are in the formula.
-- brew installs `node` because OpenSpec (the spec engine) is an npm package. The OpenSpec CLI itself is installed by
-  `sdkit init --install-openspec`, not by brew.
-- Windows is out of scope (the kit is bash).
+CI templates (`templates/ci/*`) pin the `sdkit` version in the consumer's own CI file, so a new release reaches a repo's gate only when that repo merges a version bump.

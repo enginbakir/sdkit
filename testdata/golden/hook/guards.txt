@@ -1,0 +1,13 @@
+# captured from the bash hooks by capture-guards.sh; the Go test replays the # in: lines
+# in: secret path|guard-secrets|{"tool_name":"Read","tool_input":{"file_path":"app/.env.local"}}
+== secret path
+stdout: {"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"'app/.env.local' matches SECRET_GLOBS in .sdkit/sdkit.env. Secrets must not be read or written by the agent."}}
+# in: prod kubectl|guard-prod|{"tool_name":"Bash","tool_input":{"command":"kubectl --context x apply -f a.yaml"}}
+== prod kubectl
+stdout: {"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"ask","permissionDecisionReason":"Mutating kubectl against PRODUCTION cluster 'prod' (context 'x'). Confirm this is intended."}}
+# in: readonly redirect|guard-readonly|{"tool_name":"Bash","agent_type":"reviewer","tool_input":{"command":"echo hi > out.txt"}}
+== readonly redirect
+stdout: {"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"'reviewer' is read-only: output redirection to a file is not allowed."}}
+# in: noisy command|guard-noisy|{"tool_name":"Bash","tool_input":{"command":"npm test"}}
+== noisy command
+stdout: {"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"ask","permissionDecisionReason":"Long output stays in the conversation and is re-read on every later turn. Run it through the capped runner: <kit>/scripts/capped.sh -- npm test"}}

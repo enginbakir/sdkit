@@ -1,0 +1,40 @@
+# sdd: status
+# sdd: start t1 --risk high --profile high-assurance --proposal docs/proposal.md
+# sdd: status
+# sdd: start t2 --risk low --proposal docs/proposal.md
+# sh: printf '{"task":"t1","risk":"high","profile":"high-assurance","proposal":"docs/proposal.md","phase":"verified","verdict":{"result":"PASS","fingerprint":"x"},"verifiedFingerprint":"x"}' > .sdkit/.sdd/state.json
+# sdd: status
+# sdd: phase
+# sdd: mode
+# sdd: transitions
+$ sdd status
+no active task
+exit: 0
+$ sdd start t1 --risk high --profile high-assurance --proposal docs/proposal.md
+task 't1' opened (risk=high, profile=high-assurance, phase=intake). Write the proposal with a Definition of Done, then: sdkit sdd advance proposed
+exit: 0
+$ sdd status
+task=t1 risk=high phase=intake profile=high-assurance
+exit: 0
+$ sdd start t2 --risk low --proposal docs/proposal.md
+sdd: task 't1' is still open (phase intake). Finish it or run: sdkit sdd abort
+exit: 1
+$ sdd status
+task=t1 risk=high phase=verified profile=high-assurance verdict=PASS evidence=stale
+exit: 0
+$ sdd phase
+verified
+exit: 0
+$ sdd mode
+strict
+exit: 0
+$ sdd transitions
+intake > proposed  proposal.md has a Definition of Done list (high risk: design.md has a race/ordering/timing section)
+proposed > red     --test-cmd runs and FAILS
+red > green        the tests PASS, the risk floor holds, no agent is still in flight (high-assurance)
+green > verified   the risk floor holds; low: the verify command passes; medium/high/high-assurance: an independent PASS for this exact diff
+verified > pr      none beyond verified: the push gate already holds the diff to the verified one before a PR exists
+pr > done          none (the PR is merged: the user's call)
+verified|pr > verified re-verification, only while the verified diff is stale: the same checks as verified
+any > (aborted)    sdkit sdd abort; the only way back, and it ends the task
+exit: 0

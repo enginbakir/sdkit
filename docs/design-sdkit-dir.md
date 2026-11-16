@@ -1,5 +1,7 @@
 # Design: `.sdkit/` as the single project directory
 
+> **History.** This record was written for the 1.x (bash) kit. Commands are shown by their 2.0 names (`sdkit <command>`); the `tests/*.test.sh` suites, `bench/` and `jq` it names belong to 1.x (2.0 replaced the suites with a small Go test set, and the harness lives in `attic/bench/`, unmaintained). The design and the decisions still stand; see [guide.md](guide.md) for how 2.0 is built.
+
 Status: **implemented, 1.1.0** (1.0.0 + the shared/personal settings split, §9). The decisions below are in the code; deviations are in §9. User-facing description: `guide.md` §3 and §15; migration: `upgrading.md` (1.0.0).
 
 ## 1. Principles
@@ -58,7 +60,7 @@ Everything updatable lives in one place under `.sdkit/`; that is always where th
 
 | Content | File | Written by |
 |---|---|---|
-| Durable project memory | `.sdkit/memory/` | `memory.sh add/promote` (at closeout, with user approval) |
+| Durable project memory | `.sdkit/memory/` | `sdkit memory add/promote` (at closeout, with user approval) |
 | Temporary (task) memory | `.sdkit/work/<slug>/notes.md` | the agent during the task; personal, candidates are extracted at closeout |
 | Bug classes | `.sdkit/known-pitfalls.md` | `incident-to-rule` |
 | Decisions | `.sdkit/adr/` | engineer / user |
@@ -67,8 +69,8 @@ Everything updatable lives in one place under `.sdkit/`; that is always where th
 ### Host routing
 The agent reaches memory in two ways; both are things that are in git or run in the agent's own session:
 
-- **Entry files (committed):** the kit block in `AGENTS.md` and `.claude/CLAUDE.md` says "read `.sdkit/memory/INDEX.md` first, read rules from `.sdkit/rules/`, and when writing, write to `.sdkit/` with `memory.sh` / `incident-to-rule` / `adr/`".
-- **Session hook (Claude):** `session-context.sh` puts `INDEX.md` into the context.
+- **Entry files (committed):** the kit block in `AGENTS.md` and `.claude/CLAUDE.md` says "read `.sdkit/memory/INDEX.md` first, read rules from `.sdkit/rules/`, and when writing, write to `.sdkit/` with `sdkit memory` / `incident-to-rule` / `adr/`".
+- **Session hook (Claude):** `session-context` puts `INDEX.md` into the context.
 - Claude Code does not read a path like `.claude/memory.md` (confirmed against the docs, §9), so no routing file is generated for that.
 - The tool's own personal memory (Claude's user-level auto memory) is outside the kit's scope; the block asks for durable project knowledge to be written to `.sdkit/`.
 
@@ -80,7 +82,7 @@ The agent reaches memory in two ways; both are things that are in git or run in 
 
 ## 6. Resolver and backward compatibility
 
-A single helper (`bin/lib.sh`, `hooks/lib.sh`); the loop in 12 scripts collapses into it. Order: `.sdkit/`, then `project.env` in the legacy `.agentkit`, `.claude`, `.codex`.
+A single helper (`internal/project`, `internal/hook`); the loop in 12 scripts collapses into it. Order: `.sdkit/`, then `project.env` in the legacy `.agentkit`, `.claude`, `.codex`.
 The old layout keeps working; `doctor` warns. `sdkit upgrade --migrate` (default `--dry-run`, archive backup first): moves the kit files into `.sdkit/` with `git mv`, turns `project.env` into `sdkit.env`,
 rewrites the host links, removes old kit copies from the host directories. It does not touch the project's own skill, command and agent files.
 
@@ -93,18 +95,18 @@ An earlier conversation had decided to "remove it entirely", but that decision r
 
 | Area | Work |
 |---|---|
-| Resolver | the loop in `bin/lib.sh`, `hooks/lib.sh` and 10 scripts becomes a single helper |
+| Resolver | the loop in `internal/project`, `internal/hook` and 10 scripts becomes a single helper |
 | Templates | `templates/sdkit.env`, `templates/sdkit.gitignore`, entry file blocks (`AGENTS.kit.md`, `CLAUDE.kit.md`); `claude.gitignore` goes away |
 | `init` / `upgrade` / `doctor` / `sync` | new layout, local ignore, appending missing keys, `--migrate`, host routing |
 | Hooks and skills | `.sdkit` instead of `<project-dir>`; `project.env` → `sdkit.env` (appears in 105 files, `project.md` in 69 of them) |
-| Writing scripts | `memory.sh`, `incident-to-rule` and the ADR template pin their target to `.sdkit/` |
-| Tests | `run.sh`, `shared.test.sh`, `memory.test.sh`, `budget.test.sh` on the new and the old layout; new tests for `migrate` and mixed hosts |
+| Writing scripts | `sdkit memory`, `incident-to-rule` and the ADR template pin their target to `.sdkit/` |
+| Tests | the 1.x test runner, `shared.test.sh`, `memory.test.sh`, `budget.test.sh` on the new and the old layout; new tests for `migrate` and mixed hosts |
 | Docs | README, `docs/guide.md` (§3, §10, §15, §19), cheatsheet, `upgrading.md`; the numbers are aligned in a single change |
 
 ## 9. Decisions and deviations in the implementation
 
 Decisions (with user approval):
-- **The CI gate and attestations stay**, optional (`init --ci`); `attestations/` and the two scripts CI needs (`sdd.sh`, `resolve-base.sh`) are in git inside `.sdkit/`. CI does not see `sdkit.env`, so it runs with the defaults.
+- **The CI gate and attestations stay**, optional (`init --ci`); `attestations/` and the two scripts CI needs (`sdkit sdd`, `sdkit base`) are in git inside `.sdkit/`. CI does not see `sdkit.env`, so it runs with the defaults.
 - **Memory:** `.sdkit/memory/INDEX.md` plus entries (not a single file). **On by default** for new installs; `USAGE_LOG` is on as well. The limits (`TOKEN_BUDGET_TASK`, `MAX_SPAWNS`, `SUBAGENT_RESULT_MAX_LINES`) are empty; the kit imposes no numbers.
 - **The kit's default rules** (`core/rules`, stack rules) are copied into `.sdkit/rules/` if the project is missing them (existing files are kept); these are in git and the project edits them.
 - **The old layout** is read throughout 1.x (`.claude`/`.codex`/`.agentkit` + `project.env`); it is planned to go in the next major release.
@@ -112,7 +114,7 @@ Decisions (with user approval):
 
 Verification results (against the Claude Code docs) and deviations:
 - `@path` imports from inside `CLAUDE.md` work, `settings.local.json` reads plugins, marketplaces, permissions and hooks, `.claude/rules/*.md` is loaded automatically and symlinks are followed; **but a path like `.claude/memory.md` is not read by Claude Code.**
-- So **no `.claude/memory.md` routing file was generated.** The real paths to memory: the session hook puts `INDEX.md` into the context, and the kit block (`CLAUDE.md` / `AGENTS.md`) says "read `.sdkit/memory/INDEX.md` first, and when writing, write to `.sdkit/` with `memory.sh`".
+- So **no `.claude/memory.md` routing file was generated.** The real paths to memory: the session hook puts `INDEX.md` into the context, and the kit block (`CLAUDE.md` / `AGENTS.md`) says "read `.sdkit/memory/INDEX.md` first, and when writing, write to `.sdkit/` with `sdkit memory`".
 - **The `@AGENTS.md` import was not used;** `CLAUDE.md` and `AGENTS.md` carry the same kit block (short duplicated text, generated from a single template source with `__KIT_DIR__`).
 - **Rules were not linked into `.claude/rules/`:** `.sdkit/rules/` is not auto-loaded in Claude; it is listed by path in the block and read when needed. This fits the token economy of not loading every rule into the context in every session.
 - Claude's kit entries go to `settings.local.json`; **the user's own `settings.json` is not touched.** In the old layout (and before `--migrate`) `settings.json` is used.

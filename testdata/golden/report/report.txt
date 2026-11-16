@@ -1,0 +1,246 @@
+# captured from the 1.x oracle scripts/report.sh on the fixtures in testdata/golden/report/proj; timestamps masked; only change: "usage.sh scan" reads "sdkit usage scan"
+=== report finalize --status completed --slug full
+SDKit Value Report — full ended COMPLETED after 12m30s: 4 role execution(s) across 4 role(s); final verification PASS.
+  12m30s · workflow standard · host N/A · files N/A · tests 1p/0f · gates Passed
+  roles:
+    orchestrator [orchestrator] m-big x1  57,000 tok  $0.3150
+    developer [subagent] m-small x1  30,000 tok  $0.0983
+    reviewer [subagent] m-small x1  N/A tok  N/A
+    verifier [subagent] m-small x1  1,300 tok  $0.0135
+  usage: 88,300 (lower bound: some runs unmeasured) tokens (in 3,500 out 7,800 cache_read 70,000 cache_write 7,000) · cache hit 87% · est. API-equivalent cost $0.4268 (PARTIAL: 1 run(s) unpriced, lower bound)
+  savings: tokens: 1,300 saved (6.6%, estimated, medium confidence) | cost: $0.4605 (51.9%, estimated)
+  optimizations: Intelligent routing [estimated], Evidence reuse [measured count], Skipped redundant agents [measured count], Test selection [measured], Context optimization [heuristic], Budget enforcement [qualitative], Workflow enforcement [qualitative]
+  validation: tests green pass x1, red fail x1 · verification PASS
+  details: sdkit report task full --detailed   (--json / --markdown to export)
+=== report finalize --status failed --slug na
+SDKit Value Report — na ended FAILED: 2 role execution(s) across 2 role(s).
+  N/A · workflow N/A · host codex · files N/A · tests n/r · gates Not run
+  roles:
+    developer [subagent] m-other x1  1,200 tok  N/A
+    scout [subagent] m-small x1  N/A tok  N/A
+  usage: 1,200 (lower bound: some runs unmeasured) tokens (in 800 out 400 cache_read 0 cache_write 0) · cache hit 0% · est. API-equivalent cost N/A (no pricing)
+  savings: tokens: N/A — insufficient baseline data | cost: N/A — insufficient baseline data
+  optimizations: none observed
+  validation: tests none recorded · verification not recorded
+  details: sdkit report task na --detailed   (--json / --markdown to export)
+=== report finalize --status completed --slug full
+SDKit Value Report for full@r20260101100000-1 already exists: sdkit report task full
+=== report task full --detailed
+## SDKit Value Report — task full
+
+**full ended COMPLETED after 12m30s: 4 role execution(s) across 4 role(s); final verification PASS.**
+
+### A. Task Overview
+
+| Metric | Value |
+|---|---|
+| Task | full |
+| Task ID | full@r20260101100000-1 |
+| Status | COMPLETED |
+| Duration | 12m30s (telemetry events) |
+| Workflow | standard (risk medium) |
+| Host | N/A |
+| Primary Model | m-big |
+| Files Changed | N/A |
+| Tests | 1 passed / 0 failed (+1 expected red-phase failure(s)) |
+| Quality Gates | Passed |
+
+### B. Agent & Role Breakdown
+
+| Role / Agent | Model | Purpose | Executions | Tokens | Cost | Result |
+|---|---|---|---|---|---|---|
+| orchestrator (orchestrator) | m-big | Runs the spec-driven workflow end to end, splits work across roles and owns the plan and the final summary | 1 | 57,000 | $0.3150 | coordinated |
+| developer (subagent) | m-small | Implements a task against an agreed design and tests until they pass | 1 | 30,000 | $0.0983 | recorded |
+| reviewer (subagent) | m-small | Read-only code reviewer | 1 | N/A | N/A | recorded |
+| verifier (subagent) | m-small | Independent verification gate for spec-driven-dev | 1 | 1,300 | $0.0135 | PASS |
+
+_kind: orchestrator = the main session; subagent = a delegated agent; host-agent = a separate host process started by run-role.sh. Executions are distinct execution ids. `*` = some runs unpriced._
+
+### C. Token & Cost Breakdown
+
+| Metric | Amount |
+|---|---|
+| Input Tokens | 3,500 |
+| Output Tokens | 7,800 |
+| Cache Read Tokens | 70,000 |
+| Cache Write Tokens | 7,000 |
+| Total Recorded Tokens | 88,300 (lower bound: some runs unmeasured) |
+| Estimated API-Equivalent Cost | $0.4268 (PARTIAL: 1 run(s) unpriced, lower bound) |
+| Estimated Baseline Cost | $0.8873 |
+| Estimated Savings | $0.4605 |
+| Estimated Savings Rate (cost) | 51.9% |
+| Estimated Savings Rate (tokens) | 6.6% (1,300 of 19,600 fresh tokens) |
+
+_Cost is API-equivalent (tokens x your price table), not a bill. Billed: unavailable: no source reports it; a subscription is not billed per token, the figure is what the same tokens cost at API rates._
+
+### D. SDKit Optimization Impact
+
+| Optimization | Evidence | Benefit | Type |
+|---|---|---|---|
+| Intelligent routing | 2 priced agent run(s) on m-small; 0 on the baseline model, 2 cheaper, 0 dearer | $0.447 avoided vs baseline m-big (same-token counterfactual) | estimated |
+| Evidence reuse | 1 valid evidence reuse(s) recorded by routing | 1 execution(s) avoided; priced only where a comparable run exists (see savings) | measured count |
+| Skipped redundant agents | 1 duplicate and 0 budget-skipped request(s) | 1 execution(s) not started; priced only where a comparable run exists | measured count |
+| Test selection | ran 1, reused 2 cached green, left out 9 suite(s) | 12s of cached runs replayed (time measured when first run); skipped suites untimed; no token claim | measured |
+| Context optimization | 1 bounded view(s); 7000 bytes kept off the orchestrator context | about 1750 tokens at ~4 bytes/token (heuristic, not in the savings rate) | heuristic |
+| Budget enforcement | 1 routing decision(s) with budget accounting; 0 stopped for budget | spending checked before each run; no dollar claim | qualitative |
+| Workflow enforcement | 3 phase(s), 1 gate rejection(s) | 1 invalid move(s) stopped before they landed | qualitative |
+
+**Savings** — tokens: 1,300 saved (6.6%, estimated, medium confidence) | cost: $0.4605 (51.9%, estimated)
+
+### Savings method
+
+| Figure | Baseline source | Method | Coverage | Confidence | Type |
+|---|---|---|---|---|---|
+| Token savings | this task: 1 recorded run(s) of the role | avoided executions x mean tokens of the comparable recorded runs; baseline = actual + avoided. fresh tokens = in + out + cache_write; cache reads are not counted as saved or as spent here | 1 of 2 avoided execution(s) quantified | medium | estimated |
+| Cost savings | same tokens priced on baseline model m-big; this task: 1 recorded run(s) of the role | baseline cost = actual priced cost + routing counterfactual + avoided executions; savings = baseline - actual | 3 of 4 run(s) priced; routing on 2 run(s) | low | estimated |
+
+### Why each role ran
+
+| Role | Routing reasons | Runs | Unmeasured runs |
+|---|---|---|---|
+| orchestrator | invoked directly (no routing record) | 1 | 0 |
+| developer | invoked directly (no routing record) | 1 | 0 |
+| reviewer | DUPLICATE_COMPLETED | 1 | 1 |
+| verifier | EVIDENCE_REUSED, ROLE_CAPABILITY_MATCH | 1 | 0 |
+
+### Validation
+
+- tests: green pass x1, red fail x1
+- verification: PASS
+- retries: 0; failures: none
+
+### Caveats
+
+- 1 run(s) reported no token usage: their zeros above are unmeasured, not counted usage
+- cache saving (provider prompt caching, not SDKit): $0.7290
+=== report task na --detailed
+## SDKit Value Report — task na
+
+**na ended FAILED: 2 role execution(s) across 2 role(s).**
+
+### A. Task Overview
+
+| Metric | Value |
+|---|---|
+| Task | na |
+| Task ID | na@0 |
+| Status | FAILED |
+| Duration | N/A (unavailable) |
+| Workflow | N/A (risk N/A) |
+| Host | codex |
+| Primary Model | m-other |
+| Files Changed | N/A |
+| Tests | not recorded |
+| Quality Gates | Not run (telemetry off: no gate result recorded) |
+
+### B. Agent & Role Breakdown
+
+| Role / Agent | Model | Purpose | Executions | Tokens | Cost | Result |
+|---|---|---|---|---|---|---|
+| developer (subagent) | m-other | Implements a task against an agreed design and tests until they pass | 1 | 1,200 | N/A | recorded |
+| scout (subagent) | m-small | Cheap read-only codebase lookups | 1 | N/A | N/A | recorded |
+
+_kind: orchestrator = the main session; subagent = a delegated agent; host-agent = a separate host process started by run-role.sh. Executions are distinct execution ids. `*` = some runs unpriced._
+
+### C. Token & Cost Breakdown
+
+| Metric | Amount |
+|---|---|
+| Input Tokens | 800 |
+| Output Tokens | 400 |
+| Cache Read Tokens | 0 |
+| Cache Write Tokens | 0 |
+| Total Recorded Tokens | 1,200 (lower bound: some runs unmeasured) |
+| Estimated API-Equivalent Cost | N/A (no pricing) |
+| Estimated Baseline Cost | N/A — insufficient baseline data |
+| Estimated Savings | N/A |
+| Estimated Savings Rate (cost) | N/A — insufficient baseline data |
+| Estimated Savings Rate (tokens) | N/A — insufficient baseline data |
+
+_Cost is API-equivalent (tokens x your price table), not a bill. Billed: unavailable: no source reports it; a subscription is not billed per token, the figure is what the same tokens cost at API rates._
+
+### D. SDKit Optimization Impact
+
+No SDKit optimization was observed in the records of this task.
+
+**Savings** — tokens: N/A — insufficient baseline data | cost: N/A — insufficient baseline data
+
+### Savings method
+
+| Figure | Baseline source | Method | Coverage | Confidence | Type |
+|---|---|---|---|---|---|
+| Token savings | - | no avoided execution observed (routing changes the price, not the token count) | - | - | N/A |
+| Cost savings | - | baseline model m-big or the selected models are not priced () | - | - | N/A |
+
+### Why each role ran
+
+| Role | Routing reasons | Runs | Unmeasured runs |
+|---|---|---|---|
+| developer | invoked directly (no routing record) | 1 | 0 |
+| scout | invoked directly (no routing record) | 1 | 1 |
+
+### Validation
+
+- tests: none recorded
+- verification: none recorded
+- retries: N/A; failures: none
+
+### Caveats
+
+- 1 run(s) reported no token usage: their zeros above are unmeasured, not counted usage
+- 1 run(s) not priced (unknown_model): m-other
+- session s2 has agent runs but no orchestrator record (turn never ended or hook off): orchestrator usage is missing; try sdkit usage scan
+- telemetry off or empty: phases, durations, tests and gate results are unavailable
+- cache saving (provider prompt caching, not SDKit): $0.0000
+=== report session s1
+SDKit Session Summary — session s1 (running): 1 task(s), 4 role execution(s) [not a confirmed session end].
+  tasks 1: completed 1, partial 0, failed/aborted 0, blocked 0
+  executions 4 across 4 role(s) · tokens 88,300 (lower bound: some runs unmeasured) · cache hit 87% · est. API-equivalent cost $0.4268 (PARTIAL: 1 run(s) unpriced, lower bound)
+  evidence reuse 1 · skipped 1 · tests 1p/0f
+  savings: tokens: 1,300 saved (N/A, estimated, null confidence) | cost: $0.4605 (N/A, estimated)
+  details: sdkit report session s1 --detailed
+=== report session s2 --markdown
+## SDKit Session Summary — s2
+
+**session s2 (running): 1 task(s), 2 role execution(s) [not a confirmed session end].**
+
+| Metric | Value |
+|---|---|
+| Session | s2 |
+| State | running — still running, or no end signal yet |
+| Tasks | 1 (completed 0, partial 0, failed/aborted 1, blocked 0) |
+| Role executions | 2 (unmeasured 1) |
+| Total tokens | 1,200 (lower bound: some runs unmeasured) |
+| Est. API-equivalent cost | N/A (no pricing) |
+| Evidence reuse | 0 execution(s) avoided |
+| Skipped executions | 0 |
+| Validation | tests 0 passed / 0 failed; gates Not run=1 |
+| Savings | tokens: N/A — insufficient baseline data / cost: N/A — insufficient baseline data |
+
+### Agent & role participation
+
+| Role / Agent | Model | Executions | Tokens | Cost |
+|---|---|---|---|---|
+| developer (subagent) | m-other | 1 | 1,200 | N/A |
+| scout (subagent) | m-small | 1 | N/A | N/A |
+
+### Tasks
+
+| Task | Status | Fresh tokens | Cost |
+|---|---|---|---|
+| na | failed | 1,200 | N/A |
+
+### Savings
+
+- routing: N/A — baseline model m-big or the selected models are not priced ()
+- avoided executions: none; 0 task(s) span several sessions: their avoided executions stay in the task reports and are not added here
+
+### Caveats
+
+- 1 run(s) reported no token usage: their zeros above are unmeasured, not counted usage
+- 1 run(s) not priced (unknown_model): m-other
+- session s2 has agent runs but no orchestrator record (turn never ended or hook off): orchestrator usage is missing; try sdkit usage scan
+- this session has no end signal: figures cover what was recorded
+=== report history
+<TS>  task  full  completed  tokens 18300  cost 0.4268  saved 0.4605
+<TS>  task  na    failed     tokens 1200   cost N/A     saved N/A

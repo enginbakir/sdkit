@@ -1,0 +1,30 @@
+# sdd: advance proposed
+# sdd: start t1 --risk high --proposal docs/empty.md
+# sdd: advance green
+# sdd: advance proposed
+# sh: cp docs/proposal.md docs/empty.md
+# sdd: advance proposed
+# sh: printf '# D\n## Race and ordering\nx\n' > docs/design.md
+# sdd: advance proposed
+# sdd: advance proposed
+$ sdd advance proposed
+sdd: no active task. Start one: sdkit sdd start <slug> --risk <low|medium|high> --proposal <path>
+exit: 1
+$ sdd start t1 --risk high --proposal docs/empty.md
+task 't1' opened (risk=high, profile=standard, phase=intake). Write the proposal with a Definition of Done, then: sdkit sdd advance proposed
+exit: 0
+$ sdd advance green
+sdd: cannot go from 'intake' to 'green'; the next phase is 'proposed'. Phases are not skipped.
+exit: 1
+$ sdd advance proposed
+sdd: docs/empty.md has no 'Definition of Done' section with at least one list item. Each acceptance criterion needs a testable line.
+exit: 1
+$ sdd advance proposed
+sdd: high risk: docs/design.md needs a race / ordering / timing scenario section.
+exit: 1
+$ sdd advance proposed
+phase: proposed
+exit: 0
+$ sdd advance proposed
+sdd: cannot go from 'proposed' to 'proposed'; the next phase is 'red'. Phases are not skipped.
+exit: 1

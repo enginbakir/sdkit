@@ -1,0 +1,5 @@
+{"v":2,"ts":"2026-01-01T10:05:00Z","role":"orchestrator","tier":"","host":"","model":"m-big","provider":"","session":"s1","id":"session-s1","origin":"sdk","kind":"final","source":"","in":1000,"out":2000,"cache_read":50000,"cache_write":4000}
+{"v":2,"ts":"2026-01-01T10:06:00Z","role":"developer","tier":"","host":"","model":"m-small","provider":"","session":"s1","id":"a1","origin":"sdk","kind":"final","source":"","in":2000,"out":5000,"cache_read":20000,"cache_write":3000}
+{"v":2,"ts":"2026-01-01T10:07:00Z","role":"verifier","tier":"","host":"","model":"m-small","provider":"","session":"s1","id":"a2","origin":"sdk","kind":"final","source":"","in":500,"out":800,"cache_read":0,"cache_write":0}
+{"v":2,"ts":"2026-01-01T10:08:00Z","role":"reviewer","tier":"","host":"","model":"m-small","provider":"","session":"s1","id":"a3","origin":"sdk","kind":"final","source":"","in":0,"out":0,"cache_read":0,"cache_write":0,"tq":"unavailable"}
+{"v":2,"ts":"2026-01-01T10:05:30Z","role":"developer","tier":"","host":"","model":"m-small","provider":"","session":"s1","id":"a1","origin":"sdk","kind":"snapshot","source":"","in":900,"out":5000,"cache_read":20000,"cache_write":3000}

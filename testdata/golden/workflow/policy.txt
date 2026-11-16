@@ -1,0 +1,49 @@
+# cmd: sdkit version
+# env: BASH_ENV=.probe.sh
+exit: 0
+== low standard
+task=t risk=low profile=standard verifier=verify-command contracts=off (scout/analyst: off) automatic-retries=1
+{
+  "task": "t",
+  "risk": "low",
+  "profile": "standard",
+  "verifier": "verify-command",
+  "contracts": {
+    "writing_and_deciding_roles": "off",
+    "lookup_roles": "off"
+  },
+  "automatic_retries": 1,
+  "evidence_roles": []
+}
+== medium standard
+task=t risk=medium profile=standard verifier=independent-verifier contracts=off (scout/analyst: off) automatic-retries=1
+{
+  "task": "t",
+  "risk": "medium",
+  "profile": "standard",
+  "verifier": "independent-verifier",
+  "contracts": {
+    "writing_and_deciding_roles": "off",
+    "lookup_roles": "off"
+  },
+  "automatic_retries": 1,
+  "evidence_roles": []
+}
+== high high-assurance
+task=t risk=high profile=high-assurance verifier=independent-verifier contracts=required (scout/analyst: optional) automatic-retries=1
+{
+  "task": "t",
+  "risk": "high",
+  "profile": "high-assurance",
+  "verifier": "independent-verifier",
+  "contracts": {
+    "writing_and_deciding_roles": "required",
+    "lookup_roles": "optional"
+  },
+  "automatic_retries": 1,
+  "evidence_roles": [
+    "verifier",
+    "reviewer",
+    "security-auditor"
+  ]
+}

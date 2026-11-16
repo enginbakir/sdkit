@@ -1,0 +1,21 @@
+# Cross-platform rules (every worker, from the first line)
+
+The maintainer works on macOS. These rules are how Windows stays correct without a Windows machine. Items marked `(assumption)` are confirmed or corrected by `P0-09`.
+
+1. **Paths.** Inside the program, repo-relative paths use `/` (`filepath.ToSlash`). Convert with `filepath.FromSlash` only when calling the OS. Compare protected-path and frozen-file entries case-insensitively on Windows. Build paths with `filepath.Join`, never string concatenation. Store `/` paths in JSON.
+2. **Running user command strings** (`--test-cmd`, `VERIFY_CMD`, `DIFF_BASE_CMD`, formatter hooks): `sh -c` on Unix. On Windows all three shells are supported: `sh -c` (Git for Windows), `powershell -NoProfile -Command` (`pwsh` too) and `cmd /C`. `SDKIT_SHELL` names the shell (`sh`, `bash`, `powershell`, `pwsh`, `cmd`, or a path to one of them) and the flag follows the shell. Unset: `sh` when it is on `PATH`, else `powershell`, else `cmd` (user decision, P0-09/Q2). Document that commands in `sdkit.env` must be shell-neutral on Windows, or point at a `.ps1`, `.cmd` or `.exe`.
+3. **Finding tools.** `exec.LookPath` (honours `PATHEXT`, finds `openspec.cmd`, `gh.exe`, `glab.exe`). Run `.cmd` and `.bat` through `cmd /C` explicitly when `exec` refuses them. `git` is a prerequisite; its absence is a clear error from `doctor`.
+4. **Processes.** Timeouts use `context.WithTimeout`. Liveness of a pid (`kill -0` today) and killing a process tree live behind `proc.Alive(pid)` and `proc.Kill(cmd)` in `proc_unix.go` and `proc_windows.go` (build tags). Nothing else in the repo has OS-specific code except files named `*_windows.go` / `*_unix.go`.
+5. **Glob.** The guards use shell `case` patterns, where `*` matches `/`. `filepath.Match` does not. `internal/glob` implements the shell meaning (match the basename, or the whole path; comma list; empty entries skipped). Never use `filepath.Match` or `path.Match` for a guard.
+6. **Regex.** Guards use `grep -E`. Go uses RE2: no backreferences, no lookaround. Port every guard regex, then run the bypass cases of `02-contracts.md` against it. `[[:space:]]` and other POSIX classes work in RE2.
+7. **Locks.** Keep the `mkdir`-based lock of `env.sh` (atomic on every OS), with an owner pid file and a stale check through `proc.Alive`. Do not use `flock`.
+8. **Files.** Write UTF-8, LF, no BOM. Write atomically (temp file in the same directory, then rename; on Windows retry a rename for up to 1 s when the target is open). Read tolerantly: strip a BOM, accept CRLF, and detect UTF-16 (PowerShell 5.1 `>` writes it) in settings and JSON the user may have touched.
+9. **Network.** `curl` and `python3` calls become `net/http`: Bitbucket, Jira, LiteLLM. Honour `HTTPS_PROXY`, `NO_PROXY`. Timeouts always set. Tokens come only from `sdkit.local.env` or the environment, never from `sdkit.env` (`jira` refuses that today, keep it).
+10. **Terminal.** No colour when stdout is not a terminal or `NO_COLOR` is set. Enable virtual terminal processing on Windows consoles.
+11. **`verify.d/` policies** (user code): `*.sh` (run with `sh` when present), `*.ps1` (run with `powershell -NoProfile -ExecutionPolicy Bypass -File`, or `pwsh` when present), `*.cmd`, `*.exe`; ordered by name; names starting with `_` skipped; `*.example` ignored. Built-in stack steps are Go, so the default path needs no shell.
+12. **OS checks** that were `uname` (react-native: Xcode on Darwin) use `runtime.GOOS`.
+13. **Home and config dirs.** Use `os.UserConfigDir()` and `os.UserHomeDir()`. No `~` expansion by hand, no `/tmp`; use `os.TempDir()` and `os.MkdirTemp`.
+14. **Line endings in the repo.** `.gitattributes` makes kit-owned text files LF (`* text=auto eol=lf`, `*.sh`, `*.json`, `*.md`, `*.go`). Generated files must be byte-identical on every OS.
+15. **Symlinks.** The kit creates none. `sdkit where` does not depend on one.
+16. **Exit codes** are the same on every OS (`02-contracts.md`). On Windows, a child's exit code above 255 is passed through unchanged; map only the codes the contract defines.
+17. **Build tags and CI.** `GOOS=windows go vet ./...` and `GOOS=linux go vet ./...` run on every task's merge from macOS (`05-workflow.md` §5). `go test ./...` runs natively on Windows in CI (`P0-06`).

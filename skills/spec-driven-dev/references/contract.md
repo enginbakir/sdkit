@@ -1,7 +1,7 @@
 # Agent contract (v1)
 
-Read this only when `CONTRACTS=1` (or a handoff carries `CONTRACT:`). A contract makes a handoff and an answer machine-checkable by `scripts/contract.sh`, with no extra agent and no model call.
-**A valid contract only says the exchange is well-formed.** It is not a test result, not a verification and not a phase transition: the verdict stays with the verifier (`parse-verdict.sh`) and the phase with `sdd.sh`.
+Read this only when `CONTRACTS=1` (or a handoff carries `CONTRACT:`). A contract makes a handoff and an answer machine-checkable by `sdkit contract`, with no extra agent and no model call.
+**A valid contract only says the exchange is well-formed.** It is not a test result, not a verification and not a phase transition: the verdict stays with the verifier (`sdkit verdict parse`) and the phase with `sdkit sdd`.
 
 ## Handoff: three extra lines
 ```
@@ -21,8 +21,8 @@ The role's own format (the verifier's `DOD / FINDINGS / VERIFY / VERDICT`, a des
 
 ## Using it
 - Claude Code: the `check-contract` hook validates and registers a contracted spawn (`PreToolUse` on `Agent`) and checks the answer (`SubagentStop`). Neither blocks; an invalid handoff asks first in `strict` mode.
-- Other hosts: `run-role.sh` does both when the handoff has a `CONTRACT:` line. Exit 4 = the answer broke the contract, 5 = valid but `partial|blocked|failed`. Otherwise by hand: `contract.sh issue FILE` before, `contract.sh check-result - --id ID --role R --record` after.
-- Invalid or interrupted: one retry, as for a malformed verdict: `state.sh <slug> retry <id>`, then a new handoff with a new `ID:` and `RETRY-OF:`. A second failure goes to the user.
+- Other hosts: `sdkit run-role` does both when the handoff has a `CONTRACT:` line. Exit 4 = the answer broke the contract, 5 = valid but `partial|blocked|failed`. Otherwise by hand: `sdkit contract issue FILE` before, `sdkit contract check-result - --id ID --role R --record` after.
+- Invalid or interrupted: one retry, as for a malformed verdict: `sdkit state <slug> retry <id>`, then a new handoff with a new `ID:` and `RETRY-OF:`. A second failure goes to the user.
 - `blocked` / `failed` / `partial` are real answers, not contract errors: read the blockers, decide, do not retry blindly.
-- `contract.sh pending` lists handoffs nobody answered (interrupted agent); `contract.sh close <id>` marks one dead.
+- `sdkit contract pending` lists handoffs nobody answered (interrupted agent); `sdkit contract close <id>` marks one dead.
 - Reasons you may see: `no-result malformed unsupported-version missing-field bad-value inconsistent id-mismatch role-mismatch task-mismatch unknown-id duplicate stale unsafe-path missing-artifact out-of-scope`.

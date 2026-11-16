@@ -8,3 +8,5 @@ dummy-pw
 user:secret@example\.org
 # the redaction test (tests/security.test.sh) feeds the redactor made-up keys and checks they are masked; none of them is a credential
 eq "(aws key id|github token|sk- api key|private key block)"
+https://u:p@bitbucket\.org/a/b
+http://u:pw@h\.io

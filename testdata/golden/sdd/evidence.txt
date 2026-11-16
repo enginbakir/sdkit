@@ -1,0 +1,54 @@
+# sdd: start t1 --risk high --proposal docs/proposal.md
+# sh: echo change >> src/app.go; F=$($SDDCMD fingerprint); printf '{"task":"t1","risk":"high","proposal":"docs/proposal.md","phase":"verified","evidence":{"verifier":{"result":"PASS","fingerprint":"%s","task":"t1","trust":"spawned","run":"r1"},"reviewer":{"result":"BLOCK","fingerprint":"%s","task":"t1","trust":"spawned","run":"r2"},"security-auditor":{"result":"PASS","fingerprint":"old","task":"t1","trust":"spawned","run":"r3"}}}' "$F" "$F" > .sdkit/.sdd/state.json
+# sdd: evidence
+# sdd: evidence --json
+# sdd: _evidence reviewer PASS
+# sdd: _evidence stranger PASS
+# sdd: evidence
+$ sdd start t1 --risk high --proposal docs/proposal.md
+task 't1' opened (risk=high, profile=standard, phase=intake). Write the proposal with a Definition of Done, then: sdkit sdd advance proposed
+exit: 0
+$ sdd evidence
+verifier           valid      verdict=PASS  trust=spawned      run=r1  (required)
+reviewer           block      verdict=BLOCK trust=spawned      run=r2  (required)
+security-auditor   stale      verdict=PASS  trust=spawned      run=r3  (required)
+exit: 0
+$ sdd evidence --json
+[
+  {
+    "role": "verifier",
+    "state": "valid",
+    "verdict": "PASS",
+    "trust": "spawned",
+    "run": "r1",
+    "required": true
+  },
+  {
+    "role": "reviewer",
+    "state": "block",
+    "verdict": "BLOCK",
+    "trust": "spawned",
+    "run": "r2",
+    "required": true
+  },
+  {
+    "role": "security-auditor",
+    "state": "stale",
+    "verdict": "PASS",
+    "trust": "spawned",
+    "run": "r3",
+    "required": true
+  }
+]
+exit: 0
+$ sdd _evidence reviewer PASS
+evidence: reviewer PASS trust=manual
+exit: 0
+$ sdd _evidence stranger PASS
+sdd: evidence role must be verifier, reviewer or security-auditor
+exit: 1
+$ sdd evidence
+verifier           valid      verdict=PASS  trust=spawned      run=r1  (required)
+reviewer           untrusted  verdict=PASS  trust=manual       run=-  (required)
+security-auditor   stale      verdict=PASS  trust=spawned      run=r3  (required)
+exit: 0

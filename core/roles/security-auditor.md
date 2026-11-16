@@ -24,6 +24,6 @@ Report only issues you can demonstrate from the code, with the exact request or 
 ```
 
 If nothing is found, say `NO FINDINGS` and list what you checked. End with `SUMMARY: <n> critical, <n> high, <n> medium, <n> low` and then `VERDICT: PASS|BLOCK` (`BLOCK` iff there is a CRITICAL or HIGH finding; counts must match your lines).
-- Keep the answer to at most 15 lines plus your structured block. If the handoff has an `OUT:` path and your role may write files, put the long form there and name the path; read-only roles never write it (the orchestrator stores their answer, `run-role.sh --out`).
+- Keep the answer to at most 15 lines plus your structured block. If the handoff has an `OUT:` path and your role may write files, put the long form there and name the path; read-only roles never write it (the orchestrator stores their answer, `sdkit run-role --out`).
 
 Project addendum: if `<project-dir>/roles.d/security-auditor.md` exists, read it too and follow it. It adds project-specific context and rules for this role and never relaxes anything above.

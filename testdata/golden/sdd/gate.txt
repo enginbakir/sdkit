@@ -1,0 +1,61 @@
+# sdd: gate edit src/app.go
+# sdd: start t1 --risk low --proposal docs/proposal.md
+# sdd: gate edit src/app.go
+# sdd: gate edit docs/../src/app.go
+# sdd: gate edit docs/a.md
+# sdd: gate edit .sdkit/./.sdd/state.json
+# sdd: gate push
+# sdd: advance proposed
+# sdd: gate edit src/app.go
+# sdd: gate edit src/app_test.go
+# sdd: advance red --test-cmd 'test -f fixed'
+# sdd: gate edit src/app.go
+# sdd: gate push
+# sh: touch fixed
+# sdd: advance green
+# sdd: gate edit src/app.go
+# sdd: gate push
+$ sdd gate edit src/app.go
+No spec-driven task is open, so 'src/app.go' may not change yet. Start one with the spec-driven-dev skill (it opens the task after you confirm the risk label).
+exit: 1
+$ sdd start t1 --risk low --proposal docs/proposal.md
+task 't1' opened (risk=low, profile=standard, phase=intake). Write the proposal with a Definition of Done, then: sdkit sdd advance proposed
+exit: 0
+$ sdd gate edit src/app.go
+Task 't1' is in 'intake': write the proposal with a Definition of Done and run 'sdkit sdd advance proposed' before changing 'src/app.go'.
+exit: 1
+$ sdd gate edit docs/../src/app.go
+Task 't1' is in 'intake': write the proposal with a Definition of Done and run 'sdkit sdd advance proposed' before changing 'src/app.go'.
+exit: 1
+$ sdd gate edit docs/a.md
+exit: 0
+$ sdd gate edit .sdkit/./.sdd/state.json
+The workflow state and attestations are written only by sdkit sdd and the verifier hook.
+exit: 1
+$ sdd gate push
+Task is in phase 'intake'; push and PR come after 'verified' (tests green, then verification).
+exit: 1
+$ sdd advance proposed
+phase: proposed
+exit: 0
+$ sdd gate edit src/app.go
+Phase 'proposed' is test-first: only test files may change. Write the failing test, then run 'sdkit sdd advance red --test-cmd <cmd>'. 'src/app.go' is not a test file (SDD_TEST_GLOBS).
+exit: 1
+$ sdd gate edit src/app_test.go
+exit: 0
+$ sdd advance red --test-cmd 'test -f fixed'
+phase: red
+exit: 0
+$ sdd gate edit src/app.go
+exit: 0
+$ sdd gate push
+Task is in phase 'red'; push and PR come after 'verified' (tests green, then verification).
+exit: 1
+$ sdd advance green
+phase: green
+exit: 0
+$ sdd gate edit src/app.go
+exit: 0
+$ sdd gate push
+Task is in phase 'green'; push and PR come after 'verified' (tests green, then verification).
+exit: 1

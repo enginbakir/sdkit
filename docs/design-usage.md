@@ -1,6 +1,8 @@
 # Usage and cost accounting (F07)
 
-The `usage.sh` ledger is now complete, deduplicated, model-aware and recomputable. There are no LLM calls; prices and usage are **never invented**. Verification: `tests/usage.test.sh`.
+> **History.** This record was written for the 1.x (bash) kit. Commands are shown by their 2.0 names (`sdkit <command>`); the `tests/*.test.sh` suites, `bench/` and `jq` it names belong to 1.x (2.0 replaced the suites with a small Go test set, and the harness lives in `attic/bench/`, unmaintained). The design and the decisions still stand; see [guide.md](guide.md) for how 2.0 is built.
+
+The `sdkit usage` ledger is now complete, deduplicated, model-aware and recomputable. There are no LLM calls; prices and usage are **never invented**. Verification: `tests/usage.test.sh`.
 
 ## 1. Root cause analysis
 
@@ -8,15 +10,15 @@ Found by reading the code and measuring real Claude Code transcripts (`~/.claude
 
 | # | Symptom | Root cause | Evidence |
 |---|---|---|---|
-| R1 | Sub-agent output tokens missing | `hooks/usage-log.sh` kept the **first** duplicate per message with `unique_by(.id)`; a streamed message repeats under the same `id` with a growing `output_tokens` | In 6177 duplicated message IDs, 853 have differing values; in sub-agent transcripts output is **31.4% short** (1,904,471 → 2,776,239). Example agent: 16,165 instead of 6,544 |
+| R1 | Sub-agent output tokens missing | `sdkit hook usage-log` kept the **first** duplicate per message with `unique_by(.id)`; a streamed message repeats under the same `id` with a growing `output_tokens` | In 6177 duplicated message IDs, 853 have differing values; in sub-agent transcripts output is **31.4% short** (1,904,471 → 2,776,239). Example agent: 16,165 instead of 6,544 |
 | R2 | Messages can be dropped | Messages without an ID were merged into one group (`unique_by` null key) | code reading; pinned by a test |
 | R3 | Main-session usage can be written to a sub-agent | For `SubagentStop`, `agent_transcript_path // transcript_path`: with no path, the **main** transcript is read and the whole session is written to the sub-agent role (e.g. analyst) | code reading. Sub-agent transcripts live in a separate file: `<session>/subagents/agent-<id>.jsonl` (+ `.meta.json`) |
-| R4 | Missing agent runs (e.g. analyst) | If the transcript could not be read, the hook exited silently; when the host failed (rc≠0, timeout), `run-role.sh` wrote no row at all. The gap was invisible | code reading |
+| R4 | Missing agent runs (e.g. analyst) | If the transcript could not be read, the hook exited silently; when the host failed (rc≠0, timeout), `sdkit run-role` wrote no row at all. The gap was invisible | code reading |
 | R5 | Orchestrator missing/partial | The orchestrator takes a snapshot only on `Stop` (end of turn); nothing is written in an interrupted session. There was no distinction between a snapshot and a final record: a late/small snapshot could overwrite a larger one | code reading |
 | R6 | No per-model cost | One model per row (the last seen); if the session switches models, everything is priced at the last model. No provider, session or origin fields | ledger schema v1 |
-| R7 | `cost_est` 0 / absent | `usage.sh report` did not compute cost. Prices lived only in `telemetry.sh`/`route.sh`, in a flat `{model:{in,out}}` form, with no date/provider, and silently "unavailable" when the table was missing | code reading |
+| R7 | `cost_est` 0 / absent | `sdkit usage report` did not compute cost. Prices lived only in `sdkit telemetry`/`sdkit route`, in a flat `{model:{in,out}}` form, with no date/provider, and silently "unavailable" when the table was missing | code reading |
 | R8 | Cache ratio unverified | The formula is correct (`cache_read/(in+cache_read+cache_write)`) but untested, used a `floor` percentage, and did not exclude partial/duplicated rows | `tests/usage.test.sh`, hand-computed |
-| R9 | No project total | `work/<slug>` is deleted on close; the report summed only open tasks | `telemetry.sh archive` already copies `_archive/<slug>.usage.jsonl`, but the report did not read it |
+| R9 | No project total | `work/<slug>` is deleted on close; the report summed only open tasks | `sdkit telemetry archive` already copies `_archive/<slug>.usage.jsonl`, but the report did not read it |
 
 Effect of R1: in main-session transcripts the duplicates are mostly identical (in the measured example the old and new results are equal); the difference shows up in sub-agent transcripts (intermediate streaming values).
 
@@ -32,7 +34,7 @@ The old fields stay as they are; the new fields are additive (a row without them
 | `role`, `tier`, `host`, `ts` | role, tier, host, UTC time |
 | `session` | session ID |
 | `id` | stable **run ID** (sub-agent: `agent_id`; orchestrator: `session-<session>`; `run-role`: `rr-…`) |
-| `origin` | `sdk` (recorded by a hook / run-role) or `observed` (read from the transcript by `usage.sh scan`) |
+| `origin` | `sdk` (recorded by a hook / run-role) or `observed` (read from the transcript by `sdkit usage scan`) |
 | `kind` | `snapshot` (may grow) or `final` (finished) |
 | `status` | `interrupted` (a run cut short) |
 | `tq` | `unavailable`: tokens could not be read; zeros mean **unmeasured** |
@@ -42,13 +44,13 @@ The old fields stay as they are; the new fields are additive (a row without them
 
 **Multiple models.** If a transcript uses more than one model, one row per model is written (same `id`); each is priced at its own rate, and the run count is the number of distinct `id`s.
 
-**SDK and observed.** Hooks write `origin: sdk`. `usage.sh scan` reads, from the transcript, the Claude Code sessions the hook never saw (hook disabled, interrupted, external) and writes them as `observed` with the same `id`s; if the hook already wrote them, they are **not counted twice**. Default: the latest session; `--session`, `--since`, `--dir`.
+**SDK and observed.** Hooks write `origin: sdk`. `sdkit usage scan` reads, from the transcript, the Claude Code sessions the hook never saw (hook disabled, interrupted, external) and writes them as `observed` with the same `id`s; if the hook already wrote them, they are **not counted twice**. Default: the latest session; `--session`, `--since`, `--dir`.
 
 ## 3. Pricing
 
 `<project-dir>/pricing.json` (or `TELEMETRY_PRICES`). `sdkit init` copies a starting table (`templates/pricing.json`): the public **AWS Bedrock** list for the Claude models (global cross-region inference, standard tier). It is a snapshot, not your contract: check it against your own prices. USD / million tokens.
 
-`scripts/pricing.sh refresh` (or `sdkit doctor --update-pricing`) rebuilds it from the live list; `pricing.sh status` (run by `doctor`) reports a missing, unreadable or stale table (kit-written, over 90 days), models in your ledgers that it cannot price, and a `REPORT_BASELINE_MODEL` that is not in it. Only a table the script wrote (`"managed_by": "sdkit pricing"`) is ever replaced; delete that key to take the table over by hand. Not modelled: 1-hour cache writes, batch tiers and long-context surcharges (`cache_write` is the 5-minute rate); models without a global price (older ones) are left out of the snapshot.
+`sdkit pricing refresh` (or `sdkit doctor --update-pricing`) rebuilds it from the live list; `sdkit pricing status` (run by `doctor`) reports a missing, unreadable or stale table (kit-written, over 90 days), models in your ledgers that it cannot price, and a `REPORT_BASELINE_MODEL` that is not in it. Only a table the script wrote (`"managed_by": "sdkit pricing"`) is ever replaced; delete that key to take the table over by hand. Not modelled: 1-hour cache writes, batch tiers and long-context surcharges (`cache_write` is the 5-minute rate); models without a global price (older ones) are left out of the snapshot.
 
 ```json
 { "version": 2, "currency": "USD",
@@ -57,7 +59,7 @@ The old fields stay as they are; the new fields are additive (a row without them
       "in": 0.0, "out": 0.0, "cache_read": 0.0, "cache_write": 0.0, "source": "<price page/contract>" } ] }
 ```
 
-The old flat form (`{"<model>": {"in":…, "out":…}}`) keeps working (no version, no dates, no provider). `telemetry.sh` and `route.sh` read the v2 table by converting it with `sdkit_prices_flat` into a flat table valid today.
+The old flat form (`{"<model>": {"in":…, "out":…}}`) keeps working (no version, no dates, no provider). `sdkit telemetry` and `sdkit route` read the v2 table by converting it with `sdkit_prices_flat` into a flat table valid today.
 
 **Resolution path (deterministic, in this order):** (1) table: `TELEMETRY_PRICES` → `<project-dir>/pricing.json` → none; (2) model: exact match, otherwise the base ID with the `-YYYYMMDD` suffix stripped; (3) provider: if the record's provider is known, the entry must be of the same provider or have none; if unknown and there are ≥2 candidates with different providers, `ambiguous_provider`; (4) effective date: the record's day falls within `[effective_from, effective_to]`; (5) multiple candidates: the provider-specific one first, then the latest `effective_from`.
 
@@ -70,20 +72,20 @@ Cost is **not written** to the ledger; every report computes it as tokens × the
 Three separate amounts, never mixed: the **API-equivalent estimate** (tokens × `pricing.json`, this report), the **host estimate** (Claude Code `total_cost_usd`, not an invoice) and **billed** (`billed`, always "unavailable": no source reports it; a Claude Code subscription has no per-token invoice, and the estimate is only the cost of the same tokens at API prices).
 
 ```bash
-usage.sh report [slug] [--project] [--session ID|current] [--json]
-usage.sh prices [--json]
-usage.sh scan [--session ID | --since YYYY-MM-DD] [--dir DIR] [--slug S]
-usage.sh extract <transcript>
+sdkit usage report [slug] [--project] [--session ID|current] [--json]
+sdkit usage prices [--json]
+sdkit usage scan [--session ID | --since YYYY-MM-DD] [--dir DIR] [--slug S]
+sdkit usage extract <transcript>
 ```
 
-Report: role, model and session tables; cache hit rate (`cache_read / (in + cache_read + cache_write)`, 1 decimal) and API-equivalent savings; estimated cost; a coverage line. The **total becomes `PARTIAL`** (a lower bound) when: a run is unpriced, a run is unmeasured (`tq: unavailable`), the price table is missing/unreadable, a session has no orchestrator record (`scan` is suggested), there are fewer agent records than the recorded spawn count (`state.json .spawns`), or an old row has no ID. `--project` adds archived tasks (`work/_archive/*.usage.jsonl`, written by `telemetry.sh archive`); the default scope is open tasks as before.
+Report: role, model and session tables; cache hit rate (`cache_read / (in + cache_read + cache_write)`, 1 decimal) and API-equivalent savings; estimated cost; a coverage line. The **total becomes `PARTIAL`** (a lower bound) when: a run is unpriced, a run is unmeasured (`tq: unavailable`), the price table is missing/unreadable, a session has no orchestrator record (`scan` is suggested), there are fewer agent records than the recorded spawn count (`state.json .spawns`), or an old row has no ID. `--project` adds archived tasks (`work/_archive/*.usage.jsonl`, written by `sdkit telemetry archive`); the default scope is open tasks as before.
 
 ## 5. Before / after
 
 On a real Claude Code sub-agent transcript (`Explore`, claude-sonnet-5-5):
 
 ```
-BEFORE                                                AFTER (usage.sh scan + report, with example prices)
+BEFORE                                                AFTER (sdkit usage scan + report, with example prices)
 role     tier runs in  out   cache_read cache_write   role          runs in  out    cache_read cache_write est_usd
 Explore  -    1    60  6544  2549093    139803         Explore       1    60  16165  2549093    139803      $1.5316
 TOTAL    -    1    60  6544  2549093    139803         orchestrator  1    202 65568  13210783   284495      $6.0142
@@ -105,5 +107,5 @@ Output tokens went 6544 → 16165 (the final value, not a streaming intermediate
 - The provider is inferred only from the transcript message-ID prefix; behind a server/gateway (proxy) it may be wrong or empty (if empty, a provider-less price entry is used).
 - Prices come from the user; a wrong table produces a wrong cost. Long-term/separate pricing (1-hour cache write, batch/priority tier, long-context threshold) is not modelled: `cache_write` is a single rate.
 - The actual billed amount is unknown; for subscription usage this report is only API-equivalent.
-- `work/<slug>` is deleted on close; for the project total, `telemetry.sh archive` (TELEMETRY=1) must have run first.
+- `work/<slug>` is deleted on close; for the project total, `sdkit telemetry archive` (TELEMETRY=1) must have run first.
 - Error bound: concurrent writes are protected by `sdkit_lock`; the lock break timeouts are the same (3 s / 10 s).

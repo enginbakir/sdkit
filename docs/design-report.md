@@ -1,17 +1,19 @@
 # Value Report: task and session value report
 
-`scripts/report.sh` (`sdkit report ...`) automatically reports **what SDKit did in a task and in a session, who did it, what it spent, and what it saved in a demonstrable way**. It is **not** a new telemetry system: it only reads the records the kit already keeps. It makes no LLM calls (pinned by a test: host CLIs on a trapped PATH are never called). Verification: `tests/report.test.sh`.
+> **History.** This record was written for the 1.x (bash) kit. Commands are shown by their 2.0 names (`sdkit <command>`); the `tests/*.test.sh` suites, `bench/` and `jq` it names belong to 1.x (2.0 replaced the suites with a small Go test set, and the harness lives in `attic/bench/`, unmaintained). The design and the decisions still stand; see [guide.md](guide.md) for how 2.0 is built.
+
+`sdkit report` (`sdkit report ...`) automatically reports **what SDKit did in a task and in a session, who did it, what it spent, and what it saved in a demonstrable way**. It is **not** a new telemetry system: it only reads the records the kit already keeps. It makes no LLM calls (pinned by a test: host CLIs on a trapped PATH are never called). Verification: `tests/report.test.sh`.
 
 ## 1. What it reuses
 
 | Need | Source | What this feature adds |
 |---|---|---|
-| Tokens, cache categories, deduplication, price resolution, cost | `usage.sh report --json` (F07) | Only `rows[]` (reconciled runs) and `--as-model M` (the price "if the same run had been on model M"; **the same** price resolver). No other price computation |
-| Phase durations, tests, verification, gate refusals, contract result, workflow decision | `telemetry.sh summary --json` (F01) | none |
+| Tokens, cache categories, deduplication, price resolution, cost | `sdkit usage report --json` (F07) | Only `rows[]` (reconciled runs) and `--as-model M` (the price "if the same run had been on model M"; **the same** price resolver). No other price computation |
+| Phase durations, tests, verification, gate refusals, contract result, workflow decision | `sdkit telemetry summary --json` (F01) | none |
 | Routing decisions (reuse / duplicate / optional-skipped / budget) | `work/<slug>/routing.jsonl` (F06) | none |
-| Context views (bytes) | `work/<slug>/context.jsonl` (`digest.sh`, F09) | none |
-| Test selection | `work/<slug>/selection.jsonl` | `test-select.sh` now writes one line per run (only counts and seconds; the duration of a cached green run is kept in the cache file) |
-| Task/session lifecycle | `sdd.sh advance done`, `sdd.sh abort [failed\|blocked\|partial]`, `SessionEnd`/`SessionStart` hook | `hooks/value-report.sh` |
+| Context views (bytes) | `work/<slug>/context.jsonl` (`sdkit digest`, F09) | none |
+| Test selection | `work/<slug>/selection.jsonl` | `go test ./...` now writes one line per run (only counts and seconds; the duration of a cached green run is kept in the cache file) |
+| Task/session lifecycle | `sdkit sdd advance done`, `sdkit sdd abort [failed\|blocked\|partial]`, `SessionEnd`/`SessionStart` hook | `sdkit hook value-report` |
 
 Storage: `<project-dir>/work/_reports/` (personal, outside git): `task/<slug>@<run>.json`, `session/<id>.json`, `index.jsonl` (one line per report), `sessions.jsonl` (session end signals). Markdown and text outputs are **generated from the JSON every time** and not stored separately. A report contains no prompt, transcript, file content or path; only identifiers, roles, models, counts and reason codes. A typical report is a few KB.
 
@@ -19,8 +21,8 @@ Storage: `<project-dir>/work/_reports/` (personal, outside git): `task/<slug>@<r
 
 | Event | Trigger | Output |
 |---|---|---|
-| Task completed | `sdd.sh advance done` | compact report to stderr; `completed` |
-| Task ended but not finished | `sdd.sh abort` → `aborted`; `abort failed` / `abort blocked` / `abort partial` | same; the status is stated explicitly |
+| Task completed | `sdkit sdd advance done` | compact report to stderr; `completed` |
+| Task ended but not finished | `sdkit sdd abort` → `aborted`; `abort failed` / `abort blocked` / `abort partial` | same; the status is stated explicitly |
 | Session ended | Claude Code `SessionEnd` hook (the real end signal) | session summary is stored (`ended`) |
 | Session cut off without a signal | `recover` at the next `SessionStart`: old sessions that have a record but no end signal | summary is stored, **`interrupted`** (never called finished). `report regenerate session ID` refreshes it later |
 
@@ -37,7 +39,7 @@ sdkit report latest [--detailed|--json|--markdown]
 sdkit report history [--json]                 # every stored report, one line (history comparison)
 sdkit report regenerate task|session ID       # rebuild from the records (status is kept)
 ```
-`scripts/report.sh` also runs directly. `--json` is machine-readable (`schema: value-report/1`), `--markdown` gives the full tables of sections A–D, the default is compact, and `--detailed` additionally gives the method table, "why it ran", verification and warnings.
+`sdkit report` also runs directly. `--json` is machine-readable (`schema: value-report/1`), `--markdown` gives the full tables of sections A–D, the default is compact, and `--detailed` additionally gives the method table, "why it ran", verification and warnings.
 
 ## 4. Measured and estimated
 
@@ -61,20 +63,20 @@ Order of evidence: (1) a comparable real run without SDKit, (2) previously recor
 **Tokens** (only from avoided executions):
 - Avoided execution = routing decision `reuse` (`EVIDENCE_REUSED`), `DUPLICATE_COMPLETED/IN_FLIGHT` or `OPTIONAL_SKIPPED`.
 - Comparable run: first the measured runs of **the same role in the same task** (confidence: medium), otherwise the runs of the same role in **earlier stored reports** (low). If neither exists, the execution is counted but not priced.
-- `fresh tokens = in + out + cache_write` (cache reads excluded; the same definition as `usage.sh budget`). Baseline = actual fresh + estimated fresh of the avoided; `ratio = (baseline − actual) / baseline × 100`. Baseline and actual have the same scope (the task). If no execution can be priced: "N/A — insufficient baseline data".
+- `fresh tokens = in + out + cache_write` (cache reads excluded; the same definition as `sdkit usage budget`). Baseline = actual fresh + estimated fresh of the avoided; `ratio = (baseline − actual) / baseline × 100`. Baseline and actual have the same scope (the task). If no execution can be priced: "N/A — insufficient baseline data".
 - Routing does not change the token count (it changes its price), so it does not enter token savings. **No** token value is assigned to shell-script work.
 
 **Cost** (not mixed with tokens, a separate percentage):
-- Routing: `REPORT_BASELINE_MODEL` (`sdkit.env`, a model ID in `pricing.json`; **N/A if empty**, the kit makes no assumption). The **same tokens** of every non-orchestrator, measured, priced run are priced on the baseline model with `usage.sh --as-model`; `delta = Σ(baseline cost − actual cost)`. A run on the baseline model contributes 0; a **run on a more expensive model** contributes a negative amount (the regression is shown, not hidden). Confidence: low (a different model may not produce the same number of tokens).
+- Routing: `REPORT_BASELINE_MODEL` (`sdkit.env`, a model ID in `pricing.json`; **N/A if empty**, the kit makes no assumption). The **same tokens** of every non-orchestrator, measured, priced run are priced on the baseline model with `sdkit usage --as-model`; `delta = Σ(baseline cost − actual cost)`. A run on the baseline model contributes 0; a **run on a more expensive model** contributes a negative amount (the regression is shown, not hidden). Confidence: low (a different model may not produce the same number of tokens).
 - Cost of avoided executions: the average cost of the comparable runs × the count (only if all are priced).
 - `baseline cost = actual priced cost + routing delta + avoided`; `savings = baseline − actual`; `ratio = savings / baseline × 100`. Unpriced runs are left out and stated on the scope line ("3 of 4 run(s) priced").
 - Every saving comes with: baseline source, method, scope, confidence, and the measured/estimated distinction.
 
 ## 6. Preventing double counting
 
-All numbers come from the reconciled rows of `usage.sh`: the key is `(execution ID, model)`; a snapshot does not overwrite a final, a smaller read does not overwrite a larger. Writing the same run twice, or a nested agent appearing again in the main session, is a single run. The session summary does **not sum** task reports; it filters ledger lines by session ID, so a task spanning several sessions is split across sessions but none is counted twice. Avoided executions are summed only from tasks entirely inside that session; spanning tasks are noted in the summary.
+All numbers come from the reconciled rows of `sdkit usage`: the key is `(execution ID, model)`; a snapshot does not overwrite a final, a smaller read does not overwrite a larger. Writing the same run twice, or a nested agent appearing again in the main session, is a single run. The session summary does **not sum** task reports; it filters ledger lines by session ID, so a task spanning several sessions is split across sessions but none is counted twice. Avoided executions are summed only from tasks entirely inside that session; spanning tasks are noted in the summary.
 
-Role and physical run are separate: in the table it is `role (kind)`, where the kind is `orchestrator` (main session), `subagent` (delegated agent) or `host-agent` (a separate host process via `run-role.sh`; its ID is `rr-…`). If the same role ran on two models there are two rows; the run count is by unique ID.
+Role and physical run are separate: in the table it is `role (kind)`, where the kind is `orchestrator` (main session), `subagent` (delegated agent) or `host-agent` (a separate host process via `sdkit run-role`; its ID is `rr-…`). If the same role ran on two models there are two rows; the run count is by unique ID.
 
 ## 7. Limits
 
@@ -84,10 +86,10 @@ Role and physical run are separate: in the table it is `role (kind)`, where the 
 - Codex, OpenCode and Cursor do not report tokens: the report counts them as `unmeasured`, and cost/savings are a lower bound (the F07 limits apply as they are).
 - The session end signal exists only in the Claude Code `SessionEnd` hook. On other hosts the session report is requested with `sdkit report session ID`; the `running`/`interrupted` states say there is no end signal.
 - The `SessionEnd` output may not be shown to the user; the summary is stored in every case and is read with `sdkit report latest`.
-- If `work/<slug>` is deleted, the records are in the archive (`telemetry.sh archive` now also copies the routing/context/selection files); without an archive, `regenerate` leaves the stored report intact.
+- If `work/<slug>` is deleted, the records are in the archive (`sdkit telemetry archive` now also copies the routing/context/selection files); without an archive, `regenerate` leaves the stored report intact.
 - "Changed files" is `git diff <base>` plus untracked files; if it comes out empty after a merge, it is `N/A`.
 - Because the duration of skipped suites in test selection is never measured, time savings are reported only for green runs reused from the cache.
 
 ## 8. Overhead
 
-A task report: `usage.sh` + `telemetry.sh summary` + `resolve-base.sh` + a few `jq`; the measurement is in the `tests/report.test.sh` output and the handover note. The report is produced only at the end of a task/session, not per tool call.
+A task report: `sdkit usage` + `sdkit telemetry summary` + `sdkit base` + a few `jq`; the measurement is in the `tests/report.test.sh` output and the handover note. The report is produced only at the end of a task/session, not per tool call.

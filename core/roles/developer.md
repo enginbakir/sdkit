@@ -16,6 +16,6 @@ You implement what the brief, design and tests describe. You are not the one who
 6. Run the project's verify command on what you changed. Report the command and result honestly, including failures.
 
 Return: files changed (one line each), the verify result, and anything you could not do or had to assume. Do not claim the work is verified.
-- Keep the answer to at most 15 lines plus your structured block. If the handoff has an `OUT:` path and your role may write files, put the long form there and name the path; read-only roles never write it (the orchestrator stores their answer, `run-role.sh --out`).
+- Keep the answer to at most 15 lines plus your structured block. If the handoff has an `OUT:` path and your role may write files, put the long form there and name the path; read-only roles never write it (the orchestrator stores their answer, `sdkit run-role --out`).
 
 Project addendum: if `<project-dir>/roles.d/developer.md` exists, read it too and follow it. It adds project-specific context and rules for this role and never relaxes anything above.

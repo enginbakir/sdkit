@@ -1,0 +1,37 @@
+# cmd: sdkit version
+# env: BASH_ENV=.probe.sh
+# env: PROBE_MODE=values
+# env: SDKIT_ENV_QUIET=1
+# env: FROM_ENV=fromenv
+exit: 0
+PLAIN=[abc]
+INDENT=[1]
+DQ=[hello world]
+SQ=[it $NOT expanded]
+EXPORTED=[yes]
+DEFAULTED=[dflt]
+FROM_ENV=[fromenv]
+EMPTY=[]
+TRAIL=[val]
+DQC=[a b]
+REF=[abc/x]
+REF2=[abc-hello world]
+UNDEF_REF=[.]
+OVER=[second]
+BARE_HASH=[a#b]
+SDKIT_ENV=[standalone]
+LOCAL_ONLY=[1]
+CMDSUB=<unset>
+SEMI=<unset>
+OTHER=<unset>
+AND=<unset>
+UNQUOTED=<unset>
+BACKTICK=<unset>
+POSARG=<unset>
+DOLLARS=<unset>
+LD_PRELOAD=<unset>
+SDKIT_FOO=<unset>
+SPACED=<unset>
+PIPE=<unset>
+BSLASH=<unset>
+bad=17

@@ -1,7 +1,7 @@
 # Roles
 
-One neutral definition per role. `bin/build-adapters.sh` turns them into the Claude Code agent files (`agents/`) and the role files
-for Codex, OpenCode, Cursor and Gemini CLI (`adapters/<host>/`), one emitter per host in `bin/emit/<host>.sh`. Edit roles here, never the generated files.
+One neutral definition per role. `sdkit dev adapters` turns them into the Claude Code agent files (`agents/`) and the role files
+for Codex, OpenCode, Cursor and Gemini CLI (`adapters/<host>/`), the emitters are in `internal/emit`. Edit roles here, never the generated files.
 
 ## File format
 
@@ -38,10 +38,10 @@ How `access` becomes a host setting (shell allow-list and tool names: `core/host
 
 The Codex, OpenCode, Cursor and Gemini formats follow each tool's documentation and are not validated on live installs.
 
-Edit scope is enforced by the instructions, by `frozen-tests.sh` and `guard-protected.sh` where the host supports hooks, and by the
+Edit scope is enforced by the instructions, by `frozen-tests` and `guard-protected` where the host supports hooks, and by the
 git hooks in `adapters/git/` everywhere else.
 
-`<project-dir>` in role text is the project-side directory (`.sdkit/`, or a legacy `.agentkit/`, `.claude/`, `.codex/` whichever holds `sdkit.env`/`project.env`). `build-adapters.sh` adds that explanation to every generated role, so source files just use the placeholder.
+`<project-dir>` in role text is the project-side directory (`.sdkit/`, the directory that holds `sdkit.env`). `sdkit dev adapters` adds that explanation to every generated role, so source files just use the placeholder.
 
 ## The roster
 
@@ -60,8 +60,8 @@ git hooks in `adapters/git/` everywhere else.
 | `spec-reviewer` | read-only | standard | Independent review of a spec document (PRD, feature spec, ADR) against a `review.d/` checklist; analyst environment |
 
 Eleven roles are defined; `orchestrator` is a session role, so ten subagent roles plus the generated `verifier-deep` (strong tier, used for `high` risk) give eleven files per host.
-Roles never call other roles: they end with `NEEDS-LOOKUP: <question>` and the orchestrator runs `scout`. `scripts/run-role.sh` can run any role as a separate process on any host.
-Every subagent keeps its answer to 15 lines plus its structured block. A writing role puts its long form at the handoff's `OUT:` path; a read-only role cannot, so the orchestrator stores its answer (`run-role.sh --out`).
+Roles never call other roles: they end with `NEEDS-LOOKUP: <question>` and the orchestrator runs `scout`. `sdkit run-role` can run any role as a separate process on any host.
+Every subagent keeps its answer to 15 lines plus its structured block. A writing role puts its long form at the handoff's `OUT:` path; a read-only role cannot, so the orchestrator stores its answer (`sdkit run-role --out`).
 
 Independence rule: the role that implements (`developer`, `devsecops`) is never the role that verifies (`verifier`, `reviewer`,
 `security-auditor`), and an independent role never receives the implementer's reasoning, only artifacts.

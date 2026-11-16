@@ -1,25 +1,38 @@
+# Template of the formula that goreleaser generates into dist/homebrew/Formula/ (.goreleaser.yaml, `brews`).
+# The release pipeline fills the __PLACEHOLDERS__ (sha256 values from checksums.txt); the version is bumped with the release (P5-05).
 class Sdkit < Formula
   desc "Spec-driven development workflow and guards for AI coding agents (Claude Code, Codex, OpenCode, Cursor, Gemini)"
   homepage "https://github.com/wecii/sdkit"
-  url "https://github.com/wecii/sdkit.git", using: :git, tag: "v1.9.0", revision: "0ea069db8d00a51d81c898ac9b6bd838dd627ff3"
-  version "1.9.0"
-  head "https://github.com/wecii/sdkit.git", using: :git, branch: "master"
+  version "2.0.0"
 
-  depends_on "jq"
-  depends_on "node" # the OpenSpec CLI (npm) that the workflow drives
+  on_macos do
+    if Hardware::CPU.arm?
+      url "https://github.com/wecii/sdkit/releases/download/v#{version}/sdkit_#{version}_darwin_arm64.tar.gz"
+      sha256 "__SHA256_DARWIN_ARM64__"
+    else
+      url "https://github.com/wecii/sdkit/releases/download/v#{version}/sdkit_#{version}_darwin_amd64.tar.gz"
+      sha256 "__SHA256_DARWIN_AMD64__"
+    end
+  end
+
+  on_linux do
+    if Hardware::CPU.arm?
+      url "https://github.com/wecii/sdkit/releases/download/v#{version}/sdkit_#{version}_linux_arm64.tar.gz"
+      sha256 "__SHA256_LINUX_ARM64__"
+    else
+      url "https://github.com/wecii/sdkit/releases/download/v#{version}/sdkit_#{version}_linux_amd64.tar.gz"
+      sha256 "__SHA256_LINUX_AMD64__"
+    end
+  end
 
   def install
-    # the whole kit stays together: scripts find their siblings relative to themselves
-    libexec.install Dir["*", ".claude-plugin"]
-    bin.install_symlink libexec/"bin/sdkit"
+    bin.install "sdkit"
   end
 
   def caveats
     <<~EOS
       Set a repo up (once per repo, by one person):
         cd your-repo && sdkit init
-      OpenSpec is part of the workflow. If it is not installed yet:
-        sdkit init --install-openspec     (runs: npm install -g @fission-ai/openspec)
       Check a repo any time:  sdkit doctor
       Upgrade a repo after "brew upgrade":  sdkit upgrade
     EOS
@@ -27,6 +40,6 @@ class Sdkit < Formula
 
   test do
     assert_match "sdkit", shell_output("#{bin}/sdkit version")
-    assert_match(/^#{Regexp.escape(libexec)}$/, shell_output("#{bin}/sdkit where").strip)
+    refute_empty shell_output("#{bin}/sdkit where").strip
   end
 end

@@ -8,12 +8,12 @@ tools:
   - list_directory
   - run_shell_command
 ---
-<!-- Generated from core/roles/reviewer.md by bin/build-adapters.sh; edit the source. Independent role: never give it the implementer's reasoning. -->
+<!-- Generated from core/roles/reviewer.md by sdkit dev adapters; edit the source. Independent role: never give it the implementer's reasoning. -->
 `<project-dir>` below is the directory that holds `sdkit.env`: `.sdkit/` (a repo set up before 1.0 may still use `.agentkit/`, `.claude/` or `.codex/` with `project.env`; the handoff names it).
 You review a diff. You do not edit files. Bash is for read-only inspection (`git diff`, `git log`).
 
 1. Read `<project-dir>/project.md`, `<project-dir>/known-pitfalls.md`, and every file in `<project-dir>/rules/`.
-2. Run `git diff <diff-base>...HEAD`, where `<diff-base>` is the output of `DIFF_BASE_CMD` in `<project-dir>/sdkit.env` (when empty, the kit's `resolve-base.sh`).
+2. Run `git diff <diff-base>...HEAD`, where `<diff-base>` is the output of `DIFF_BASE_CMD` in `<project-dir>/sdkit.env` (when empty, the kit's `sdkit base`).
 3. For each changed hunk, check: rule violations (naming, layering, error handling, context passing), known pitfalls, missing tests for new error paths and for the Definition of Done items the change claims, API contract not updated for endpoint changes, leftover debug code.
 4. Report only issues you can point at with file:line. Do not pad with style nitpicks the linter already covers.
 
@@ -24,6 +24,6 @@ Output, most severe first:
 ```
 
 End with `SUMMARY: <n> blockers, <n> major, <n> minor` and then `VERDICT: PASS|BLOCK` (`BLOCK` iff there is a BLOCKER; counts must match your lines).
-- Keep the answer to at most 15 lines plus your structured block. If the handoff has an `OUT:` path and your role may write files, put the long form there and name the path; read-only roles never write it (the orchestrator stores their answer, `run-role.sh --out`).
+- Keep the answer to at most 15 lines plus your structured block. If the handoff has an `OUT:` path and your role may write files, put the long form there and name the path; read-only roles never write it (the orchestrator stores their answer, `sdkit run-role --out`).
 
 Project addendum: if `<project-dir>/roles.d/reviewer.md` exists, read it too and follow it. It adds project-specific context and rules for this role and never relaxes anything above.

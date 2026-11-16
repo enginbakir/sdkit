@@ -4,16 +4,16 @@
 
 ### Spec-driven development for AI coding agents
 
-**Make your coding agent follow a real engineering process, enforced by scripts instead of left to its good intentions.**
+**Make your coding agent follow a real engineering process, enforced by code instead of left to its good intentions.**
 
-![Version 1.9.0](https://img.shields.io/badge/version-1.8.0-blue)
+![Version 2.0.0](https://img.shields.io/badge/version-2.0.0-blue)
 ![License: MIT](https://img.shields.io/badge/license-MIT-blue)
 ![Claude Code](https://img.shields.io/badge/Claude%20Code-supported-informational)
 ![Codex](https://img.shields.io/badge/Codex-supported-informational)
 ![OpenCode](https://img.shields.io/badge/OpenCode-supported-informational)
 ![Cursor](https://img.shields.io/badge/Cursor-supported-informational)
 ![Gemini CLI](https://img.shields.io/badge/Gemini%20CLI-supported-informational)
-![Platform: macOS | Linux](https://img.shields.io/badge/platform-macOS%20%C2%B7%20Linux-lightgrey)
+![Platform: macOS | Linux | Windows](https://img.shields.io/badge/platform-macOS%20%C2%B7%20Linux%20%C2%B7%20Windows-lightgrey)
 
 [Quick Start](#-quick-start) · [How It Works](#-how-it-works) · [Supported Agents](#-supported-agents) · [Docs](#-documentation)
 
@@ -80,10 +80,18 @@ One committed `.sdkit/` (risk rubric, rules, checks) gives everyone, on any supp
 ```sh
 brew tap wecii/sdkit https://github.com/wecii/sdkit.git
 brew trust wecii/sdkit      # recent Homebrew asks for this once
-brew install sdkit          # brings jq and node
+brew install sdkit
 ```
 
-> No Homebrew? Clone this repo and use `<kit>/bin/sdkit` the same way. Maintainers: [packaging/homebrew/README.md](packaging/homebrew/README.md).
+Windows (PowerShell or cmd), with [Scoop](https://scoop.sh):
+
+```powershell
+scoop install packaging\scoop\sdkit.json    # needs git; or unzip the release zip and put sdkit.exe on PATH
+```
+
+**Locked-down corporate Windows PC (no admin, no scripts)?** Install nothing, just copy a file: download `sdkit_<version>_windows_amd64.zip` (`arm64` on ARM) from the releases page, unzip it to `%USERPROFILE%\tools\sdkit\`, and add that folder to your user `Path` in *Start → "Edit environment variables for your account"* (no admin, no command). Restart the terminal or editor. Details and what IT may still block: [docs/guide.md §11](docs/guide.md#11-install-flows).
+
+> `sdkit` is one binary; it must be on `PATH` (the plugin hooks and the git-hook shims call it). No package manager? Download the archive for your platform from the releases page, or `go install github.com/wecii/sdkit/cmd/sdkit@<tag>`. Maintainers: [packaging/homebrew/README.md](packaging/homebrew/README.md).
 
 ### 2. Set a repo up, once, by one person
 
@@ -92,7 +100,7 @@ cd your-repo
 sdkit init                  # Claude Code by default; --host codex | opencode | cursor | gemini | claude,codex,...
 ```
 
-`init` detects the stack and base branch, writes the project profile, installs the host files and sets up OpenSpec, the spec engine the workflow drives (`--install-openspec` installs its CLI if missing). Then:
+`init` detects the stack and base branch, writes the project profile, installs the host files and, for an analyst repo only (`--env analyst`), sets up OpenSpec, which `/generate-specs` outputs its change with (`--install-openspec` installs the CLI if missing). Then:
 
 1. Fill in `.sdkit/project.md`. **The risk rubric is mandatory**; the workflow will not start without it.
 2. Enable the `verify.d/` policies you want (rename `*.example` to `*.sh`). Team settings live in `.sdkit/sdkit.env` (committed); your personal ones in `.sdkit/sdkit.local.env` (not in git). Every setting is already there with its default.
@@ -132,7 +140,7 @@ Flows, limits and open decisions: [docs/role-aware.md](docs/role-aware.md).
 
 ### What to fill in, per role
 
-`sdkit init --env ...` writes both files with every key and its default; you only fill in what is empty. **Shared** settings go in `.sdkit/sdkit.env` (committed, set once by whoever sets the repo up). **Personal and secret** ones (tokens, your account) go in `.sdkit/sdkit.local.env` (git-ignored, wins over the shared file). Tokens never go in `sdkit.env`; `jira.sh` refuses that. `sdkit doctor` lists what is still missing.
+`sdkit init --env ...` writes both files with every key and its default; you only fill in what is empty. **Shared** settings go in `.sdkit/sdkit.env` (committed, set once by whoever sets the repo up). **Personal and secret** ones (tokens, your account) go in `.sdkit/sdkit.local.env` (git-ignored, wins over the shared file). Tokens never go in `sdkit.env`; `sdkit jira` refuses that. `sdkit doctor` lists what is still missing.
 
 **Analyst** (specs repo, `sdkit init --env analyst`)
 
@@ -143,7 +151,7 @@ Flows, limits and open decisions: [docs/role-aware.md](docs/role-aware.md).
 | | `TRACKER=jira`, `JIRA_BASE_URL`, `JIRA_PROJECT` | your Jira site and project key (`generate-tasks` creates the subtasks there) |
 | | `JIRA_SUBTASK_TYPE`, `JIRA_CHANGE_TYPE`, `JIRA_LINK_TYPE` | your Jira issue and link type names, if they differ from the defaults |
 | | `ANALYST_LANGUAGE`, `SPEC_REVIEW_MAX_ROUNDS`, `PRESPEC_DIR` | language of the specs (`tr`), review rounds before a person decides (`4`), the pre-spec folder (`prespec`) |
-| | `SPEC_CHECK_ON_PUSH=1` | optional: the pre-push hook runs `spec.sh check` for a spec's base branch |
+| | `SPEC_CHECK_ON_PUSH=1` | optional: the pre-push hook runs `sdkit spec check` for a spec's base branch |
 | `.sdkit/sdkit.local.env` (you) | `BITBUCKET_EMAIL`, `BITBUCKET_TOKEN` | your Bitbucket account e-mail and an API token (repository + pull request write). An `ATCTT...` access token is sent as Bearer and needs no e-mail. Alternatively an origin URL that embeds the credentials, or `PR_TOKEN_REPO` |
 | | `JIRA_EGRESS=allow`, `JIRA_API_TOKEN`, `JIRA_USER` | allow Jira calls from this machine, your Jira token, your Jira account (Cloud: your e-mail). `JIRA_USER` is also the name recorded when you accept a review finding or decide in `merge-specs`, so set it before |
 | | `ANALYST_LANGUAGE` | only to override the team language for yourself |
@@ -164,7 +172,7 @@ Flows, limits and open decisions: [docs/role-aware.md](docs/role-aware.md).
 | | `RUN_ROLE_HOST`, `VERIFIER_HOST` | only to run roles as separate processes or the verifier on another vendor |
 | `.sdkit/project.md`, `verify.d/` | risk rubric, verify policies | **mandatory rubric**; the workflow does not start without it |
 
-Tech Lead: no file to fill in. Review the spec PR, run `spec.sh check <id>` before merging a revision that had changes, and merge: the merge is the approval. Hosts and credentials in detail: [docs/hosts.md](docs/hosts.md); the Jira keys: [docs/guide.md](docs/guide.md) §10.
+Tech Lead: no file to fill in. Review the spec PR, run `sdkit spec check <id>` before merging a revision that had changes, and merge: the merge is the approval. Hosts and credentials in detail: [docs/hosts.md](docs/hosts.md); the Jira keys: [docs/guide.md](docs/guide.md) §10.
 
 ---
 
@@ -222,9 +230,9 @@ flowchart TD
     PRQ --> MG["You merge the PR<br/>done --merged checks the merge<br/>phase: done"]
     MG --> CO["Closeout: memory candidates, Value Report,<br/>work dir and worktrees cleaned"]
   end
-  VD -->|"BLOCK, spec gap"| BL["sdd.sh block --spec-change<br/>change request in Jira, subtask Blocked"]
+  VD -->|"BLOCK, spec gap"| BL["sdkit sdd block --spec-change<br/>change request in Jira, subtask Blocked"]
   BL --> US
-  US -.->|"revised spec merged, subtask re-pinned:<br/>sdd.sh revalidate --sha"| IN
+  US -.->|"revised spec merged, subtask re-pinned:<br/>sdkit sdd revalidate --sha"| IN
   CO -.->|"change request after delivery"| US
 ```
 
@@ -255,30 +263,30 @@ The kit does not run discovery, release or deploy for you.
 
 [EGM](https://github.com/google/elephant-goldfish-model) (Elephant Goldfish Model) is a Claude Code plugin (`egm@egm`) whose `egm-review-loop` skill runs fresh-context reviewers against a document and a standard. `generate-specs` and `update-specs` run it per artifact (PRD, ADR, feature spec) and once more on the final OpenSpec change, with the rubric in `.sdkit/review.d/<artifact>.env`.
 
-`scripts/review.sh` keeps the evidence honest: the PASS is bound to the document's content hash, any edit makes it stale, a review without fresh isolation is `NOT_RUN` and never PASS, and `spec.sh publish` refuses without a fresh PASS. After `SPEC_REVIEW_MAX_ROUNDS` rounds a person decides. Without the plugin, the read-only `spec-reviewer` role runs the same review through `run-role.sh`. A review PASS is not approval; the Tech Lead's merge is.
+`sdkit review` keeps the evidence honest: the PASS is bound to the document's content hash, any edit makes it stale, a review without fresh isolation is `NOT_RUN` and never PASS, and `sdkit spec publish` refuses without a fresh PASS. After `SPEC_REVIEW_MAX_ROUNDS` rounds a person decides. Without the plugin, the read-only `spec-reviewer` role runs the same review through `sdkit run-role`. A review PASS is not approval; the Tech Lead's merge is.
 
 ---
 
 ## 🛠️ Inside `spec-driven-dev`
 
-The developer side is a **phase machine** (`scripts/sdd.sh`). Each move has an exit condition that a script checks, so the agent cannot skip a step by deciding it is not needed. In this mode the skill writes no spec: it never calls the OpenSpec skills, and nothing under `SPECS_DIR` can be edited. At the start and end of every step it prints `[sdkit] orchestrator · Step <n>/<total>: <name> — started|done`; the total is 7 for `low` and 8 for `medium` and `high`.
+The developer side is a **phase machine** (`sdkit sdd`). Each move has an exit condition that the binary checks, so the agent cannot skip a step by deciding it is not needed. In this mode the skill writes no spec: it never calls the OpenSpec skills, and nothing under `SPECS_DIR` can be edited. At the start and end of every step it prints `[sdkit] orchestrator · Step <n>/<total>: <name> — started|done`; the total is 7 for `low` and 8 for `medium` and `high`.
 
 Gate phases: `intake → proposed → red → green → verified → pr → done` (plus `aborted`). Planning happens inside `intake`.
 
-> **Standalone mode** (`SDKIT_ENV=standalone`, no Jira): `/spec-driven-dev <description>` runs the same phases on a free-text task. The differences are at the edges: the `analyst` role checks the request and proposes the risk, `openspec-explore` grounds the problem, `openspec-propose` writes `proposal.md` / `design.md` / `specs/` / `tasks.md` from the approved plan, and closeout syncs and archives the specs with `openspec-sync-specs` and `openspec-archive-change`.
+> **Standalone mode** (`SDKIT_ENV=standalone`, no Jira): `/spec-driven-dev <description>` runs the same phases on a free-text task. The differences are at the edges: the `analyst` role checks the request and proposes the risk, there is no approved spec to read, so the approved `plan.md` is the spec and the orchestrator transcribes it into `proposal.md` / `tasks.md` / `design.md` under `.sdkit/work/<slug>/`, and closeout has no spec to sync. OpenSpec is not involved.
 
 ### Step by step
 
 | Step | Phase | What happens | It moves on when |
 |---|---|---|---|
-| **Intake** | `intake` | `sdd.sh start --ticket <KEY>` fetches the subtask, validates its contract, checks that the pinned `specSha` exists in `SPECS_DIR` and that every dependency is done. The risk comes from the task | The start is accepted and you confirm the risk (you can only raise it) |
+| **Intake** | `intake` | `sdkit sdd start --ticket <KEY>` fetches the subtask, validates its contract, checks that the pinned `specSha` exists in `SPECS_DIR` and that every dependency is done. The risk comes from the task | The start is accepted and you confirm the risk (you can only raise it) |
 | **Explore** | `intake` | Read the spec at the pinned revision; `scout` answers "where is X" cheaply, cached per code state | The problem is grounded in code and spec |
 | **Plan gate** | `intake` | For medium/high the `engineer` drafts design, test strategy and task split. You are questioned on the plan in batched rounds (1 low, 3 medium, 5 high). Work outside the task's `scope` is a question, not a silent extension | You pick `Approve and propose` |
 | **Definition of Done** | `proposed` | `start` already wrote one `D<n>: ... \| Verified by: ...` line per acceptance criterion; you refine each from the spec text and write `design.md` for high | `advance proposed` re-fetches the contract (same `specSha`), re-checks dependencies and finds the DoD list (high: also a race/ordering section) |
 | **Test first** | `red` | `test-writer` writes the failing test. Only test files may change | `advance red` runs the test and it **fails** |
 | **Implement** | `green` | `developer` writes code until the test passes. Independent tasks (disjoint `writes:`) run as parallel subagents in separate worktrees | `advance green` runs the test and it **passes** |
 | **Verify** | `verified` | Depends on risk (see below). Evidence is tied to the exact diff, and the attestation records the ticket and `specSha` | A PASS for this diff |
-| **PR** | `pr` | Commit, push and open the PR. Push is denied before `verified`. `sdd.sh evidence-sync` comments the evidence and PR link on the subtask and moves it to `JIRA_REVIEW_STATUS` | `advance pr` |
+| **PR** | `pr` | Commit, push and open the PR. Push is denied before `verified`. `sdkit sdd evidence-sync` comments the evidence and PR link on the subtask and moves it to `JIRA_REVIEW_STATUS` | `advance pr` |
 | **Closeout** | `done` | After you merge: `done --merged` checks that the PR head is in the base branch. Memory entries you pick, Value Report written | `advance done` |
 
 ### Risk decides the rigor
@@ -295,33 +303,33 @@ A verifier `BLOCK` gets one automatic retry; a second stops and hands the decisi
 
 | Situation | What SDKit does |
 |---|---|
-| Task contract incomplete, spec revision unknown or dependency open | `sdd.sh start` is refused and says why |
+| Task contract incomplete, spec revision unknown or dependency open | `sdkit sdd start` is refused and says why |
 | You want to change the plan | `Edit a section` re-runs only the affected rounds; `Stop here` ends the task |
 | Proposal has no Definition of Done | `advance proposed` is refused with the reason; fix and retry |
 | Test passes before any code exists | `advance red` is refused: the test must fail, for the right reason |
-| Tasks overlap or depend on each other | `after:` links order them; tasks with overlapping `writes:` never run in parallel (`plan-waves.sh` computes the waves) |
+| Tasks overlap or depend on each other | `after:` links order them; tasks with overlapping `writes:` never run in parallel (`sdkit plan waves` computes the waves) |
 | Verifier `BLOCK`, implementation bug | One automatic retry with only the failing items |
-| Verifier `BLOCK` or any finding that the spec itself is wrong | `sdd.sh block --spec-change` files a change request in Jira and blocks the task. Every `advance` and every code edit is refused until the revised spec is merged and `sdd.sh revalidate --sha <new sha>` passes. No retry against a broken target |
+| Verifier `BLOCK` or any finding that the spec itself is wrong | `sdkit sdd block --spec-change` files a change request in Jira and blocks the task. Every `advance` and every code edit is refused until the revised spec is merged and `sdkit sdd revalidate --sha <new sha>` passes. No retry against a broken target |
 | Second `BLOCK` | Automatic retries stop and you decide. No third loop |
 | Code edited after verification | The verdict is stale; push and PR are refused until you verify again |
 | Valid evidence already exists for this diff | With `ROUTING=on` it is reused and nothing runs again |
 | Budget would be exceeded | Stops before the spawn that goes over; you continue, raise the limit or stop. Verification is never shortened |
-| Session crashed or was killed | Records stay on disk; `recover.sh scan` and `state.sh <task> show` resume the task |
-| You abandon the task | `sdd.sh abort` ends it and still writes the report |
+| Session crashed or was killed | Records stay on disk; `sdkit recover scan` and `sdkit state <task> show` resume the task |
+| You abandon the task | `sdkit sdd abort` ends it and still writes the report |
 
 Every box maps to a real mechanism. Real command output for each step: **[docs/developer-workflow.md](docs/developer-workflow.md)** §5 and §10.
 
 ### 📍 Where am I?
 
-There is no dashboard; these read-only commands answer it (`KIT="$(sdkit where)"`, run inside your repo):
+There is no dashboard; these read-only commands answer it (run inside your repo):
 
 | Question | Command |
 |---|---|
-| Phase and active task | `$KIT/scripts/sdd.sh status` → `task=rate-limit risk=medium phase=green` |
-| Which verifier / reviewer / auditor PASS is missing | `$KIT/scripts/sdd.sh evidence` |
-| What the task requires, what each move needs | `$KIT/scripts/sdd.sh policy`, `sdd.sh transitions` |
-| Why was I stopped | the refusal message names the missing step; `sdd.sh gate edit <path>` re-asks |
-| Tokens, cache, cost, budget | `$KIT/scripts/usage.sh report <task>`, `usage.sh budget` |
+| Phase and active task | `sdkit sdd status` → `task=rate-limit risk=medium phase=green` |
+| Which verifier / reviewer / auditor PASS is missing | `sdkit sdd evidence` |
+| What the task requires, what each move needs | `sdkit sdd policy`, `sdkit sdd transitions` |
+| Why was I stopped | the refusal message names the missing step; `sdkit sdd gate edit <path>` re-asks |
+| Tokens, cache, cost, budget | `sdkit usage report <task>`, `sdkit usage budget` |
 | Result of a task | `sdkit report task <task>` |
 
 More in [docs/developer-workflow.md](docs/developer-workflow.md) §7 and the one-page [docs/cheatsheet.md](docs/cheatsheet.md).
@@ -350,7 +358,7 @@ Eight skills and eleven roles ship in this version.
 
 | Skill | Use it to |
 |---|---|
-| `spec-driven-dev` | Run a task through the whole workflow above (the driver; it calls the OpenSpec skills) |
+| `spec-driven-dev` | Run a task through the whole workflow above (the driver; it writes no spec and uses no OpenSpec skill) |
 | `generate-specs` | Analyst: turn a pre-spec into reviewed specs, an OpenSpec change and one PR |
 | `update-specs` | Analyst: change a published spec after edits or Tech Lead change requests (after approval: write a change under `specs/<id>/changes/`) |
 | `merge-specs` | Analyst: merge sibling spec changes into the next revision (semantic merge, a person decides conflicts) |
@@ -369,15 +377,15 @@ Agent workflows spend most of their tokens on searching, re-reading and long con
 | **Model tiers** | Roles declare a cost tier: `light` (search, planning check), `standard` (most work), `strong` (design, high-risk verification). `core/tiers.env` maps tiers to models, e.g. `haiku` / `sonnet` / `opus` on Claude Code. Independent roles never drop below their own tier |
 | **Right-sized work** | Each task in the plan gets a `size`, which picks the tier. You can change it at the plan gate. Low risk skips the engineer, the independent verifier and parallel waves |
 | **Subagents keep context small** | A role gets a short handoff with file paths, not the conversation. It returns at most 15 lines and files the long form under `work/<slug>/out/`. Roles never spawn roles, and one- or two-file work stays in the main session |
-| **Context growth** | `SKILL.md` is short and step detail loads only when needed. Command output is trimmed to a summary plus failing lines (`capped.sh`). Progress is checkpointed so `/clear` or compaction loses nothing |
-| **Cheap before expensive** | `verify.sh` runs before the LLM review; plan parity, verdict parsing, write-set and retry checks are scripts, not model calls. Green verification is cached per code state and scout answers per question |
-| **Cache hit ratio** | Handoffs put fixed lines first and changing lines last, tasks in a wave share a model and spawn together, so the prompt cache keeps hitting. `usage.sh report` prints the hit rate |
+| **Context growth** | `SKILL.md` is short and step detail loads only when needed. Command output is trimmed to a summary plus failing lines (`sdkit capped`). Progress is checkpointed so `/clear` or compaction loses nothing |
+| **Cheap before expensive** | `sdkit verify` runs before the LLM review; plan parity, verdict parsing, write-set and retry checks are code, not model calls. Green verification is cached per code state and scout answers per question |
+| **Cache hit ratio** | Handoffs put fixed lines first and changing lines last, tasks in a wave share a model and spawn together, so the prompt cache keeps hitting. `sdkit usage report` prints the hit rate |
 | **Budgets** | `MAX_SPAWNS` and `TOKEN_BUDGET_TASK` stop and ask before the spawn that goes over (`strict`) or only warn (`guided`). A budget stop never shrinks verification |
 | **Routing** (`ROUTING=on`) | A deterministic function, with no model call, decides which adapter and model run a role and whether to run, reuse valid evidence, retry or escalate. Risk floors and mandatory gates are never lowered |
 | **Local measurement** | `USAGE_LOG=1` writes a per-run ledger (role, tier, model, input, output, cache tokens). `TELEMETRY=1` records phases, agent runs, retries and failures as local events. Nothing leaves your machine and no prompts are logged |
 | **Honest numbers** | Every figure is labelled actual, estimated or unavailable. Where a host reports no token usage the ledger stays empty and budgets stay silent; the kit does not guess |
 
-Read the result with `usage.sh report <task>` for tokens, cache hit rate and budget, or `sdkit report task <task>` for the Value Report: per-role tokens, API-equivalent cost and savings against a stated baseline. Orchestration adds agent runs, so SDKit does not assume it saves money; it reports only what the records support. Details: [guide §18](docs/guide.md), [design-usage.md](docs/design-usage.md), [design-routing.md](docs/design-routing.md), [design-telemetry.md](docs/design-telemetry.md).
+Read the result with `sdkit usage report <task>` for tokens, cache hit rate and budget, or `sdkit report task <task>` for the Value Report: per-role tokens, API-equivalent cost and savings against a stated baseline. Orchestration adds agent runs, so SDKit does not assume it saves money; it reports only what the records support. Details: [guide §18](docs/guide.md), [design-usage.md](docs/design-usage.md), [design-routing.md](docs/design-routing.md), [design-telemetry.md](docs/design-telemetry.md).
 
 ---
 
@@ -385,10 +393,10 @@ Read the result with `usage.sh report <task>` for tokens, cache hit rate and bud
 
 | Layer | Where | What it stops |
 |---|---|---|
-| Phase gate | `scripts/sdd.sh gate`, the single decision point | code before a proposal and a failing test; push/PR before verification; any edit after verification |
+| Phase gate | `sdkit sdd gate`, the single decision point | code before a proposal and a failing test; push/PR before verification; any edit after verification |
 | Agent hooks | Claude Code (full set), Gemini/Cursor/OpenCode (adapters) | the above per tool call, plus secrets, protected paths, frozen tests, prod `kubectl`, release-flow git mistakes |
 | Git hooks | `.githooks/`, every tool | the same gate at commit and push time |
-| CI | `sdkit init --ci ...` | a PR whose code change has no committed attestation for exactly that diff; medium/high also need a verifier PASS. The job runs the **base branch's** `sdd.sh`, so a PR cannot edit the check that judges it |
+| CI | `sdkit init --ci ...` | a PR whose code change has no committed attestation for exactly that diff; medium/high also need a verifier PASS. The job installs the `sdkit` release pinned on the **base branch** and runs `sdkit sdd ci-check`, so a PR cannot edit the check that judges it |
 
 `SDD_MODE` in `sdkit.env`: `strict` (default) denies, `guided` asks or warns, `off` disables. Git hooks can be skipped with `--no-verify`; CI cannot, so mark the CI check as required. Details: [docs/guide.md](docs/guide.md).
 
@@ -406,7 +414,7 @@ Roles are written once in `core/roles/` and generated for each host. Every agent
 | **Cursor** | `--host cursor` | ask for the `spec-driven-dev` skill | `hooks.json` + git hooks | Follows documented format |
 | **Gemini CLI** | `--host gemini` | ask for the `spec-driven-dev` skill | `settings.json` hooks + git hooks | Follows documented format |
 
-Mix hosts with `--host claude,codex`. Any agent that reads `AGENTS.md` and runs shell commands still gets the phase gate through git hooks and CI, and `run-role.sh` can run the verifier in a different provider for real independence. Per-host details and limits: [docs/guide.md](docs/guide.md) §16.
+Mix hosts with `--host claude,codex`. Any agent that reads `AGENTS.md` and runs shell commands still gets the phase gate through git hooks and CI, and `sdkit run-role` can run the verifier in a different provider for real independence. Per-host details and limits: [docs/guide.md](docs/guide.md) §16.
 
 ## 🧰 Supported Stacks
 
@@ -436,7 +444,7 @@ You never edit the kit. You edit your own repo, and the kit writes only its own 
 | `.sdkit/sdkit.env` | **Team**: committed policy; the kit only appends new settings |
 | `.sdkit/sdkit.local.env` | **Each developer**: personal, not in git, wins over `sdkit.env` |
 | `AGENTS.md`, `CLAUDE.md`, `.codex/config.toml`, `.cursor/hooks.json`, `.gemini/settings.json` | **Shared**: the kit owns only its marked `spec-driven-kit:begin … end` block or its own keys |
-| kit scripts, hooks, role files, `.githooks/`, `settings.local.json` | **Kit**: generated per machine, hidden from git, refreshed by `sdkit sync` |
+| kit hook wiring, role files, `.githooks/`, `settings.local.json` | **Kit**: generated per machine, hidden from git, refreshed by `sdkit sync` |
 
 To adapt a role, write `.sdkit/roles.d/<role>.md`. `sdkit sync --check` and `sdkit doctor` report drift. Full ownership table: [docs/guide.md](docs/guide.md) §3.
 
@@ -447,37 +455,44 @@ Configured in `.sdkit/sdkit.local.env`. Cost, budget, routing and telemetry feat
 | Feature | What it gives you | Details |
 |---|---|---|
 | **Memory** (`MEMORY=1`, on) | Durable facts and decisions in `.sdkit/memory/`, one index line each, shared through git | [guide §19](docs/guide.md) |
-| **Workflow profiles** | `sdd.sh start --profile small\|standard\|high-assurance`: process weight, separate from risk. A profile never removes a gate | [design-workflow.md](docs/design-workflow.md), [design-evidence.md](docs/design-evidence.md) |
+| **Workflow profiles** | `sdkit sdd start --profile small\|standard\|high-assurance`: process weight, separate from risk. A profile never removes a gate | [design-workflow.md](docs/design-workflow.md), [design-evidence.md](docs/design-evidence.md) |
 | **Agent contracts** (`CONTRACTS=1`) | Checked handoff and result lines between orchestrator and roles | [design-contracts.md](docs/design-contracts.md) |
-| **Benchmarks** | `bench/run.sh` simulates four workflows for free; a task-level benchmark compares plain agentic development with SDKit | [design-benchmark.md](docs/design-benchmark.md) |
+| **Benchmarks** | The 1.x harness (`attic/bench/`) simulates workflows for free; it is kept as is, unmaintained and not part of the build | [design-benchmark.md](docs/design-benchmark.md) |
 
 ## ⌨️ The `sdkit` Command
 
 | Command | Does |
 |---|---|
-| `sdkit init [options] [dir]` | Set a repo up (profile, host files, OpenSpec, optional CI) |
+| `sdkit init [options] [dir]` | Set a repo up (profile, host files, optional CI; OpenSpec for analyst repos) |
 | `sdkit doctor [dir]` | Check a repo and say what to fix |
 | `sdkit sync [--check] [dir]` | Refresh the kit's files; `--check` only reports drift |
 | `sdkit upgrade [dir]` | Bring a repo to the installed kit version |
-| `sdkit install` | Register a cloned kit on the machine for the git hooks (not needed with Homebrew) |
 | `sdkit report task\|session\|latest\|history` | The Value Report |
 | `sdkit version`, `sdkit where` | Version, and where the kit lives |
+| `sdkit sdd`, `state`, `workflow`, `verify`, `verdict`, `dod`, `plan`, `pr`, `worktree` | The phase machine and what the skills call: phase gate, task state, verification, verdict parsing, plan checks, PRs, parallel worktrees |
+| `sdkit spec`, `review`, `jira`, `tasks`, `prespec` | Specs, spec review, Jira, task lists (analyst and developer environments) |
+| `sdkit run-role`, `route`, `dispatch`, `contract`, `adapter`, `recover` | Run a role as its own process, routing, parallel dispatch, handoff contracts, host adapters, crash recovery |
+| `sdkit usage`, `pricing`, `telemetry`, `report`, `audit`, `redact`, `memory`, `knowledge`, `lookup`, `digest`, `capped`, `base` | Tokens and cost, the Value Report, the audit chain, memory and caches, bounded output, the base branch |
+| `sdkit hook`, `guard` | Called by the hosts and git hooks, not by hand |
+| `sdkit dev adapters`, `sdkit dev scan` | Maintainers: regenerate the role files, check the tree is safe to publish |
+
+41 subcommands in all (`sdkit help`); the one-line usage of each is `sdkit <command>` with no arguments, the full list is in [docs/guide.md](docs/guide.md) §9.
 
 ---
 
 ## 📋 Requirements
 
-- `git`, `jq`, `node` (for OpenSpec) and your stack's toolchain. The analyst environment also uses the [EGM](https://github.com/google/elephant-goldfish-model) plugin for spec review (or the `spec-reviewer` role as fallback). `sdkit doctor` lists what is missing.
-- macOS and Linux. Windows is not supported (the kit is bash).
+- `git` and your stack's toolchain (`node` only in an analyst repo, for OpenSpec); `jq`, bash and python are not needed. The analyst environment also uses the [EGM](https://github.com/google/elephant-goldfish-model) plugin for spec review (or the `spec-reviewer` role as fallback). `sdkit doctor` lists what is missing.
+- macOS, Linux and Windows (native, PowerShell or cmd; no WSL needed). On Windows the hook wiring for Codex, Gemini CLI and OpenCode follows each host's documentation and is not yet verified on a live install ([docs/hosts.md](docs/hosts.md), [docs/guide.md](docs/guide.md) §13).
 - Pull requests: Bitbucket (REST API), GitHub (`gh`) and GitLab (`glab`). `PR_HOST=auto` picks one from the origin URL ([docs/hosts.md](docs/hosts.md)).
-- `<project-dir>` is `.sdkit/` for every host. Repos set up before 1.0 keep their old directory until `sdkit upgrade --migrate`.
+- `<project-dir>` is `.sdkit/` for every host. A repo set up before 1.0 first runs `sdkit upgrade --migrate` of the last 1.x release ([docs/upgrading.md](docs/upgrading.md)).
 
 ## ⚠️ Limits
 
 - Guards are regex-based safety nets, not a security boundary. They keep a cooperative agent on the workflow; an agent that tries to get around them can (Bash writes are not phase-gated).
 - An attestation is a JSON file the author commits: `ci-check` proves the flow was run for exactly this diff, not who ran it or that the verifier was independent. Protect `.sdkit/`, `attestations/` and the CI file with CODEOWNERS.
 - One stack per repo.
-- `spec-driven-dev` drives the OpenSpec skills, so the `openspec` CLI is required.
+- OpenSpec is used only by `generate-specs` (analyst repos); `spec-driven-dev` does not need the `openspec` CLI.
 
 ---
 
@@ -498,8 +513,8 @@ Configured in `.sdkit/sdkit.local.env`. Cost, budget, routing and telemetry feat
 ## 🤝 Contributing
 
 1. Read [CONTRIBUTING.md](CONTRIBUTING.md) and the rules in [CLAUDE.md](CLAUDE.md).
-2. Roles are edited in `core/roles/`; run `bin/build-adapters.sh` and commit its output.
-3. Run `scripts/test-select.sh run` and `bin/build-adapters.sh --check` before opening a PR.
+2. Roles are edited in `core/roles/`; run `sdkit dev adapters` and commit its output.
+3. Run `go test ./...` (and `go vet ./...`) and `sdkit dev adapters --check` before opening a PR.
 4. Commits follow `core/rules/git.md`: `<type>(<scope>): <description>`.
 
 ## 📄 License

@@ -1,0 +1,19 @@
+# cmd: sdkit version
+# env: BASH_ENV=.probe.sh
+exit: 0
+{
+  "slug": "t",
+  "step": "3-implement",
+  "risk": "medium",
+  "branch": "feat/x",
+  "verdict": "PASS",
+  "tasks": {
+    "T1": "done",
+    "T2": "doing"
+  },
+  "retries": {
+    "T1": 1
+  },
+  "updated": "<TS>",
+  "spawns": 1
+}

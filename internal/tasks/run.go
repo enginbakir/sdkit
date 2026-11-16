@@ -1,0 +1,369 @@
+package tasks
+
+import (
+	"bytes"
+	"encoding/json"
+	"fmt"
+	"io"
+	"os"
+	"path"
+	"regexp"
+	"sort"
+	"strings"
+
+	"github.com/wecii/sdkit/internal/gitx"
+)
+
+// Exit codes: 0 ok, 1 check failed, 2 usage, 3 not approved / spec unreadable, 4 task contract invalid.
+const (
+	exitFail     = 1
+	exitUsage    = 2
+	exitApproval = 3
+	exitContract = 4
+)
+
+// Env is what the verbs need from outside. Approve says whether the spec at the SHA is an
+// approved SHA (spec approved-sha); Validate checks a rendered task against the Jira contract
+// (jira validate-task) and returns its message.
+type Env struct {
+	Repo     string // git repo holding the specs
+	SpecPath string // directory of the specs, default "specs"
+	Approve  func(id, sha string) bool
+	Validate func(text string) (string, bool)
+	Stdin    io.Reader
+	Out, Err io.Writer
+}
+
+type runner struct {
+	Env
+	doc *Doc
+}
+
+var sha40 = regexp.MustCompile(`^[0-9a-f]{40}$`)
+
+const usage = "usage: sdkit tasks acs|changes|trace|cycles|ids|order|render|report <tasks.json> ..."
+
+// Run executes `sdkit tasks <verb> <tasks.json> ...` and returns the exit code.
+func Run(env Env, args []string) int {
+	r := &runner{Env: env}
+	if r.SpecPath == "" {
+		r.SpecPath = "specs"
+	}
+	die := func(code int, format string, a ...any) int {
+		fmt.Fprintf(r.Err, "tasks: "+format+"\n", a...)
+		return code
+	}
+	if len(args) < 2 || args[0] == "" {
+		fmt.Fprintln(r.Err, usage)
+		return exitUsage
+	}
+	verb, file, rest := args[0], args[1], args[2:]
+	data, err := os.ReadFile(file)
+	if err != nil {
+		fmt.Fprintln(r.Err, usage)
+		return exitUsage
+	}
+	if r.doc, err = Parse(data); err != nil {
+		return die(exitUsage, "%v", err)
+	}
+	d := r.doc
+	if !strings.Contains(" acs changes trace cycles ids order render report ", " "+verb+" ") {
+		return die(exitUsage, "unknown verb %s", verb)
+	}
+	if verb != "cycles" {
+		if code := r.gate(); code != 0 {
+			return code
+		}
+	}
+	switch verb {
+	case "cycles":
+		return r.cycles(true)
+	case "changes":
+		fmt.Fprint(r.Out, lines(r.revChanges()))
+	case "acs":
+		if len(rest) > 0 && rest[0] == "--revision" {
+			fmt.Fprint(r.Out, lines(r.revisionACs()))
+		} else {
+			fmt.Fprint(r.Out, lines(r.allACs()))
+		}
+	case "trace":
+		if len(rest) == 0 || rest[0] == "" {
+			fmt.Fprintln(r.Err, "tasks: usage: trace <tasks.json> <ac-list|->")
+			return exitUsage
+		}
+		var in []byte
+		if rest[0] == "-" {
+			in, _ = io.ReadAll(r.Stdin)
+		} else if in, err = os.ReadFile(rest[0]); err != nil {
+			return die(exitUsage, "no such file: %s", rest[0])
+		}
+		set := map[string]bool{}
+		for _, a := range strings.FieldsFunc(string(in), func(c rune) bool { return c == ',' || c == ' ' || c == '\t' || c == '\n' }) {
+			set[a] = true
+		}
+		if len(set) == 0 {
+			return die(exitFail, "empty AC list")
+		}
+		ok, problems := d.Trace(keys(set))
+		for _, p := range problems {
+			fmt.Fprintln(r.Err, p)
+		}
+		if len(problems) > 0 {
+			return exitFail
+		}
+		fmt.Fprintln(r.Out, ok)
+	case "ids":
+		out, err := d.IDs()
+		if err != nil {
+			fmt.Fprintln(r.Err, err)
+			return exitFail
+		}
+		fmt.Fprintln(r.Out, string(out))
+	case "order":
+		if code := r.cycles(false); code != 0 {
+			return code
+		}
+		fmt.Fprint(r.Out, lines(d.Order()))
+	case "render":
+		return r.render(rest)
+	case "report":
+		return r.report(rest)
+	}
+	return 0
+}
+
+func lines(s []string) string {
+	if len(s) == 0 {
+		return ""
+	}
+	return strings.Join(s, "\n") + "\n"
+}
+
+func keys(m map[string]bool) []string {
+	var o []string
+	for k := range m {
+		o = append(o, k)
+	}
+	sort.Strings(o)
+	return o
+}
+
+func (r *runner) cycles(say bool) int {
+	unknown, cycle := r.doc.Cycles()
+	switch {
+	case unknown != "":
+		fmt.Fprintln(r.Err, "tasks: unknown dependency: "+unknown)
+	case cycle != "":
+		fmt.Fprintln(r.Err, "tasks: dependency cycle: "+cycle)
+	default:
+		if say {
+			fmt.Fprintln(r.Out, "no cycles")
+		}
+		return 0
+	}
+	return exitFail
+}
+
+// gate: approval first, then the spec version at that exact commit must match tasks.json.
+func (r *runner) gate() int {
+	d := r.doc
+	refuse := func(format string, a ...any) int {
+		fmt.Fprintf(r.Err, "tasks: "+format+"\n", a...)
+		return exitApproval
+	}
+	if d.SpecID == "" || !sha40.MatchString(d.SpecSha) {
+		return refuse("tasks.json needs specId and a 40-hex specSha")
+	}
+	if r.Approve == nil || !r.Approve(d.SpecID, d.SpecSha) {
+		return refuse("specSha %s of %s is not an approved SHA on origin/main: refusing", d.SpecSha, d.SpecID)
+	}
+	var meta struct {
+		Version string `json:"version"`
+	}
+	_ = json.Unmarshal([]byte(r.show(path.Join(r.dir(), "spec.meta.json"))), &meta)
+	have := "null"
+	if d.SpecVersion != nil {
+		have = Str(d.SpecVersion)
+	}
+	if meta.Version != "" && meta.Version != have {
+		return refuse("specVersion in tasks.json differs from %s at %s", meta.Version, d.SpecSha)
+	}
+	return 0
+}
+
+func (r *runner) dir() string { return r.SpecPath + "/" + r.doc.SpecID }
+
+func (r *runner) show(file string) string {
+	out, _ := gitx.Run(r.Repo, "show", r.doc.SpecSha+":"+file)
+	return out
+}
+
+func (r *runner) files() []string {
+	out, _ := gitx.Run(r.Repo, "ls-tree", "-r", "--name-only", r.doc.SpecSha, "--", r.dir())
+	return gitx.Lines(out)
+}
+
+// text is every file of the spec directory at the SHA, optionally without changes/.
+func (r *runner) text(withChanges bool) string {
+	var parts []string
+	for _, f := range r.files() {
+		if withChanges || !strings.Contains(f, "/changes/") {
+			parts = append(parts, r.show(f))
+		}
+	}
+	return strings.Join(parts, "\n")
+}
+
+var acToken = regexp.MustCompile(`\bAC-[A-Za-z0-9_]+(-[A-Za-z0-9_]+)*(\.[A-Za-z0-9_]+)*`)
+
+func (r *runner) allACs() []string {
+	set := map[string]bool{}
+	for _, a := range acToken.FindAllString(r.text(true), -1) {
+		set[a] = true
+	}
+	return keys(set)
+}
+
+// revChanges: slugs of the changes applied in the revision of the spec at the SHA.
+func (r *runner) revChanges() []string {
+	var meta struct {
+		Version string `json:"version"`
+	}
+	_ = json.Unmarshal([]byte(r.show(r.dir()+"/spec.meta.json")), &meta)
+	var out []string
+	for _, f := range r.files() {
+		if !strings.HasPrefix(f, r.dir()+"/changes/") || !strings.HasSuffix(f, "/change.json") {
+			continue
+		}
+		var c struct {
+			Slug    string `json:"slug"`
+			Status  string `json:"status"`
+			Applied struct {
+				Version string `json:"version"`
+			} `json:"applied"`
+		}
+		if json.Unmarshal([]byte(r.show(f)), &c) == nil && c.Status == "applied" && c.Applied.Version == meta.Version {
+			out = append(out, c.Slug)
+		}
+	}
+	return out
+}
+
+// revisionACs: the active ACs that the changes of this revision added or modified.
+func (r *runner) revisionACs() []string {
+	slugs := r.revChanges()
+	if len(slugs) == 0 {
+		return nil
+	}
+	spec := r.text(false)
+	touched := map[string]bool{}
+	for _, s := range slugs {
+		var c struct {
+			Touches []string `json:"touches"`
+		}
+		_ = json.Unmarshal([]byte(r.show(r.dir()+"/changes/"+s+"/change.json")), &c)
+		for _, t := range c.Touches {
+			touched[t] = true
+		}
+	}
+	var out []string
+	for _, ac := range keys(touched) {
+		if regexp.MustCompile(`(?m)^####[ \t]+Scenario:[ \t]*` + regexp.QuoteMeta(ac) + `([ \t]+-|[ \t]*$)`).MatchString(spec) {
+			out = append(out, ac)
+		}
+	}
+	return out
+}
+
+func (r *runner) render(rest []string) int {
+	if len(rest) == 0 || rest[0] == "" {
+		fmt.Fprintln(r.Err, "tasks: usage: render <tasks.json> <ref> [--keys MAP] [--json]")
+		return exitUsage
+	}
+	ref, m, asJSON := rest[0], map[string]string{}, false
+	for rest = rest[1:]; len(rest) > 0; {
+		switch rest[0] {
+		case "--keys":
+			var b []byte
+			var err error
+			if len(rest) > 1 {
+				b, err = os.ReadFile(rest[1])
+			}
+			if len(rest) < 2 || err != nil || json.Unmarshal(b, &m) != nil {
+				fmt.Fprintln(r.Err, "tasks: --keys needs a file")
+				return exitUsage
+			}
+			rest = rest[2:]
+		case "--json":
+			asJSON, rest = true, rest[1:]
+		default:
+			fmt.Fprintf(r.Err, "tasks: unknown option %s\n", rest[0])
+			return exitUsage
+		}
+	}
+	if err := r.doc.Keys(); err != nil {
+		fmt.Fprintln(r.Err, err)
+		return exitFail
+	}
+	u, ok := r.doc.Render(ref, m)
+	if !ok {
+		fmt.Fprintf(r.Err, "tasks: no task with ref %s\n", ref)
+		return exitUsage
+	}
+	text := strings.TrimRight(u.Text(), "\n") // the bash held it in $(...), which drops the trailing newline
+	if r.Validate != nil {
+		if msg, ok := r.Validate(text); !ok {
+			fmt.Fprint(r.Err, msg)
+			fmt.Fprintf(r.Err, "tasks: rendered task %s fails jira.sh validate-task\n", ref)
+			return exitContract
+		}
+	}
+	if asJSON {
+		fmt.Fprintln(r.Out, u.JSON())
+	} else {
+		fmt.Fprint(r.Out, text)
+	}
+	return 0
+}
+
+func (r *runner) report(rest []string) int {
+	if len(rest) == 0 {
+		fmt.Fprintln(r.Err, "tasks: usage: report <tasks.json> <results.jsonl> [--out FILE]")
+		return exitUsage
+	}
+	b, err := os.ReadFile(rest[0])
+	if err != nil {
+		fmt.Fprintln(r.Err, "tasks: usage: report <tasks.json> <results.jsonl> [--out FILE]")
+		return exitUsage
+	}
+	out := ""
+	if len(rest) > 2 && rest[1] == "--out" {
+		out = rest[2]
+	}
+	if err := r.doc.Keys(); err != nil {
+		fmt.Fprintln(r.Err, err)
+		return exitFail
+	}
+	res := map[string]map[string]any{}
+	for dec := json.NewDecoder(bytes.NewReader(b)); ; {
+		var o any
+		if dec.Decode(&o) != nil {
+			break
+		}
+		if m, ok := o.(map[string]any); ok {
+			if id, _ := m["externalId"].(string); id != "" {
+				res[id] = m
+			}
+		}
+	}
+	md, ok := r.doc.Report(res)
+	if out != "" {
+		_ = os.WriteFile(out, []byte(md+"\n"), 0o644)
+	} else {
+		fmt.Fprintln(r.Out, md)
+	}
+	if !ok {
+		return exitFail
+	}
+	return 0
+}
