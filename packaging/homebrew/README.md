@@ -26,7 +26,7 @@ locally (`skip_upload: true`); nothing is published and no token is configured. 
 0. Run `sdkit dev scan --history` (no hard findings; read the soft ones).
 1. Bump the version in all five places (`plugin.json`, `marketplace.json`, README badge, `Formula/sdkit.rb`, `packaging/scoop/sdkit.json`).
 2. Try it locally: `goreleaser release --snapshot --clean --skip=publish`, then check `dist/` has six archives, `checksums.txt`, the formula and the manifest.
-3. Tag `v<version>` and push the tag (explicit user step). The `release` workflow builds the artifacts; publishing is enabled by the user later.
-4. Copy the generated `dist/homebrew/Formula/sdkit.rb` to `Formula/` and `dist/scoop/sdkit.json` to `packaging/scoop/`, commit on `master`.
+3. Tag `v<version>` and push the tag. The `release` workflow builds the archives and `checksums.txt` and creates the GitHub Release (a manual run is a snapshot that publishes nothing).
+4. Replace the `__SHA256_*__` placeholders in `Formula/sdkit.rb` and `packaging/scoop/sdkit.json` with the values from the release's `checksums.txt` (or copy the generated `dist/homebrew/Formula/sdkit.rb` and `dist/scoop/sdkit.json` from the workflow's `dist` artifact), commit on `master`.
 
 CI templates (`templates/ci/*`) pin the `sdkit` version in the consumer's own CI file, so a new release reaches a repo's gate only when that repo merges a version bump.

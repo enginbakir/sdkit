@@ -32,7 +32,7 @@ checksum:
 
 # Generated into dist/ only: dist/homebrew/Formula/sdkit.rb and dist/scoop/sdkit.json.
 # skip_upload keeps both local; there is no publish block and no token anywhere (06-release.md).
-# Publishing is the user's explicit step (P5-06): until then `release` stays disabled.
+# The GitHub Release itself is created by the `release` workflow on a v* tag; the formula and scoop manifest are filled from its checksums.txt and committed by hand.
 brews:
   - name: sdkit
     ids: [default]
@@ -45,8 +45,6 @@ brews:
       owner: wecii
       name: sdkit
     directory: Formula
-    dependencies:
-      - name: node
     caveats: |
       Set a repo up (once per repo, by one person):
         cd your-repo && sdkit init
@@ -69,4 +67,8 @@ scoops:
       name: sdkit
 
 release:
-  disable: true
+  github:
+    owner: wecii
+    name: sdkit
+  draft: false
+  prerelease: auto

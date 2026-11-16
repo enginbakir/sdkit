@@ -1,17 +1,17 @@
 name: release
 
-# Snapshot only: builds the artifacts, publishes nothing.
-# Publishing is enabled by the user later (docs/go-port/06-release.md).
+# A v* tag builds the six archives plus checksums.txt and creates the GitHub Release.
+# A manual run is a snapshot: it builds the artifacts and publishes nothing.
 on:
   workflow_dispatch:
   push:
     tags: ['v*']
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  snapshot:
+  release:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -21,10 +21,12 @@ jobs:
         with:
           go-version-file: go.mod
       - uses: goreleaser/goreleaser-action@v6
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           distribution: goreleaser
           version: '~> v2'
-          args: release --snapshot --clean --skip=publish
+          args: release --clean ${{ startsWith(github.ref, 'refs/tags/v') && ' ' || '--snapshot --skip=publish' }}
       - uses: actions/upload-artifact@v4
         with:
           name: dist
