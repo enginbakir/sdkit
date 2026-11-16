@@ -34,8 +34,8 @@ func TestCaseClash(t *testing.T) {
 		{"spec/LOGIN-v2", ""},              // the same spelling is the same branch, not a clash
 		{"spec/new", ""},
 	} {
-		if got := caseClash(ex, c.b); got != c.want {
-			t.Errorf("caseClash(%q) = %q, want %q", c.b, got, c.want)
+		if got := CaseClash(ex, c.b); got != c.want {
+			t.Errorf("CaseClash(%q) = %q, want %q", c.b, got, c.want)
 		}
 	}
 }

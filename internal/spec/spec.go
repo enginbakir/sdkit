@@ -246,9 +246,9 @@ func (e *env) push(branch string) bool {
 	return false
 }
 
-// caseClash returns an existing ref name that differs from branch only in letter case ("" when none). On a case-insensitive
+// CaseClash returns an existing ref name that differs from branch only in letter case ("" when none). On a case-insensitive
 // file system (macOS, Windows) such refs share one file and a push fails with "cannot be resolved to branch".
-func caseClash(existing []string, branch string) string {
+func CaseClash(existing []string, branch string) string {
 	for _, n := range existing {
 		if n != branch && strings.EqualFold(n, branch) {
 			return n
@@ -1059,7 +1059,7 @@ func (e *env) publish(id string, a []string) int {
 		for _, r := range gitx.Lines(refs) {
 			names = append(names, strings.TrimPrefix(r, "origin/"))
 		}
-		if c := caseClash(names, b); c != "" {
+		if c := CaseClash(names, b); c != "" {
 			return int(e.die("branch %s clashes with the existing %s: they differ only in letter case, so a case-insensitive file system (macOS, Windows) treats them as one ref and the push fails. Use the existing spelling of the id (or delete the stale branch); nothing was committed", b, c))
 		}
 	}
@@ -1302,4 +1302,12 @@ func jsonField(doc, key string) string {
 		return ""
 	}
 	return string(field(ps, key))
+}
+
+// SpecsDir is SPECS_DIR of the settings, "specs" when unset.
+func SpecsDir(s interface{ String(string) string }) string {
+	if v := s.String("SPECS_DIR"); v != "" && !strings.HasPrefix(v, "__") {
+		return v
+	}
+	return "specs"
 }
