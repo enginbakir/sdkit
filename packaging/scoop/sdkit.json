@@ -7,11 +7,11 @@
   "architecture": {
     "64bit": {
       "url": "https://github.com/wecii/sdkit/releases/download/v2.0.0/sdkit_2.0.0_windows_amd64.zip",
-      "hash": "__SHA256_WINDOWS_AMD64__"
+      "hash": "a7ab20d7c1a5ab25ef69500c483793545f0987045557d350a786b448fd075d69"
     },
     "arm64": {
       "url": "https://github.com/wecii/sdkit/releases/download/v2.0.0/sdkit_2.0.0_windows_arm64.zip",
-      "hash": "__SHA256_WINDOWS_ARM64__"
+      "hash": "66acb4a687dc67a2c485a0bac17373dfbe067c14dd7821c8702d845dc595a15d"
     }
   },
   "bin": "sdkit.exe",
