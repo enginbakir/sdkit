@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -74,5 +75,105 @@ func TestBeginRequiresLint(t *testing.T) {
 	os.WriteFile(doc, []byte("#### Scenario: AC-X-1\n#### Scenario: AC-X-2\n"), 0o644)
 	if _, err := c.Begin("s", doc, false); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestCheapPassNeverPublishes(t *testing.T) {
+	root := t.TempDir()
+	doc := filepath.Join(root, "s.md")
+	os.WriteFile(doc, []byte("v1"), 0o644)
+	os.WriteFile(doc+".f", []byte("[]"), 0o644)
+	c := Load(root)
+	c.Begin("s", doc, false)
+	c.Record("s", "PASS", "fresh", doc+".f", RecordOpt{Set: "cheap", Roles: 1})
+	if r := c.Check("s"); r.OK() || r.State != "PARTIAL" {
+		t.Fatalf("a cheap-set PASS must not be approval: %+v", r)
+	}
+	c.Begin("s", doc, false)
+	c.Record("s", "PASS", "fresh", doc+".f", RecordOpt{Roles: 4})
+	if r := c.Check("s"); !r.OK() {
+		t.Fatalf("the full set PASSes on the same content: %+v", r)
+	}
+	if st := c.Status("s"); !strings.Contains(st, "reviewer runs recorded: 5") {
+		t.Fatal(st)
+	}
+}
+
+func TestSettleAndRaiseCapNeedAPerson(t *testing.T) {
+	root := t.TempDir()
+	doc := filepath.Join(root, "s.md")
+	os.WriteFile(doc, []byte("v1"), 0o644)
+	os.MkdirAll(filepath.Join(root, ".sdkit"), 0o755) // the project dir, where the audit trail lives
+	c := Load(root)
+	c.JiraUser = ""
+	c.MaxRounds = 1
+	c.Begin("s", doc, false)
+	if _, err := c.Settle("s-draft", "cost wording", "decided", ""); err == nil {
+		t.Fatal("settle without a person must be refused")
+	}
+	if _, err := c.RaiseCap("s", 3, "more", ""); err == nil {
+		t.Fatal("raise-cap without a person must be refused")
+	}
+	if _, err := c.Begin("s", doc, false); err == nil {
+		t.Fatal("cap of 1 reached")
+	}
+	c.JiraUser = "ayse"
+	if _, err := c.Settle("s-draft", "cost wording", "analyst: out of scope", ""); err != nil {
+		t.Fatal(err)
+	}
+	if p := c.SettledPrompt("s"); !strings.Contains(p, "cost wording") { // the draft and output reviews share one list
+		t.Fatalf("prompt %q", p)
+	}
+	if _, err := c.RaiseCap("s", 1, "x", ""); err == nil {
+		t.Fatal("raise-cap must go above the current cap")
+	}
+	if _, err := c.RaiseCap("s", 3, "analyst agreed", ""); err != nil {
+		t.Fatal(err)
+	}
+	os.WriteFile(doc, []byte("v2"), 0o644)
+	if _, err := c.Begin("s", doc, false); err != nil {
+		t.Fatalf("the raised cap must apply: %v", err)
+	}
+}
+
+func TestChangedAndConverged(t *testing.T) {
+	root := t.TempDir()
+	d := filepath.Join(root, "doc")
+	os.MkdirAll(d, 0o755)
+	os.WriteFile(filepath.Join(d, "a.md"), []byte("a"), 0o644)
+	os.WriteFile(filepath.Join(d, "b.md"), []byte("b"), 0o644)
+	os.WriteFile(filepath.Join(root, "f.json"), []byte("[]"), 0o644)
+	c := Load(root)
+	c.Begin("s", d, false)
+	c.Record("s", "BLOCK", "fresh", filepath.Join(root, "f.json"))
+	os.WriteFile(filepath.Join(d, "b.md"), []byte("b2"), 0o644)
+	l, same, _ := c.Changed("s")
+	if len(l) != 1 || l[0] != "changed ./b.md" || same != 1 {
+		t.Fatalf("%v %d", l, same)
+	}
+	n := func(m int) Note { return Note{Major: m} }
+	for _, tc := range []struct {
+		h    []Note
+		want bool
+	}{{[]Note{n(30), n(20), n(20)}, true}, {[]Note{n(3), n(1), n(4)}, false}, {[]Note{n(20), n(1)}, false}, {[]Note{n(2), n(0), n(0)}, false}} {
+		if Converged(tc.h) != tc.want {
+			t.Errorf("%v want %v", tc.h, tc.want)
+		}
+	}
+}
+
+func TestScopeGrowthWarning(t *testing.T) {
+	root := t.TempDir()
+	doc := filepath.Join(root, "spec.md")
+	os.WriteFile(doc, []byte("#### Scenario: AC-X-1\n"), 0o644)
+	os.WriteFile(filepath.Join(root, "f.json"), []byte("[]"), 0o644)
+	c := Load(root)
+	c.MaxNewACs = 2
+	c.Begin("s", doc, false)
+	c.Record("s", "BLOCK", "fresh", filepath.Join(root, "f.json"))
+	os.WriteFile(doc, []byte("#### Scenario: AC-X-1\n#### Scenario: AC-X-2\n#### Scenario: AC-X-3\n#### Scenario: AC-X-4\n"), 0o644)
+	msg, err := c.Begin("s", doc, false)
+	if err != nil || !strings.Contains(msg, "SCOPE GROWTH: 3 AC ids") {
+		t.Fatalf("%v %q", err, msg)
 	}
 }

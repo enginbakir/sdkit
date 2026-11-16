@@ -358,3 +358,12 @@ func sortedKeys[V any](m map[string]V) []string {
 	sort.Strings(out)
 	return out
 }
+
+// ACIDs lists the AC ids a document defines (withdrawn ones included: an id once issued stays issued), sorted.
+func ACIDs(target string) []string {
+	files, err := load(target)
+	if err != nil {
+		return nil
+	}
+	return sortedKeys(acDefs(files, Config{}))
+}
