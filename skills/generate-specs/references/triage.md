@@ -20,3 +20,11 @@ Stop here only when the round cap is reached (`begin` exits 3) or the user says 
 3. Group findings that one decision closes into a single question (as above); do not ask again for a finding the answer already closed.
 4. Apply the answers as content. Accept runs `sdkit review accept <review-id> <finding-id> --why "<reason>"` only after the user's explicit yes for that finding; `--who` is left out, so it records `JIRA_USER`. If `JIRA_USER` is empty, tell the user to set it in `sdkit.local.env` and stop; never invent a name.
 5. Verify, do not trust: open the single final round `sdkit review begin <review-id> --final` (outside the cap, once per review id), run fresh reviewers on the changed artifacts only, `record`. Text the person wrote or edited is not PASS until this round says so. If the final round still has open BLOCKER/MAJOR findings, a second `--final` is refused (exit 3): show them and let the user decide (rework by hand or raise `SPEC_REVIEW_MAX_ROUNDS`).
+
+## Decisions are recorded once
+
+Every answer the person gives at step 3 of this file, and every "accept the risk" or "reject" that is a topic rather than one finding, goes into the settled list the moment it is given: `sdkit review settle <id> "<topic>" --why "<decision and reason>"` (`--who`/`JIRA_USER` is the person; never your own name). The list is pasted into every later reviewer prompt (`sdkit review settled <id> --prompt`), so the same question is not asked and the same finding not raised again. You do not retype it per round. At the propose step copy `<project-dir>/work/decisions/<id>.md` to `specs/<id>/decisions.md` (it is not part of the review hash).
+
+`SPEC_REVIEW_MAX_NEW_ACS`: when `begin` prints SCOPE GROWTH, the new criteria came from the reviewers, not the pre-spec. Ask the analyst, per criterion, whether it is wanted; the default is no. Reviewer feedback mostly says "add"; also ask what can be removed or merged.
+
+Raising the round cap is `sdkit review raise-cap <id> --to N --why "<reason>"`, only after the user said yes to the number; it is audited. Do not edit `sdkit.env` for it.

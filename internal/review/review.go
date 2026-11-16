@@ -43,6 +43,8 @@ type Ctx struct {
 	// RequireLint (REVIEW_REQUIRE_LINT=1): begin refuses while `review lint` has errors, so no model round is spent on mechanical mistakes.
 	RequireLint bool
 	Lint        lint.Config
+	// MaxNewACs (SPEC_REVIEW_MAX_NEW_ACS, 0 = off): begin warns when a round added more AC ids than this since the previous one.
+	MaxNewACs int
 }
 
 // Load reads the settings of the project at root.
@@ -59,6 +61,7 @@ func Load(root string) Ctx {
 		c.JiraUser = os.Getenv("JIRA_USER")
 	}
 	c.RequireLint = s.Bool("REVIEW_REQUIRE_LINT")
+	c.MaxNewACs = s.Int("SPEC_REVIEW_MAX_NEW_ACS", 0)
 	c.Lint = lint.Config{RefPrefixes: s.List("LINT_REF_PREFIXES"), GatePrefix: s.String("LINT_GATE_PREFIX"), Withdrawn: lower(s.List("LINT_WITHDRAWN_WORDS")),
 		MarkerWords: lower(s.List("LINT_MARKER_WORDS")), ClosedWords: lower(s.List("LINT_CLOSED_WORDS"))}
 	return c
@@ -104,18 +107,40 @@ type Evidence struct {
 	Round       int       `json:"round"`
 	At          string    `json:"at"`
 	Findings    []Finding `json:"findings"`
+	// Set is the reviewer set that gave the verdict: "full" (the rubric's REVIEWERS, the default) or "cheap" (a first,
+	// cheaper pass). Only a full-set PASS on the current content lets publish through.
+	Set   string            `json:"set,omitempty"`
+	Roles int               `json:"roles,omitempty"` // reviewer runs this round took, as reported by the orchestrator
+	Files map[string]string `json:"files,omitempty"` // per-file hashes at begin: what `review changed` compares against
+}
+
+// Note is one line of the round history `review status` prints.
+type Note struct {
+	Round   int    `json:"round"`
+	At      string `json:"at"`
+	Verdict string `json:"verdict"`
+	Set     string `json:"set,omitempty"`
+	Blocker int    `json:"blocker"`
+	Major   int    `json:"major"`
+	Minor   int    `json:"minor"`
+	Roles   int    `json:"roles,omitempty"`
+	ACs     int    `json:"acs,omitempty"`
 }
 
 // State is <project-dir>/work/review/<id>/state.json.
 type State struct {
-	ID          string    `json:"id,omitempty"`
-	Target      string    `json:"target,omitempty"`
-	ContentHash string    `json:"contentHash,omitempty"`
-	Round       int       `json:"round"`
-	Pending     bool      `json:"pending"`
-	BegunAt     string    `json:"begunAt,omitempty"`
-	FinalUsed   bool      `json:"finalUsed,omitempty"`
-	Evidence    *Evidence `json:"evidence,omitempty"`
+	ID          string            `json:"id,omitempty"`
+	Target      string            `json:"target,omitempty"`
+	ContentHash string            `json:"contentHash,omitempty"`
+	Round       int               `json:"round"`
+	Pending     bool              `json:"pending"`
+	BegunAt     string            `json:"begunAt,omitempty"`
+	FinalUsed   bool              `json:"finalUsed,omitempty"`
+	Evidence    *Evidence         `json:"evidence,omitempty"`
+	CapOverride int               `json:"capOverride,omitempty"` // raised by `review raise-cap`; wins over SPEC_REVIEW_MAX_ROUNDS when larger
+	Files       map[string]string `json:"files,omitempty"`
+	ACs         []string          `json:"acs,omitempty"` // AC ids at the last begin (scope growth)
+	History     []Note            `json:"history,omitempty"`
 }
 
 func readState(path string) (State, bool) {
@@ -140,6 +165,8 @@ func compact(v any) string {
 
 func now() string { return time.Now().UTC().Format("2006-01-02T15:04:05Z") }
 
+func jsonUnmarshal(b []byte, v any) error { return json.Unmarshal(b, v) }
+
 func sum(b []byte) string { h := sha256.Sum256(b); return hex.EncodeToString(h[:]) }
 
 func (c Ctx) target(id, override string) (string, error) {
@@ -161,14 +188,12 @@ func (c Ctx) target(id, override string) (string, error) {
 	return t, nil
 }
 
-// Hash is the contentHash of a document (a directory or one file): sha256 over
-// the sorted lines "<sha256 of file>  ./<relative path>". A directory excludes
-// spec.meta.json, change.json, acceptances.jsonl, .DS_Store and the top-level changes/.
-func Hash(t string) (string, error) {
-	var d string
+// FileHashes lists the files a document's hash covers: relative path -> sha256 of the file. A directory excludes
+// spec.meta.json, change.json, acceptances.jsonl, decisions.md, .DS_Store and the top-level changes/.
+func FileHashes(t string) (map[string]string, error) {
+	d := t
 	var list []string
 	if st, err := os.Stat(t); err == nil && st.IsDir() {
-		d = t
 		filepath.WalkDir(t, func(p string, e fs.DirEntry, err error) error {
 			if err != nil || !e.Type().IsRegular() {
 				return nil
@@ -176,7 +201,7 @@ func Hash(t string) (string, error) {
 			rel, _ := filepath.Rel(t, p)
 			rel = filepath.ToSlash(rel)
 			switch e.Name() {
-			case "spec.meta.json", "change.json", "acceptances.jsonl", ".DS_Store":
+			case "spec.meta.json", "change.json", "acceptances.jsonl", "decisions.md", ".DS_Store":
 				return nil
 			}
 			if strings.HasPrefix(rel, "changes/") {
@@ -189,16 +214,34 @@ func Hash(t string) (string, error) {
 		d, list = filepath.Dir(t), []string{"./" + filepath.Base(t)}
 	}
 	if len(list) == 0 {
-		return "", fail(2, "%s has no files to hash", t)
+		return nil, fail(2, "%s has no files to hash", t)
+	}
+	out := map[string]string{}
+	for _, f := range list {
+		b, err := os.ReadFile(filepath.Join(d, filepath.FromSlash(f)))
+		if err != nil {
+			return nil, fail(2, "cannot read %s", f)
+		}
+		out[f] = sum(b)
+	}
+	return out, nil
+}
+
+// Hash is the contentHash of a document (a directory or one file): sha256 over
+// the sorted lines "<sha256 of file>  ./<relative path>".
+func Hash(t string) (string, error) {
+	fh, err := FileHashes(t)
+	if err != nil {
+		return "", err
+	}
+	list := make([]string, 0, len(fh))
+	for f := range fh {
+		list = append(list, f)
 	}
 	sort.Strings(list)
 	var sb strings.Builder
 	for _, f := range list {
-		b, err := os.ReadFile(filepath.Join(d, filepath.FromSlash(f)))
-		if err != nil {
-			return "", fail(2, "cannot read %s", f)
-		}
-		fmt.Fprintf(&sb, "%s  %s\n", sum(b), f)
+		fmt.Fprintf(&sb, "%s  %s\n", fh[f], f)
 	}
 	return sum([]byte(sb.String())), nil
 }
@@ -337,31 +380,68 @@ func (c Ctx) Begin(id, target string, final bool) (string, error) {
 		var st State
 		json.Unmarshal(old, &st)
 		prev := st.Round
+		capN := max(c.MaxRounds, st.CapOverride)
 		if final {
-			if prev < c.MaxRounds {
-				return nil, fail(1, "--final is only for after the round cap (%d of %d used); open a normal round", prev, c.MaxRounds)
+			if prev < capN {
+				return nil, fail(1, "--final is only for after the round cap (%d of %d used); open a normal round", prev, capN)
 			}
 			if st.FinalUsed {
 				return nil, fail(3, "the final verification round of '%s' is already used. A person decides (rework by hand or raise SPEC_REVIEW_MAX_ROUNDS).", id)
 			}
-		} else if prev >= c.MaxRounds {
-			return nil, fail(3, "round cap reached for '%s' (%d of SPEC_REVIEW_MAX_ROUNDS=%d used). No further automatic round: a person decides (rework the document by hand or raise SPEC_REVIEW_MAX_ROUNDS).", id, prev, c.MaxRounds)
+		} else if prev >= capN {
+			return nil, fail(3, "round cap reached for '%s' (%d of %d used). No further automatic round: a person decides (rework the document by hand, or `sdkit review raise-cap %s --to N --why \"...\"` after the user agrees).", id, prev, capN, id)
 		}
 		st.ID, st.Target, st.ContentHash, st.Pending, st.BegunAt = id, rel, h, true, now()
+		st.Files, _ = FileHashes(t)
+		ids := lint.ACIDs(t)
+		grow := ""
+		if prev > 0 && len(st.ACs) > 0 {
+			old := map[string]bool{}
+			for _, a := range st.ACs {
+				old[a] = true
+			}
+			n := 0
+			for _, a := range ids {
+				if !old[a] {
+					n++
+				}
+			}
+			if c.MaxNewACs > 0 && n > c.MaxNewACs {
+				grow = fmt.Sprintf("\nreview: SCOPE GROWTH: %d AC ids are new since the last round (limit %d, now %d ACs). New criteria are new requirements, not corrections: ask the analyst whether each is wanted before the reviewers see them.", n, c.MaxNewACs, len(ids))
+			}
+		}
+		st.ACs = ids
 		if final {
 			st.FinalUsed = true
-			msg = fmt.Sprintf("review: final verification round opened for '%s' at %s (outside the cap of %d; the only one)", id, h, c.MaxRounds)
+			msg = fmt.Sprintf("review: final verification round opened for '%s' at %s (outside the cap of %d; the only one)", id, h, capN)
 		} else {
 			st.Round = prev + 1
-			msg = fmt.Sprintf("review: round %d of %d opened for '%s' at %s", st.Round, c.MaxRounds, id, h)
+			msg = fmt.Sprintf("review: round %d of %d opened for '%s' at %s", st.Round, capN, id, h)
 		}
+		msg += grow
 		return []byte(compact(st) + "\n"), nil
 	})
 	return msg, err
 }
 
 // Record stores the round's evidence, bound to the hash seen at Begin.
-func (c Ctx) Record(id, verdict, isolation, findings string) (string, error) {
+// RecordOpt carries the optional parts of a record: Set is "full" (default) or "cheap"; Roles the reviewer runs the round took.
+type RecordOpt struct {
+	Set   string
+	Roles int
+}
+
+func (c Ctx) Record(id, verdict, isolation, findings string, opts ...RecordOpt) (string, error) {
+	var o RecordOpt
+	if len(opts) > 0 {
+		o = opts[0]
+	}
+	if o.Set == "" {
+		o.Set = "full"
+	}
+	if o.Set != "full" && o.Set != "cheap" {
+		return "", fail(2, "--set must be full|cheap")
+	}
 	switch verdict {
 	case "PASS", "BLOCK", "PARTIAL", "NOT_RUN":
 	default:
@@ -402,7 +482,22 @@ func (c Ctx) Record(id, verdict, isolation, findings string) (string, error) {
 			return nil, fail(2, "PASS contradicts the findings: BLOCKER/MAJOR still open or accepted without a valid acceptance: %s", strings.Join(bl, " "))
 		}
 		st.Pending = false
-		st.Evidence = &Evidence{verdict, isolation, st.ContentHash, st.Round, now(), fj}
+		st.Evidence = &Evidence{Verdict: verdict, Isolation: isolation, ContentHash: st.ContentHash, Round: st.Round, At: now(), Findings: fj, Set: o.Set, Roles: o.Roles, Files: st.Files}
+		note := Note{Round: st.Round, At: now(), Verdict: verdict, Set: o.Set, Roles: o.Roles, ACs: len(st.ACs)}
+		for _, f := range fj {
+			if f.Disposition != "open" {
+				continue
+			}
+			switch f.Severity {
+			case "BLOCKER":
+				note.Blocker++
+			case "MAJOR":
+				note.Major++
+			default:
+				note.Minor++
+			}
+		}
+		st.History = append(st.History, note)
 		msg = fmt.Sprintf("review: %s (%s) recorded for '%s' round %d, bound to %s", verdict, isolation, id, st.Round, st.ContentHash)
 		return []byte(compact(st) + "\n"), nil
 	})
@@ -457,6 +552,8 @@ func (c Ctx) Check(id string) Result {
 		return no("NOT_RUN", "isolation is '%s', not fresh", ev.Isolation)
 	case ev.Verdict != "PASS":
 		return no(ev.Verdict, "latest verdict is %s", ev.Verdict)
+	case ev.Set == "cheap":
+		return no("PARTIAL", "the PASS came from the cheap first pass; this content still needs a round with the full reviewer set (record --set full)")
 	}
 	if bl := blocking(ev.Findings, accFile(t)); len(bl) > 0 {
 		return no("OPEN", "BLOCKER/MAJOR still open: %s", strings.Join(bl, " "))
@@ -518,6 +615,8 @@ func (c Ctx) Accept(id, fid, who, why string) (string, error) {
 
 // Rubric is a resolved review.d/<artifact>.env.
 type Rubric struct {
+	Round            int    // 0: the full rubric; N>0: the plan of round N (REVIEWERS_R<N> when the rubric sets it)
+	Set, Tier        string // "full" or "cheap"; Tier is TIER_R<N> (a cost tier name), "" when not set
 	Artifact, Source string
 	Reviewers        []string
 	Standards        [][2]string // reviewer, standard, in file order
@@ -525,7 +624,12 @@ type Rubric struct {
 }
 
 // Plan resolves the rubric of an artifact: <project-dir>/review.d/<artifact>.env, else the kit's template.
-func (c Ctx) Plan(art string) (*Rubric, error) {
+func (c Ctx) Plan(art string) (*Rubric, error) { return c.PlanRound(art, 0) }
+
+// PlanRound is Plan for round n: a rubric may set REVIEWERS_R1="structural" and TIER_R1=light for a cheap first pass;
+// without such a key the round uses the full REVIEWERS. A round whose reviewers are not the full set is "cheap": its PASS
+// never lets publish through (record --set cheap).
+func (c Ctx) PlanRound(art string, n int) (*Rubric, error) {
 	src := filepath.Join(c.Root, c.KitDir, "review.d", art+".env")
 	data, err := os.ReadFile(src)
 	if err != nil {
@@ -538,9 +642,14 @@ func (c Ctx) Plan(art string) (*Rubric, error) {
 	s.Quiet = true
 	s.LoadBytes(art+".env", data)
 	get := func(k string) string { v, _ := s.Raw(k); return v }
-	r := &Rubric{Artifact: art, Source: src, Reviewers: strings.Fields(get("REVIEWERS")), Context: strings.Fields(get("CONTEXT"))}
+	r := &Rubric{Round: n, Set: "full", Artifact: art, Source: src, Reviewers: strings.Fields(get("REVIEWERS")), Context: strings.Fields(get("CONTEXT"))}
 	if len(r.Reviewers) == 0 {
 		return nil, fail(2, "%s sets no REVIEWERS", src)
+	}
+	if n > 0 {
+		if cheap := strings.Fields(get(fmt.Sprintf("REVIEWERS_R%d", n))); len(cheap) > 0 {
+			r.Reviewers, r.Set, r.Tier = cheap, "cheap", get(fmt.Sprintf("TIER_R%d", n))
+		}
 	}
 	for _, p := range strings.Fields(get("STANDARDS")) {
 		i := strings.Index(p, "=")
@@ -571,7 +680,11 @@ func (r *Rubric) Text() string {
 	for _, p := range r.Standards {
 		st = append(st, p[0]+"="+p[1])
 	}
-	return fmt.Sprintf("artifact:  %s\nsource:    %s\nreviewers: %s\nstandards: %s\ncontext:   %s\n", r.Artifact, r.Source, strings.Join(r.Reviewers, " "), or(st), or(r.Context))
+	extra := ""
+	if r.Round > 0 {
+		extra = fmt.Sprintf("round:     %d (%s set%s)\n", r.Round, r.Set, map[bool]string{true: ", tier " + r.Tier, false: ""}[r.Tier != ""])
+	}
+	return fmt.Sprintf("artifact:  %s\nsource:    %s\n%sreviewers: %s\nstandards: %s\ncontext:   %s\n", r.Artifact, r.Source, extra, strings.Join(r.Reviewers, " "), or(st), or(r.Context))
 }
 
 // JSON is the indented JSON form, keys in the order the bash printed them.

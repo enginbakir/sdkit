@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"strconv"
 
 	"github.com/wecii/sdkit/internal/cli"
 	"github.com/wecii/sdkit/internal/lint"
@@ -12,7 +13,7 @@ import (
 
 func init() { cli.Register("review", runReview) }
 
-const reviewUsage = "usage: sdkit review plan <artifact> [--json] | hash <id> | begin <id> [--final] | record <id> --verdict V --isolation I [--findings F] | check <id> | lint <id> [--target T] | accept <id> <finding-id> [--who W] --why Y"
+const reviewUsage = "usage: sdkit review plan <artifact> [--round N] [--json] | status <id> | changed <id> | settle <id> <topic> --why Y [--who W] | settled <id> [--prompt] | raise-cap <id> --to N --why Y [--who W] | hash <id> | begin <id> [--final] | record <id> --verdict V --isolation I [--findings F] [--set full|cheap] [--roles N] | check <id> | lint <id> [--target T] | accept <id> <finding-id> [--who W] --why Y"
 
 func runReview(args []string) int {
 	usage := func() int { fmt.Fprintln(os.Stderr, reviewUsage); return cli.ExitUsage }
@@ -60,11 +61,12 @@ func runReview(args []string) int {
 	id := arg(0)
 	switch cmd {
 	case "plan":
-		js := false
-		if !review.OkName(id) || !flags(1, nil, map[string]*bool{"--json": &js}) {
+		js, rn := false, ""
+		if !review.OkName(id) || !flags(1, map[string]*string{"--round": &rn}, map[string]*bool{"--json": &js}) {
 			return usage()
 		}
-		r, err := c.Plan(id)
+		n, _ := strconv.Atoi(rn)
+		r, err := c.PlanRound(id, n)
 		if err != nil {
 			return done("", err)
 		}
@@ -89,11 +91,57 @@ func runReview(args []string) int {
 		}
 		return done(t, err)
 	case "record":
-		var v, iso, ff string
-		if !review.OkName(id) || !flags(1, map[string]*string{"--verdict": &v, "--isolation": &iso, "--findings": &ff}, nil) {
+		var v, iso, ff, set, roles string
+		if !review.OkName(id) || !flags(1, map[string]*string{"--verdict": &v, "--isolation": &iso, "--findings": &ff, "--set": &set, "--roles": &roles}, nil) {
 			return usage()
 		}
-		return done(c.Record(id, v, iso, ff))
+		nr, _ := strconv.Atoi(roles)
+		return done(c.Record(id, v, iso, ff, review.RecordOpt{Set: set, Roles: nr}))
+	case "status":
+		if !review.OkName(id) {
+			return usage()
+		}
+		fmt.Println(c.Status(id))
+		return cli.ExitOK
+	case "changed":
+		if !review.OkName(id) {
+			return usage()
+		}
+		l, same, err := c.Changed(id)
+		if err != nil {
+			return done("", err)
+		}
+		for _, x := range l {
+			fmt.Println(x)
+		}
+		fmt.Printf("review: %d file(s) to review, %d unchanged since the last evidence (their earlier result stands)\n", len(l), same)
+		return cli.ExitOK
+	case "settle":
+		var why, who string
+		if !review.OkName(id) || arg(1) == "" || !flags(2, map[string]*string{"--why": &why, "--who": &who}, nil) {
+			return usage()
+		}
+		return done(c.Settle(id, arg(1), why, who))
+	case "settled":
+		pr := false
+		if !review.OkName(id) || !flags(1, nil, map[string]*bool{"--prompt": &pr}) {
+			return usage()
+		}
+		if pr {
+			fmt.Print(c.SettledPrompt(id))
+		} else {
+			for _, l := range c.Settled(id) {
+				fmt.Println(l)
+			}
+		}
+		return cli.ExitOK
+	case "raise-cap":
+		var to, why, who string
+		if !review.OkName(id) || !flags(1, map[string]*string{"--to": &to, "--why": &why, "--who": &who}, nil) {
+			return usage()
+		}
+		nto, _ := strconv.Atoi(to)
+		return done(c.RaiseCap(id, nto, why, who))
 	case "lint":
 		var tgt string
 		if !review.OkName(id) || !flags(1, map[string]*string{"--target": &tgt}, nil) {
