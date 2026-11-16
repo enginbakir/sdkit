@@ -28,7 +28,7 @@ import (
 	"github.com/wecii/sdkit/internal/review"
 )
 
-const specUsage = "usage: sdkit spec change new|refresh|status <id> ... | drift <id> [slug] | check <id> | apply <id> [slug...] | init-meta <id> | hash <id> | status <id> | changed <id> | branch <id> | publish <id> --title T --body-file F [--breaking] | promote <id> | approved-sha <id> --sha S"
+const specUsage = "usage: sdkit spec change new|refresh|status <id> ... | drift <id> [slug] | check <id> | apply <id> [slug...] | init-meta <id> | hash <id> | status <id> | changed <id> | branch <id> | next <id> | publish <id> --title T --body-file F [--breaking] | promote <id> | approved-sha <id> --sha S"
 
 // env is one invocation: the project, its settings and the two streams.
 type env struct {
@@ -538,6 +538,20 @@ func (e *env) dispatch(verb string, a []string) (rc int) {
 			return int(e.die("cannot switch to spec/%s (never forced: resolve by hand)", id))
 		}
 		e.say("spec/%s", id)
+		return 0
+	case "next":
+		if len(a) != 1 || !okname(a[0]) {
+			return int(e.usage())
+		}
+		st := Next(e.root, a[0])
+		who := "agent"
+		if st.Human {
+			who = "person"
+		}
+		e.say("next (%s): %s", who, st.Action)
+		if st.Why != "" {
+			e.say("why: %s", st.Why)
+		}
 		return 0
 	case "publish":
 		return e.publish(id, a)

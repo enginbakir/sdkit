@@ -31,3 +31,16 @@ func TestUpsertErrorSaysWhatIsExpected(t *testing.T) {
 		t.Fatalf("the message must name what to pass: %v", err)
 	}
 }
+
+func TestSupersedeNeedsConfirmationAndValidKeys(t *testing.T) {
+	c := &Config{SupersededStatus: "Won't Do"}
+	plan, err := c.Supersede([]string{"P-1", "P-2"}, "P-9", false) // a dry run touches nothing (no network config at all)
+	if err != nil || len(plan) != 2 || !strings.Contains(plan[0], "move to Won't Do") {
+		t.Fatalf("%v %v", plan, err)
+	}
+	for _, bad := range [][]string{{"nope"}, {"P-9"}} {
+		if _, err := c.Supersede(bad, "P-9", false); err == nil {
+			t.Errorf("%v must be refused", bad)
+		}
+	}
+}

@@ -73,3 +73,28 @@ func TestMaskGit(t *testing.T) {
 		t.Fatal(got)
 	}
 }
+
+func TestNext(t *testing.T) {
+	root := t.TempDir()
+	w := func(p, c string) {
+		_ = os.MkdirAll(filepath.Dir(filepath.Join(root, p)), 0o755)
+		_ = os.WriteFile(filepath.Join(root, p), []byte(c), 0o644)
+	}
+	w(".sdkit/sdkit.env", "ANALYST_LANGUAGE=en\n")
+	step := func() Step { return Next(root, "x") }
+	if s := step(); !s.Human || !strings.Contains(s.Action, "no pre-spec") {
+		t.Fatalf("%+v", s)
+	}
+	w("prespec/x.md", "raw")
+	if s := step(); !s.Human || !strings.Contains(s.Action, "ONE batch") {
+		t.Fatalf("questions are collected once, up front: %+v", s)
+	}
+	w(".sdkit/work/spec-draft/x/prd.md", "#### Scenario: AC-X-1\n#### Scenario: AC-X-1\n")
+	if s := step(); s.Human || !strings.Contains(s.Action, "lint error") {
+		t.Fatalf("mechanical errors are fixed before any reviewer runs: %+v", s)
+	}
+	w(".sdkit/work/spec-draft/x/prd.md", "#### Scenario: AC-X-1\n")
+	if s := step(); s.Human || !strings.Contains(s.Action, "review round") {
+		t.Fatalf("%+v", s)
+	}
+}

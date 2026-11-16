@@ -132,3 +132,38 @@ func (c *Config) ChangeRequest(key, in string) (string, error) {
 	}
 	return crk, nil
 }
+
+// Supersede marks old subtasks as replaced by another: a comment on each, then the transition to JIRA_SUPERSEDED_STATUS when
+// that is set. Nothing is deleted. With !apply it only returns what it would do (a person confirms first).
+func (c *Config) Supersede(old []string, by string, apply bool) (plan []string, err error) {
+	if !reKey.MatchString(by) {
+		return nil, fail(2, "--by %q is not a Jira key (e.g. PROJ-123)", by)
+	}
+	for _, k := range old {
+		if !reKey.MatchString(k) {
+			return nil, fail(2, "%q is not a Jira key (e.g. PROJ-123)", k)
+		}
+		if k == by {
+			return nil, fail(2, "%s cannot supersede itself", k)
+		}
+		line := k + ": comment \"superseded by " + by + "\""
+		if c.SupersededStatus != "" {
+			line += ", then move to " + c.SupersededStatus
+		}
+		plan = append(plan, line)
+	}
+	if !apply {
+		return plan, nil
+	}
+	for _, k := range old {
+		if err := c.Comment(k, "Superseded by "+by+": its acceptance criteria moved there when the task plan was regrouped. Nothing was deleted."); err != nil {
+			return plan, err
+		}
+		if c.SupersededStatus != "" {
+			if err := c.Transition(k, c.SupersededStatus); err != nil {
+				return plan, err
+			}
+		}
+	}
+	return plan, nil
+}

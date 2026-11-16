@@ -13,7 +13,7 @@ import (
 
 func init() { cli.Register("jira", runJira) }
 
-const jiraUsage = "usage: sdkit jira validate-task|fetch|deps-ready|upsert|comment|transition|change-request ..."
+const jiraUsage = "usage: sdkit jira validate-task|fetch|deps-ready|upsert|comment|transition|change-request|supersede ..."
 
 func runJira(args []string) int {
 	if len(args) == 0 {
@@ -93,6 +93,35 @@ func runJira(args []string) int {
 		}
 		if err = c.Transition(a[0], a[1]); err == nil {
 			out = map[string]any{"key": a[0], "transitioned": a[1]}
+		}
+	case "supersede":
+		// supersede KEY... --by KEY [--yes]: without --yes it only prints what it would do
+		var olds []string
+		by, yes := "", false
+		for i := 0; i < len(a); i++ {
+			switch {
+			case a[i] == "--by" && i+1 < len(a):
+				by, i = a[i+1], i+1
+			case a[i] == "--yes":
+				yes = true
+			default:
+				olds = append(olds, a[i])
+			}
+		}
+		if len(olds) == 0 || by == "" {
+			return usage("supersede KEY... --by KEY [--yes]")
+		}
+		var plan []string
+		plan, err = c.Supersede(olds, by, yes)
+		if err == nil {
+			for _, l := range plan {
+				fmt.Println("jira: " + l)
+			}
+			if !yes {
+				fmt.Fprintln(os.Stderr, "jira: nothing was changed. Ask the person, then run it again with --yes (no issue is deleted).")
+				return cli.ExitUsage
+			}
+			out = map[string]any{"superseded": olds, "by": by}
 		}
 	case "change-request":
 		if arg(0) == "" || arg(1) == "" {

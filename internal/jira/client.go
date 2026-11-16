@@ -21,11 +21,11 @@ import (
 
 // Config is the Jira settings: process environment first, then sdkit.local.env, then sdkit.env.
 type Config struct {
-	Base, Egress, User, Version, SearchPath, Project, SubtaskType, ChangeType, LinkType, Token string
-	TokenErr                                                                                   error // deferred so validate-task needs no token
-	Timeout                                                                                    time.Duration
-	HTTP                                                                                       *http.Client
-	AuditLog                                                                                   string // the audit trail written before every request ("" = none, nothing is sent)
+	Base, Egress, User, Version, SearchPath, Project, SubtaskType, ChangeType, LinkType, Token, SupersededStatus string
+	TokenErr                                                                                                     error // deferred so validate-task needs no token
+	Timeout                                                                                                      time.Duration
+	HTTP                                                                                                         *http.Client
+	AuditLog                                                                                                     string // the audit trail written before every request ("" = none, nothing is sent)
 }
 
 var reVar = regexp.MustCompile(`^[A-Za-z0-9_]+$`)
@@ -45,7 +45,7 @@ func Load(root string, getenv func(string) string) *Config {
 	}
 	c := &Config{Base: get("JIRA_BASE_URL", ""), Egress: get("JIRA_EGRESS", ""), User: get("JIRA_USER", ""), Version: get("JIRA_API_VERSION", "2"),
 		SearchPath: get("JIRA_SEARCH_PATH", ""), Project: get("JIRA_PROJECT", ""), SubtaskType: get("JIRA_SUBTASK_TYPE", "Sub-task"),
-		ChangeType: get("JIRA_CHANGE_TYPE", "Task"), LinkType: get("JIRA_LINK_TYPE", "Blocks"), HTTP: http.DefaultClient, AuditLog: audit.Path(p.Dir())}
+		ChangeType: get("JIRA_CHANGE_TYPE", "Task"), LinkType: get("JIRA_LINK_TYPE", "Blocks"), SupersededStatus: get("JIRA_SUPERSEDED_STATUS", ""), HTTP: http.DefaultClient, AuditLog: audit.Path(p.Dir())}
 	secs, _ := strconv.Atoi(get("JIRA_TIMEOUT_S", "60"))
 	c.Timeout = time.Duration(max(secs, 1)) * time.Second
 	tv := get("JIRA_TOKEN_ENV", "JIRA_API_TOKEN")
