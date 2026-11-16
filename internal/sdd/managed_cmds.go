@@ -83,7 +83,7 @@ func (e *Env) mStart(args []string) int {
 	kept := false
 	if _, err := os.Stat(e.abs(t.Proposal)); err == nil {
 		kept = true
-	} else if err := writeDoD(e.abs(t.Proposal), c); err != nil {
+	} else if err := writeDoD(e.abs(t.Proposal), c, e.specScenarios(t.SpecID, t.SpecSha)); err != nil {
 		return e.die("cannot write " + t.Proposal)
 	}
 	at := now()
@@ -265,7 +265,7 @@ func (e *Env) mRevalidate(args []string) int {
 	if b, err := os.ReadFile(prop); err == nil {
 		_ = os.WriteFile(prop+".prev", b, 0o644)
 	}
-	if err := writeDoD(prop, c); err != nil {
+	if err := writeDoD(prop, c, e.specScenarios(tstr(c, "specId"), tstr(c, "specSha"))); err != nil {
 		return e.die("cannot write " + t.Proposal)
 	}
 	cur := t.Phase

@@ -39,7 +39,7 @@ If `project.md` has no risk rubric, stop and ask the user to define one; never i
 
 ## Managed mode (SDD_MANAGED=on)
 
-When `sdkit.env` has `SDD_MANAGED=on` (developer env) the task is a Jira subtask and the approved spec is read-only: read `references/managed.md` now; it replaces steps 0, 1, 3 and 8 below (intake→done mapped to Jira). Open the task with `<sdd> start --ticket <KEY>`; never regenerate the PRD, architecture or spec. A spec defect is `<sdd> block --spec-change` (a change request); resume only with `<sdd> revalidate --sha <approved revision>`.
+When `sdkit.env` has `SDD_MANAGED=on` (developer env) the task is a Jira subtask and the approved spec is read-only: read `references/managed.md` now; it replaces steps 0, 1, 2, 3 and 8 below (intake→done mapped to Jira). The task and the spec already hold scope, acceptance criteria and risk, so nothing is re-derived: no analyst run, no plan interview, no new proposal. `<sdd> start` seeds `proposal.md` from the spec's own scenarios and you move on. Open the task with `<sdd> start --ticket <KEY>`; never regenerate the PRD, architecture or spec. A spec defect is `<sdd> block --spec-change` (a change request); resume only with `<sdd> revalidate --sha <approved revision>`.
 
 ## 0. Intake: analyst and risk label
 
