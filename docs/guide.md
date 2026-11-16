@@ -628,6 +628,7 @@ Details, flows and limits: [role-aware.md](role-aware.md).
 | `PRESPEC_DIR` | `prespec` | Git-ignored directory with raw pre-specs (analyst). Never committed |
 | `SPECS_DIR` | `specs` | Specs directory: the specs repo's spec folder (analyst) or the read-only approved-specs submodule (developer) |
 | `SPEC_REVIEW_MAX_ROUNDS` | `4` | Most `spec-reviewer` rounds per spec before a human decides. `AGENT_SPEC_REVIEWER_TIER` sets its tier (`standard`) |
+| `TASKS_TARGET_MIN`, `TASKS_TARGET_MAX`, `TASKS_SINGLE_AC_MAX`, `TASKS_CHAIN_MAX` | `12`, `20`, `3`, `3` | Size rules of `sdkit tasks plan-check` (wanted task count, most single-AC tasks, longest dependsOn chain); it warns, and errors when project.md's risk rubric still has a TODO |
 | `ANALYST_LANGUAGE` | `tr` | Language of the `analyst` role's prose and of the specs `generate-specs` writes (ISO 639-1 code or name). Markers, AC ids, verdicts and file names stay English |
 | `SDD_MANAGED` | `on` in the developer env, else empty | Managed execution: `sdkit sdd start --ticket KEY` takes the task from Jira and pins the approved spec revision |
 | `TRACKER` | empty | `jira` enables the keys below (read only then) |

@@ -23,6 +23,7 @@ type Task struct {
 	ACs        []string `json:"acceptanceCriteria"`
 	DependsOn  []string `json:"dependsOn"`
 	Scope      []string `json:"scope"`
+	BlockedBy  []string `json:"blockedBy"` // gates (open questions) the task waits for; shown as "Blocked: ..." in its summary
 	ExternalID string   `json:"-"`
 	Key        string   `json:"-"`
 }
