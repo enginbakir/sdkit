@@ -23,6 +23,10 @@ To see whether you are up to date: `<project-dir>/.scaffold-version` is the kit 
 
 There is no `<kit>/bin/upgrade.sh` any more: the kit is one binary and a checkout of it is not needed.
 
+## 2.1.0 -> 2.1.1: `spec promote` opens the PR
+
+No manual step. `sdkit spec promote <id>` now commits the approval, pushes the branch and opens the promote PR itself (it checks that the PR host is ready first, and rolls the commit back when the push fails). It used to stop after the local commit.
+
 ## 2.0.0 -> 2.1.0: fewer review rounds, smaller task plans
 
 No manual step; `sdkit upgrade` appends the new settings to `sdkit.env`. A repo whose `sdkit.env` does not set them takes the shipped defaults, and three of those are **on**:
