@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/wecii/sdkit/internal/envfile"
+	"github.com/wecii/sdkit/internal/lint"
 	"github.com/wecii/sdkit/internal/project"
 	"github.com/wecii/sdkit/internal/store"
 )
@@ -44,6 +45,9 @@ type Ctx struct {
 	JiraUser               string
 	// IdempotentBegin (REVIEW_BEGIN_IDEMPOTENT=1): begin on content that already has its evidence, or an open round, uses no round.
 	IdempotentBegin bool
+	// RequireLint (REVIEW_REQUIRE_LINT=1): begin refuses while `review lint` has errors, so no model round is spent on mechanical mistakes.
+	RequireLint bool
+	Lint        lint.Config
 }
 
 // Load reads the settings of the project at root.
@@ -60,7 +64,26 @@ func Load(root string) Ctx {
 		c.JiraUser = os.Getenv("JIRA_USER")
 	}
 	c.IdempotentBegin = s.Bool("REVIEW_BEGIN_IDEMPOTENT")
+	c.RequireLint = s.Bool("REVIEW_REQUIRE_LINT")
+	c.Lint = lint.Config{RefPrefixes: s.List("LINT_REF_PREFIXES"), GatePrefix: s.String("LINT_GATE_PREFIX"), Withdrawn: lower(s.List("LINT_WITHDRAWN_WORDS")),
+		MarkerWords: lower(s.List("LINT_MARKER_WORDS")), ClosedWords: lower(s.List("LINT_CLOSED_WORDS"))}
 	return c
+}
+
+func lower(l []string) []string {
+	for i := range l {
+		l[i] = strings.ToLower(l[i])
+	}
+	return l
+}
+
+// LintTarget runs the mechanical checks on the document of id and returns the problems.
+func (c Ctx) LintTarget(id, override string) ([]lint.Problem, error) {
+	t, err := c.target(id, override)
+	if err != nil {
+		return nil, err
+	}
+	return lint.Run(t, c.Lint)
 }
 
 func (c Ctx) work(id string) string      { return filepath.Join(c.Root, c.KitDir, "work", "review", id) }
@@ -295,6 +318,21 @@ func (c Ctx) Begin(id, target string, final bool) (string, error) {
 	h, err := Hash(t)
 	if err != nil {
 		return "", err
+	}
+	if c.RequireLint && !final {
+		ps, err := lint.Run(t, c.Lint)
+		if err != nil {
+			return "", fail(2, "lint: %v", err)
+		}
+		if n := lint.Errors(ps); n > 0 {
+			var sb strings.Builder
+			for i, p := range ps {
+				if p.Severity == "error" && i < 25 {
+					sb.WriteString("\n  " + p.String())
+				}
+			}
+			return "", fail(1, "REVIEW_REQUIRE_LINT: %d mechanical error(s) in '%s'; fix them (no model round is spent on these) and run begin again:%s", n, id, sb.String())
+		}
 	}
 	rel := t
 	if r, err := filepath.Rel(c.Root, t); err == nil && !strings.HasPrefix(r, "..") && !filepath.IsAbs(r) {
