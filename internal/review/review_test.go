@@ -22,3 +22,22 @@ func TestStatus(t *testing.T) {
 		t.Fatal(got)
 	}
 }
+
+// With REVIEW_REQUIRE_LINT a mechanical error stops begin before a round is used.
+func TestBeginRequiresLint(t *testing.T) {
+	root := t.TempDir()
+	doc := filepath.Join(root, "spec.md")
+	os.WriteFile(doc, []byte("#### Scenario: AC-X-1\n#### Scenario: AC-X-1\n"), 0o644)
+	c := Load(root)
+	c.RequireLint = true
+	if _, err := c.Begin("s", doc, false); err == nil {
+		t.Fatal("duplicate AC id must stop begin")
+	}
+	if st, _ := readState(c.stateFile("s")); st.Round != 0 {
+		t.Fatalf("round used: %d", st.Round)
+	}
+	os.WriteFile(doc, []byte("#### Scenario: AC-X-1\n#### Scenario: AC-X-2\n"), 0o644)
+	if _, err := c.Begin("s", doc, false); err != nil {
+		t.Fatal(err)
+	}
+}

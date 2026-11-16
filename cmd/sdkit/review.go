@@ -5,13 +5,14 @@ import (
 	"os"
 
 	"github.com/wecii/sdkit/internal/cli"
+	"github.com/wecii/sdkit/internal/lint"
 	"github.com/wecii/sdkit/internal/project"
 	"github.com/wecii/sdkit/internal/review"
 )
 
 func init() { cli.Register("review", runReview) }
 
-const reviewUsage = "usage: sdkit review plan <artifact> [--json] | hash <id> | begin <id> [--final] | record <id> --verdict V --isolation I [--findings F] | check <id> | accept <id> <finding-id> [--who W] --why Y"
+const reviewUsage = "usage: sdkit review plan <artifact> [--json] | hash <id> | begin <id> [--final] | record <id> --verdict V --isolation I [--findings F] | check <id> | lint <id> [--target T] | accept <id> <finding-id> [--who W] --why Y"
 
 func runReview(args []string) int {
 	usage := func() int { fmt.Fprintln(os.Stderr, reviewUsage); return cli.ExitUsage }
@@ -93,6 +94,24 @@ func runReview(args []string) int {
 			return usage()
 		}
 		return done(c.Record(id, v, iso, ff))
+	case "lint":
+		var tgt string
+		if !review.OkName(id) || !flags(1, map[string]*string{"--target": &tgt}, nil) {
+			return usage()
+		}
+		ps, err := c.LintTarget(id, tgt)
+		if err != nil {
+			return done("", err)
+		}
+		for _, p := range ps {
+			fmt.Println(p)
+		}
+		if n := lint.Errors(ps); n > 0 {
+			fmt.Printf("lint: %d error(s), %d warning(s)\n", n, len(ps)-n)
+			return cli.ExitFail
+		}
+		fmt.Printf("lint: clean (%d warning(s))\n", len(ps))
+		return cli.ExitOK
 	case "check":
 		if !review.OkName(id) {
 			return usage()
