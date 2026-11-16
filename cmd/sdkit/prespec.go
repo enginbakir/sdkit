@@ -11,8 +11,14 @@ import (
 func init() { cli.Register("prespec", runPrespec) }
 
 func runPrespec(args []string) int {
+	if len(args) == 2 && args[0] == "gaps" && args[1] != "" {
+		if !setup.PrespecGaps(args[1], func(s string) { fmt.Println(s) }) {
+			return cli.ExitFail
+		}
+		return cli.ExitOK
+	}
 	if len(args) != 2 || args[0] != "check" || args[1] == "" {
-		fmt.Fprintln(os.Stderr, "usage: sdkit prespec check <name>")
+		fmt.Fprintln(os.Stderr, "usage: sdkit prespec check <name> | gaps <role-answer-file>")
 		return cli.ExitUsage
 	}
 	wd, _ := os.Getwd()

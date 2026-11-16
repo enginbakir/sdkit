@@ -60,6 +60,7 @@ README.md ->
 .codex/agents/developer.toml
 .codex/agents/devsecops.toml
 .codex/agents/engineer.toml
+.codex/agents/prespec-gaps.toml
 .codex/agents/reviewer.toml
 .codex/agents/scout.toml
 .codex/agents/security-auditor.toml

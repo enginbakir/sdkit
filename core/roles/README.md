@@ -57,9 +57,10 @@ git hooks in `adapters/git/` everywhere else.
 | `reviewer` | read-only | standard | Rule and pitfall review of a diff |
 | `security-auditor` | read-only | standard | Attack-oriented review of a diff |
 | `verifier` | read-only | standard | Independent Definition-of-Done gate |
+| `prespec-gaps` | read-only | light | Scans a pre-spec before the draft and classes every open point as decision, fact or default (`sdkit prespec gaps`); analyst environment |
 | `spec-reviewer` | read-only | standard | Independent review of a spec document (PRD, feature spec, ADR) against a `review.d/` checklist; analyst environment |
 
-Eleven roles are defined; `orchestrator` is a session role, so ten subagent roles plus the generated `verifier-deep` (strong tier, used for `high` risk) give eleven files per host.
+Twelve roles are defined; `orchestrator` is a session role, so eleven subagent roles plus the generated `verifier-deep` (strong tier, used for `high` risk) give twelve files per host.
 Roles never call other roles: they end with `NEEDS-LOOKUP: <question>` and the orchestrator runs `scout`. `sdkit run-role` can run any role as a separate process on any host.
 Every subagent keeps its answer to 15 lines plus its structured block. A writing role puts its long form at the handoff's `OUT:` path; a read-only role cannot, so the orchestrator stores its answer (`sdkit run-role --out`).
 

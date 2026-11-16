@@ -20,6 +20,10 @@ config_file = "agents/devsecops.toml"
 description = "Technical design role. Turns an agreed plan into a design with options and trade-offs, an ADR when a decision is made, a race/ordering scenario for high-risk work, and a test strategy. Use before implementation, never to implement."
 config_file = "agents/engineer.toml"
 
+[agents.prespec-gaps]
+description = "Read-only scan of a pre-spec before any draft exists; lists every open point as a decision, a fact or a default so the analyst answers once, up front. Analyst environment (generate-specs step 2)."
+config_file = "agents/prespec-gaps.toml"
+
 [agents.reviewer]
 description = "Read-only code reviewer. Reviews a diff against the project's rules and known pitfalls and reports violations. Use for a second opinion before a PR; it never edits code."
 config_file = "agents/reviewer.toml"
