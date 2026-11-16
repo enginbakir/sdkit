@@ -81,10 +81,22 @@ func Run(env Env, args []string) int {
 	case "changes":
 		fmt.Fprint(r.Out, lines(r.revChanges()))
 	case "acs":
-		if len(rest) > 0 && rest[0] == "--revision" {
+		rev, inc := false, false
+		for _, f := range rest {
+			switch f {
+			case "--revision":
+				rev = true
+			case "--include-withdrawn":
+				inc = true
+			default:
+				fmt.Fprintln(r.Err, "tasks: usage: acs <tasks.json> [--revision] [--include-withdrawn]")
+				return exitUsage
+			}
+		}
+		if rev {
 			fmt.Fprint(r.Out, lines(r.revisionACs()))
 		} else {
-			fmt.Fprint(r.Out, lines(r.allACs()))
+			fmt.Fprint(r.Out, lines(r.allACs(inc)))
 		}
 	case "trace":
 		if len(rest) == 0 || rest[0] == "" {
@@ -103,6 +115,12 @@ func Run(env Env, args []string) int {
 		}
 		if len(set) == 0 {
 			return die(exitFail, "empty AC list")
+		}
+		// A withdrawn AC is not tested, so it needs no task; --include-withdrawn keeps the old, stricter list.
+		if len(rest) < 2 || rest[1] != "--include-withdrawn" {
+			for w := range withdrawnIDs(r.text(true)) {
+				delete(set, w)
+			}
 		}
 		ok, problems := d.Trace(keys(set))
 		for _, p := range problems {
@@ -216,10 +234,30 @@ func (r *runner) text(withChanges bool) string {
 
 var acToken = regexp.MustCompile(`\bAC-[A-Za-z0-9_]+(-[A-Za-z0-9_]+)*(\.[A-Za-z0-9_]+)*`)
 
-func (r *runner) allACs() []string {
+// withdrawnRe matches a scenario title that withdraws an AC: `#### Scenario: AC-x-1 (withdrawn)` (optionally `- title`).
+var withdrawnRe = regexp.MustCompile(`(?m)^####[ \t]+Scenario:[ \t]*(` + acToken.String() + `)[ \t]*\([ \t]*withdrawn\b[^)]*\)`)
+
+// withdrawnIDs are the AC ids the spec text marks withdrawn in a scenario title; prose that merely mentions an id does not count.
+func withdrawnIDs(text string) map[string]bool {
+	out := map[string]bool{}
+	for _, m := range withdrawnRe.FindAllStringSubmatch(text, -1) {
+		out[m[1]] = true
+	}
+	return out
+}
+
+// allACs: every AC id in the spec text, without the withdrawn ones unless include.
+func (r *runner) allACs(include bool) []string {
+	text := r.text(true)
+	w := map[string]bool{}
+	if !include {
+		w = withdrawnIDs(text)
+	}
 	set := map[string]bool{}
-	for _, a := range acToken.FindAllString(r.text(true), -1) {
-		set[a] = true
+	for _, a := range acToken.FindAllString(text, -1) {
+		if !w[a] {
+			set[a] = true
+		}
 	}
 	return keys(set)
 }
@@ -249,7 +287,7 @@ func (r *runner) revChanges() []string {
 	return out
 }
 
-// revisionACs: the active ACs that the changes of this revision added or modified.
+// revisionACs: the active ACs (a `(withdrawn)` title never matches the scenario pattern below) that the changes of this revision added or modified.
 func (r *runner) revisionACs() []string {
 	slugs := r.revChanges()
 	if len(slugs) == 0 {
