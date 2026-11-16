@@ -27,6 +27,9 @@ func TestWithdrawnIDs(t *testing.T) {
 	got := withdrawnIDs(text)
 	if len(got) != 2 || !got["AC-X-18"] || !got["AC-X-22"] {
 		t.Fatalf("withdrawn = %v, want AC-X-18 and AC-X-22 only (prose mentions and other markers do not count)", got)
+	}
+}
+
 func TestPlanCheck(t *testing.T) {
 	// 39 tasks, 7 of them single-AC, the rest 2-14 ACs: the shape of the LOGIN-V2 plan that should have been 12-20 tasks
 	sizes := []int{1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 4, 4, 4, 5, 5, 5, 5, 6, 6, 7, 8, 12, 14}

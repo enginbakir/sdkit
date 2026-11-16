@@ -59,6 +59,9 @@ func TestBeginIdempotent(t *testing.T) {
 		if fmt.Sprint(got) != fmt.Sprint(want) {
 			t.Errorf("idempotent=%v: rounds %v, want %v", on, got, want)
 		}
+	}
+}
+
 // With REVIEW_REQUIRE_LINT a mechanical error stops begin before a round is used.
 func TestBeginRequiresLint(t *testing.T) {
 	root := t.TempDir()
