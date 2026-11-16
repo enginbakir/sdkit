@@ -4,10 +4,12 @@ import (
 	"bytes"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 
 	"github.com/wecii/sdkit/internal/cli"
 	"github.com/wecii/sdkit/internal/gitx"
+	"github.com/wecii/sdkit/internal/project"
 	"github.com/wecii/sdkit/internal/tasks"
 )
 
@@ -42,7 +44,16 @@ func runTasks(args []string) int {
 		err := cmd.Run()
 		return out.String(), err == nil
 	}
+	st, pj, _ := project.Load(top)
+	plan := tasks.DefaultPlanCfg()
+	plan.Min, plan.Max = st.Int("TASKS_TARGET_MIN", plan.Min), st.Int("TASKS_TARGET_MAX", plan.Max)
+	plan.SingleMax, plan.ChainMax = st.Int("TASKS_SINGLE_AC_MAX", plan.SingleMax), st.Int("TASKS_CHAIN_MAX", plan.ChainMax)
+	for _, w := range st.List("LINT_MARKER_WORDS") {
+		plan.MarkerWords = append(plan.MarkerWords, w)
+	}
+	md, _ := os.ReadFile(filepath.Join(pj.Dir(), "project.md"))
 	return tasks.Run(tasks.Env{
+		Plan: plan, Project: string(md),
 		Repo:     repo,
 		SpecPath: os.Getenv("TASKS_SPEC_PATH"),
 		Approve: func(id, sha string) bool {

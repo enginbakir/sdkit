@@ -44,6 +44,9 @@ func (d *Doc) Render(ref string, keys map[string]string) (u Upsert, ok bool) {
 	u.Contract = Contract{ExternalID: t.ExternalID, SpecID: d.SpecID, SpecVersion: d.SpecVersion, SpecSha: d.SpecSha, ACs: t.ACs,
 		Risk: t.Risk, Dependencies: []string{}, Scope: t.Scope}
 	u.Description = Str(t.Summary)
+	if len(t.BlockedBy) > 0 {
+		u.Description = "Blocked: " + strings.Join(t.BlockedBy, ", ") + "\n\n" + u.Description
+	}
 	if p, _ := d.Parent.(string); p != "" {
 		u.Parent = p
 	}

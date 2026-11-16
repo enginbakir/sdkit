@@ -30,6 +30,8 @@ type Env struct {
 	SpecPath string // directory of the specs, default "specs"
 	Approve  func(id, sha string) bool
 	Validate func(text string) (string, bool)
+	Plan     PlanCfg // size rules for plan-check
+	Project  string  // text of project.md (the risk rubric)
 	Stdin    io.Reader
 	Out, Err io.Writer
 }
@@ -41,7 +43,7 @@ type runner struct {
 
 var sha40 = regexp.MustCompile(`^[0-9a-f]{40}$`)
 
-const usage = "usage: sdkit tasks acs|changes|trace|cycles|ids|order|render|report <tasks.json> ..."
+const usage = "usage: sdkit tasks acs|changes|trace|cycles|ids|order|plan-check|regroup|render|report <tasks.json> ..."
 
 // Run executes `sdkit tasks <verb> <tasks.json> ...` and returns the exit code.
 func Run(env Env, args []string) int {
@@ -67,10 +69,10 @@ func Run(env Env, args []string) int {
 		return die(exitUsage, "%v", err)
 	}
 	d := r.doc
-	if !strings.Contains(" acs changes trace cycles ids order render report ", " "+verb+" ") {
+	if !strings.Contains(" acs changes trace cycles ids order plan-check regroup render report ", " "+verb+" ") {
 		return die(exitUsage, "unknown verb %s", verb)
 	}
-	if verb != "cycles" {
+	if verb != "cycles" && verb != "regroup" {
 		if code := r.gate(); code != 0 {
 			return code
 		}
@@ -142,6 +144,42 @@ func Run(env Env, args []string) int {
 			return code
 		}
 		fmt.Fprint(r.Out, lines(d.Order()))
+	case "regroup":
+		// regroup <tasks.json> --merge A,B,C [--merge D,E] [--out FILE]: merge tasks of the plan (local file only; nothing is sent anywhere)
+		out := ""
+		for i := 0; i < len(rest); i++ {
+			switch {
+			case rest[i] == "--merge" && i+1 < len(rest):
+				if err := d.Merge(strings.Split(rest[i+1], ",")); err != nil {
+					return die(exitFail, "%v", err)
+				}
+				i++
+			case rest[i] == "--out" && i+1 < len(rest):
+				out, i = rest[i+1], i+1
+			default:
+				fmt.Fprintln(r.Err, "tasks: usage: regroup <tasks.json> --merge A,B,C [--merge D,E] [--out FILE]")
+				return exitUsage
+			}
+		}
+		if out == "" {
+			fmt.Fprintln(r.Out, d.PlanJSON())
+		} else if err := os.WriteFile(out, []byte(d.PlanJSON()+"\n"), 0o644); err != nil {
+			return die(exitFail, "cannot write %s", out)
+		}
+	case "plan-check":
+		adv := d.PlanCheck(r.Plan, GateMarkers(r.text(false), r.Plan.MarkerWords), r.Project)
+		code := 0
+		for _, a := range adv {
+			tag := "warn"
+			if a.Error {
+				tag, code = "error", exitFail
+			}
+			fmt.Fprintf(r.Out, "plan-check: %s: %s\n", tag, a.Text)
+		}
+		if len(adv) == 0 {
+			fmt.Fprintln(r.Out, "plan-check: ok")
+		}
+		return code
 	case "render":
 		return r.render(rest)
 	case "report":
