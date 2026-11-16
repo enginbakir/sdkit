@@ -1,17 +1,17 @@
 {
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "Spec-driven development workflow and guards for AI coding agents",
   "homepage": "https://github.com/wecii/sdkit",
   "license": "MIT",
   "depends": "git",
   "architecture": {
     "64bit": {
-      "url": "https://github.com/wecii/sdkit/releases/download/v2.0.0/sdkit_2.0.0_windows_amd64.zip",
-      "hash": "a7ab20d7c1a5ab25ef69500c483793545f0987045557d350a786b448fd075d69"
+      "url": "https://github.com/wecii/sdkit/releases/download/v2.1.0/sdkit_2.1.0_windows_amd64.zip",
+      "hash": "292968d489138c8ebbbd9b80687d40da38b695a8308dfcbd6491c2e05ce36c81"
     },
     "arm64": {
-      "url": "https://github.com/wecii/sdkit/releases/download/v2.0.0/sdkit_2.0.0_windows_arm64.zip",
-      "hash": "66acb4a687dc67a2c485a0bac17373dfbe067c14dd7821c8702d845dc595a15d"
+      "url": "https://github.com/wecii/sdkit/releases/download/v2.1.0/sdkit_2.1.0_windows_arm64.zip",
+      "hash": "cab9e8e87e57b1160615c457c69550290a9c6d42d4321e88b1fb434346ee53ef"
     }
   },
   "bin": "sdkit.exe",
