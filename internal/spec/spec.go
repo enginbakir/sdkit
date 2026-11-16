@@ -1130,7 +1130,7 @@ func (e *env) publish(id string, a []string) int {
 	e.updatePR(id, title, bf)
 	e.say("spec: published '%s' v%s at %s on %s -> %s", id, newv, sha, b, url)
 	if strings.HasPrefix(newv, "0.") {
-		e.say("spec: next: the Tech Lead reviews this PR; a v0.x is not approved yet, so after it merges run `sdkit spec promote %s` on a new branch, push it and open the promote PR (its merge is the approval). Only the merged SHA of that PR goes to generate-tasks (a SHA of the v0.x merge is refused).", id)
+		e.say("spec: next: the Tech Lead reviews this PR; a v0.x is not approved yet, so after it merges run `sdkit spec promote %s` on a new branch (it commits, pushes and opens the promote PR; its merge is the approval). Only the merged SHA of that PR goes to generate-tasks (a SHA of the v0.x merge is refused).", id)
 	} else {
 		e.say("spec: next: the Tech Lead reviews and merges this PR; the merge is the approval. generate-tasks takes the merged SHA.")
 	}
@@ -1188,7 +1188,7 @@ func (e *env) promote(id string) int {
 	e.needDir(id)
 	b := e.branch()
 	if e.isProtected(b) {
-		return int(e.die("refusing on '%s': promote only prepares a commit on the approval PR branch, nobody commits to a protected branch", b))
+		return int(e.die("refusing on '%s': promote commits on the approval PR branch, nobody commits to a protected branch", b))
 	}
 	if !e.hasMeta(id) {
 		return int(e.die("no spec.meta.json for '%s'", id))
@@ -1205,11 +1205,18 @@ func (e *env) promote(id string) int {
 	if st, _ := e.g("status", "--porcelain", "--", e.dir(id)); st != "" {
 		return int(e.die("uncommitted changes under %s", e.dir(id)))
 	}
+	if n, err := e.request("create", "", "", "", false, nil).Check(context.Background()); err != nil || n > 0 {
+		if err != nil {
+			fmt.Fprintln(e.err, err)
+		}
+		return int(e.die("the PR host is not ready (list above): fill it in and run promote again; nothing was committed or pushed"))
+	}
 	v := m.Version
 	if strings.HasPrefix(v, "0.") {
 		v = "1.0"
 	}
 	sha, _ := e.g("rev-parse", "HEAD")
+	oldMeta, _ := os.ReadFile(e.metaPath(id))
 	ps, err := readObj(e.metaPath(id))
 	e.must(err, "cannot write the meta")
 	hist := []json.RawMessage{}
@@ -1224,10 +1231,43 @@ func (e *env) promote(id string) int {
 	e.must(e.wmeta(id, ps), "cannot write the meta")
 	mrel := e.dir(id) + "/spec.meta.json"
 	if !e.gok("add", "--", mrel) || !e.gok("commit", "-q", "-m", fmt.Sprintf("chore(spec): promote %s to v%s", id, v), "--", mrel) {
-		return int(e.die("commit failed"))
+		_ = os.WriteFile(e.metaPath(id), oldMeta, 0o644)
+		_ = e.gok("reset", "-q", "HEAD", "--", mrel)
+		return int(e.die("commit failed; meta restored, run promote again"))
 	}
-	e.say("spec: prepared 'approved v%s' for '%s' on %s. Push it with git push; the Tech Lead's merge is the approval (nothing was pushed or merged)", v, id, b)
+	// Like publish: a failed push rolls the commit back so promote can simply be run again.
+	if !e.push(b) {
+		if e.gok("reset", "-q", "--soft", "HEAD~1") {
+			_ = os.WriteFile(e.metaPath(id), oldMeta, 0o644)
+			_ = e.gok("reset", "-q", "HEAD", "--", mrel)
+		}
+		return int(e.die("push failed; nothing recorded, fix the remote and run promote again"))
+	}
+	title := fmt.Sprintf("chore(spec): promote %s to v%s", id, v)
+	bf, err := writeTemp(fmt.Sprintf("Promotes spec `%s` to v%s (approved).\n\nThe merge of this PR is the approval; generate-tasks takes the merged SHA.\n", id, v))
+	if err != nil {
+		return int(e.die("pushed %s, but could not write the PR body: run `sdkit pr open` by hand", b))
+	}
+	defer os.Remove(bf)
+	url, err := e.openPR(title, bf)
+	if err != nil {
+		return int(e.die("pushed '%s' on %s, but opening the pull request failed: fix the cause and run `sdkit pr open`", id, b))
+	}
+	e.say("spec: promoted '%s' to approved v%s on %s and opened %s. The Tech Lead's merge is the approval; only the merged SHA goes to generate-tasks", id, v, b, url)
 	return 0
+}
+
+func writeTemp(body string) (string, error) {
+	f, err := os.CreateTemp("", "sdkit-promote-*.md")
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+	if _, err := f.WriteString(body); err != nil {
+		os.Remove(f.Name())
+		return "", err
+	}
+	return f.Name(), nil
 }
 
 // ApprovedSHA is gate (a): sha is on origin/<base>, the spec meta at sha says approved, and a spec with changes/ is whole there (gate d).
