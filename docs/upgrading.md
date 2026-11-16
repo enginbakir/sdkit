@@ -23,6 +23,16 @@ To see whether you are up to date: `<project-dir>/.scaffold-version` is the kit 
 
 There is no `<kit>/bin/upgrade.sh` any more: the kit is one binary and a checkout of it is not needed.
 
+## 2.0.0 -> 2.1.0: fewer review rounds, smaller task plans
+
+No manual step; `sdkit upgrade` appends the new settings to `sdkit.env`. A repo whose `sdkit.env` does not set them takes the shipped defaults, and three of those are **on**:
+
+- `REVIEW_BEGIN_IDEMPOTENT=1`: `sdkit review begin` on unchanged content uses no round. Set `0` for the old counting.
+- `REVIEW_REQUIRE_LINT=1`: `begin` refuses while `sdkit review lint` has errors. Without `LINT_*` settings only the AC checks run (duplicate, undefined, gapped ids, `tasks.md` coverage); set `LINT_REF_PREFIXES`, `LINT_GATE_PREFIX`, `LINT_MARKER_WORDS`, `LINT_CLOSED_WORDS`, `LINT_WITHDRAWN_WORDS` to name your own conventions. Set `0` to turn the gate off.
+- `SPEC_REVIEW_MAX_NEW_ACS=5`: `begin` warns (never refuses) when a round added more AC ids than that. `0` is off.
+
+New: `sdkit review lint|status|changed|settle|settled|raise-cap`, `plan --round`, `record --set cheap|full --roles`, `sdkit preflight`, `sdkit spec next`, `sdkit tasks plan-check|regroup`, `acs --gates`, `ids --list`, `sdkit jira supersede`, `sdkit prespec gaps` and the `prespec-gaps` role (12 role files per host now). `tasks acs` and `trace` skip ACs the spec marks `(withdrawn)` (`--include-withdrawn` keeps them). `sdkit spec publish` reads `BITBUCKET_TOKEN`/`BITBUCKET_EMAIL` from `sdkit.local.env`. In `SDD_MANAGED=on` repos the task is no longer re-planned or re-proposed: `sdd start` seeds the Definition of Done from the approved spec's scenarios. A cheap-set review PASS never lets `spec publish` through.
+
 ## 2.0.0: one Go binary, no bash, Windows support
 
 2.0.0 replaces every bash script, hook and git hook with the `sdkit` binary (`sdkit hook <event>`, `sdkit sdd ...`, `sdkit run-role`, ...). The files, the formats and the verifier's `DOD / FINDINGS / VERIFY / VERDICT` block are unchanged. Windows (amd64, arm64) is supported next to macOS and Linux.

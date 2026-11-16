@@ -108,7 +108,7 @@ A guard is not trusted until it has been seen to "fail and then pass": try both 
 
 ## Versioning and release
 
-1. Make the change. If you changed roles in `core/roles/`, run `sdkit dev adapters` and commit the generated files too. Update the related tables in `docs/guide.md` and the README (including part counts: number of skills/roles/hooks and the list of `sdkit` subcommands; currently 8 skills, 11 roles, 20 hooks, 41 subcommands; count with `ls skills`, `ls core/roles`, the `Register` calls in `internal/hook` and `sdkit help`).
+1. Make the change. If you changed roles in `core/roles/`, run `sdkit dev adapters` and commit the generated files too. Update the related tables in `docs/guide.md` and the README (including part counts: number of skills/roles/hooks and the list of `sdkit` subcommands; currently 8 skills, 12 roles, 20 hooks, 41 subcommands; count with `ls skills`, `ls core/roles`, the `Register` calls in `internal/hook` and `sdkit help`).
 2. Bump the version in `.claude-plugin/plugin.json` **and** `.claude-plugin/marketplace.json` together (both must match; the binary reads `plugin.json`), and in the version badge at the top of `README.md`.
    - patch: fix, docs
    - minor: new skill/agent/hook/setting (off by default)
