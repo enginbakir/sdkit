@@ -58,8 +58,8 @@ func ParseGaps(text string) (gaps []Gap, problems []string) {
 	return gaps, problems
 }
 
-// GapsReport groups the gaps for the analyst: what has to be asked (decisions and facts, in batches of four) and the
-// defaults to accept with one yes. It returns the text and whether the answer is usable.
+// GapsReport groups the gaps for the analyst: what has to be asked (decisions and facts, as one list; the analyst forms the
+// rounds, at most four questions each, and may ask fewer) and the defaults to accept with one yes. It returns the text and whether the answer is usable.
 func GapsReport(gaps []Gap, problems []string) (string, bool) {
 	var b strings.Builder
 	var ask, def []Gap
@@ -71,10 +71,10 @@ func GapsReport(gaps []Gap, problems []string) (string, bool) {
 		}
 	}
 	fmt.Fprintf(&b, "gaps: %d to ask (decision/fact), %d defaults to accept in one question\n", len(ask), len(def))
-	for i, g := range ask {
-		if i%4 == 0 {
-			fmt.Fprintf(&b, "-- question round %d (at most 4 per round)\n", i/4+1)
-		}
+	if len(ask) > 0 {
+		b.WriteString("-- to ask: group related points into rounds of at most 4 questions (fewer is fine; a point that depends on another comes in a later round)\n")
+	}
+	for _, g := range ask {
 		fmt.Fprintf(&b, "%s %s (%s) %s [%s] default: %s; owner: %s\n", g.ID, g.Class, g.Where, g.Question, "ask", g.Default, g.Owner)
 	}
 	if len(def) > 0 {
