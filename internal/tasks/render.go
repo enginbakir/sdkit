@@ -16,7 +16,7 @@ type Contract struct {
 	ACs          []string `json:"acceptanceCriteria"`
 	Risk         any      `json:"risk"`
 	Dependencies []string `json:"dependencies"`
-	Scope        []string `json:"scope"`
+	Scope        []string `json:"scope,omitempty"`
 	Parent       string   `json:"parent"`
 }
 

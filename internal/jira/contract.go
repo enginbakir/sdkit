@@ -107,8 +107,11 @@ func Problems(t Task) string {
 	if _, ok := sarr(t["dependencies"]); !ok {
 		p = append(p, "dependencies (array)")
 	}
-	if a, ok := sarr(t["scope"]); !ok || len(a) == 0 {
-		p = append(p, "scope (non-empty array)")
+	// scope is optional: the developer finds the files in the repo; when present it must be an array.
+	if _, has := t["scope"]; has && t["scope"] != nil {
+		if _, ok := sarr(t["scope"]); !ok {
+			p = append(p, "scope (array)")
+		}
 	}
 	if !nes(t["parent"]) {
 		p = append(p, "parent")
@@ -206,6 +209,9 @@ func Normalise(iss map[string]any) (Task, error) {
 func Block(t Task) any {
 	m := map[string]any{}
 	for _, k := range []string{"externalId", "specId", "specVersion", "specSha", "acceptanceCriteria", "risk", "dependencies", "scope", "parent"} {
+		if k == "scope" && t[k] == nil {
+			continue
+		}
 		m[k] = t[k]
 	}
 	return m

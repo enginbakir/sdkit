@@ -343,8 +343,12 @@ func writeDoD(path string, t jira.Task, scen map[string]string) error {
 		"The approved spec is the source of truth: the PRD, architecture and spec are not regenerated here. A spec defect is `sdkit sdd block --spec-change`.",
 		"Each condition below is the spec's own scenario for that acceptance criterion; nothing is regenerated. Change a line only when the code shows it cannot be tested as written (then block with a spec change); keep the D ids and a Verified-by method on every line.", "",
 		"## Scope", ""}
-	for _, s := range tlist(t, "scope") {
-		l = append(l, "- "+s)
+	if sc := tlist(t, "scope"); len(sc) == 0 {
+		l = append(l, "- not set by the task; find the files from the acceptance criteria in the repo")
+	} else {
+		for _, s := range sc {
+			l = append(l, "- "+s)
+		}
 	}
 	l = append(l, "", "## Dependencies", "")
 	if d := tlist(t, "dependencies"); len(d) == 0 {

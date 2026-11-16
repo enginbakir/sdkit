@@ -36,7 +36,7 @@ If the host has no fresh-subagent facility the verdict is NOT_RUN, never PASS. O
 ## Task contract (F07/F08)
 
 Required Jira subtask fields, rendered as a fenced `sdkit-task` JSON block in the description (machine-readable, tolerant of Jira rendering):
-`externalId` (`<specId>:<taskKey>`, upsert key), `specId`, `specVersion`, `specSha`, `acceptanceCriteria[]` (spec AC ids), `risk` (low|medium|high), `dependencies[]` (Jira keys), `scope[]` (paths/globs), `parent`.
+`externalId` (`<specId>:<taskKey>`, upsert key), `specId`, `specVersion`, `specSha`, `acceptanceCriteria[]` (spec AC ids), `risk` (low|medium|high), `dependencies[]` (Jira keys), `parent`; optional `scope[]` (paths/globs; the analyst does not set it, the developer finds files in the repo).
 Missing/empty required field = intake rejected. Never auto-assign.
 
 `sdkit jira` verbs: `fetch <KEY>` (normalised JSON on stdout), `deps-ready <KEY>`, `upsert <externalId> <json>`, `comment <KEY> <text>`, `transition <KEY> <status>`, `change-request <KEY> <json>`. Backend is the built-in Jira client (`internal/jira`) (mockable; opt-in egress `JIRA_EGRESS=allow`, credentials by env var name only). Exit codes: 0 ok, 2 usage, 3 egress/auth, 4 contract invalid, 5 not found. A failed call must never produce success evidence.

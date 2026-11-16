@@ -12,7 +12,7 @@ import (
 const ok = `{"externalId":"s:T1","specId":"s","specVersion":1,"specSha":"` + "0123456789012345678901234567890123456789" + `","acceptanceCriteria":["a"],"risk":"low","dependencies":[],"scope":["x"],"parent":"P-1"}`
 
 func TestContractAndToken(t *testing.T) {
-	for in, want := range map[string]string{ok: "", `{"specId":"s"}`: "specVersion", "x": "no sdkit-task"} {
+	for in, want := range map[string]string{ok: "", strings.Replace(ok, `"scope":["x"],`, "", 1): "", `{"specId":"s"}`: "specVersion", "x": "no sdkit-task"} {
 		if _, err := Validate(in); (err == nil) != (want == "") || err != nil && !strings.Contains(err.Error(), want) {
 			t.Errorf("%q: %v", in, err)
 		}
