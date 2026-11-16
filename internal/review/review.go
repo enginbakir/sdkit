@@ -32,6 +32,9 @@ type Error struct {
 
 func (e *Error) Error() string { return "review: " + e.Msg }
 
+// errKeep is returned from a store.Update callback to leave the state file as it is.
+var errKeep = errors.New("keep")
+
 func fail(code int, f string, a ...any) *Error { return &Error{code, fmt.Sprintf(f, a...)} }
 
 // Ctx is what a review needs from the project.
@@ -39,6 +42,8 @@ type Ctx struct {
 	Root, KitDir, SpecsDir string
 	MaxRounds              int
 	JiraUser               string
+	// IdempotentBegin (REVIEW_BEGIN_IDEMPOTENT=1): begin on content that already has its evidence, or an open round, uses no round.
+	IdempotentBegin bool
 }
 
 // Load reads the settings of the project at root.
@@ -54,6 +59,7 @@ func Load(root string) Ctx {
 	if c.JiraUser == "" {
 		c.JiraUser = os.Getenv("JIRA_USER")
 	}
+	c.IdempotentBegin = s.Bool("REVIEW_BEGIN_IDEMPOTENT")
 	return c
 }
 
@@ -299,6 +305,18 @@ func (c Ctx) Begin(id, target string, final bool) (string, error) {
 		var st State
 		json.Unmarshal(old, &st)
 		prev := st.Round
+		// Same content as the round already open or already reviewed: another round would only sample the same
+		// document again. A NOT_RUN round learned nothing, so it may be repeated.
+		if c.IdempotentBegin && !final && prev > 0 && st.ContentHash == h {
+			switch {
+			case st.Pending:
+				msg = fmt.Sprintf("review: round %d of '%s' is already open at %s (unchanged, no round used)", prev, id, h)
+				return nil, errKeep
+			case st.Evidence != nil && st.Evidence.ContentHash == h && st.Evidence.Verdict != "NOT_RUN":
+				msg = fmt.Sprintf("review: '%s' is unchanged since round %d (%s, %s); its evidence stands, no round used. Change the document before a new round", id, prev, st.Evidence.Verdict, h)
+				return nil, errKeep
+			}
+		}
 		if final {
 			if prev < c.MaxRounds {
 				return nil, fail(1, "--final is only for after the round cap (%d of %d used); open a normal round", prev, c.MaxRounds)
@@ -319,6 +337,9 @@ func (c Ctx) Begin(id, target string, final bool) (string, error) {
 		}
 		return []byte(compact(st) + "\n"), nil
 	})
+	if err == errKeep {
+		err = nil
+	}
 	return msg, err
 }
 

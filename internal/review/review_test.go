@@ -22,3 +22,41 @@ func TestStatus(t *testing.T) {
 		t.Fatal(got)
 	}
 }
+
+// A begin on content that already has its evidence must not use a round when REVIEW_BEGIN_IDEMPOTENT is on;
+// off (the default) keeps the old counting. A NOT_RUN round learned nothing and may be repeated.
+func TestBeginIdempotent(t *testing.T) {
+	steps := []struct {
+		name    string
+		act     func(c Ctx, doc string)
+		rounds  int // expected state round after the step
+		changes bool
+	}{
+		{"first begin", func(c Ctx, d string) { c.Begin("s", d, false) }, 1, false},
+		{"begin again while open", func(c Ctx, d string) { c.Begin("s", d, false) }, 1, false},
+		{"record PASS then begin, same content", func(c Ctx, d string) { c.Record("s", "PASS", "fresh", d+".f"); c.Begin("s", d, false) }, 1, false},
+		{"content changed", func(c Ctx, d string) { os.WriteFile(d, []byte("changed"), 0o644); c.Begin("s", d, false) }, 2, true},
+		{"NOT_RUN may be repeated", func(c Ctx, d string) { c.Record("s", "NOT_RUN", "none", ""); c.Begin("s", d, false) }, 3, true},
+	}
+	for _, on := range []bool{true, false} {
+		root := t.TempDir()
+		doc := filepath.Join(root, "s.md")
+		os.WriteFile(doc, []byte("v1"), 0o644)
+		os.WriteFile(doc+".f", []byte("[]"), 0o644)
+		c := Load(root)
+		c.MaxRounds, c.IdempotentBegin = 9, on
+		var got []int
+		for _, s := range steps {
+			s.act(c, doc)
+			st, _ := readState(c.stateFile("s"))
+			got = append(got, st.Round)
+		}
+		want := []int{1, 1, 1, 2, 3}
+		if !on {
+			want = []int{1, 2, 3, 4, 5} // before: every begin burns a round
+		}
+		if fmt.Sprint(got) != fmt.Sprint(want) {
+			t.Errorf("idempotent=%v: rounds %v, want %v", on, got, want)
+		}
+	}
+}
