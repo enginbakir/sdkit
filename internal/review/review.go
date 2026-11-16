@@ -387,13 +387,13 @@ func (c Ctx) Begin(id, target string, final bool) (string, error) {
 		json.Unmarshal(old, &st)
 		prev := st.Round
 		// Same content as the round already open or already reviewed: another round would only sample the same
-		// document again. A NOT_RUN round learned nothing, so it may be repeated.
+		// document again. A NOT_RUN round learned nothing, and a cheap-set round still needs the full set on the same content, so both may be repeated.
 		if c.IdempotentBegin && !final && prev > 0 && st.ContentHash == h {
 			switch {
 			case st.Pending:
 				msg = fmt.Sprintf("review: round %d of '%s' is already open at %s (unchanged, no round used)", prev, id, h)
 				return nil, errKeep
-			case st.Evidence != nil && st.Evidence.ContentHash == h && st.Evidence.Verdict != "NOT_RUN":
+			case st.Evidence != nil && st.Evidence.ContentHash == h && st.Evidence.Verdict != "NOT_RUN" && st.Evidence.Set != "cheap":
 				msg = fmt.Sprintf("review: '%s' is unchanged since round %d (%s, %s); its evidence stands, no round used. Change the document before a new round", id, prev, st.Evidence.Verdict, h)
 				return nil, errKeep
 			}

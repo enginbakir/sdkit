@@ -117,6 +117,7 @@ func TestSettleAndRaiseCapNeedAPerson(t *testing.T) {
 	if _, err := c.RaiseCap("s", 3, "more", ""); err == nil {
 		t.Fatal("raise-cap without a person must be refused")
 	}
+	os.WriteFile(doc, []byte("v1b"), 0o644) // unchanged content would be a no-op, not a round
 	if _, err := c.Begin("s", doc, false); err == nil {
 		t.Fatal("cap of 1 reached")
 	}
