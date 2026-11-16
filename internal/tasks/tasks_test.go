@@ -14,3 +14,14 @@ func TestCore(t *testing.T) {
 		t.Fatalf("trace %v", p)
 	}
 }
+
+func TestWithdrawnIDs(t *testing.T) {
+	text := "#### Scenario: AC-X-18 (withdrawn)\n- **WHEN** AC-X-18 is evaluated\n" +
+		"#### Scenario: AC-X-22 (withdrawn) - old title\n" +
+		"#### Scenario: AC-X-1\n- THEN replaces AC-X-18 and mentions (withdrawn)\n" +
+		"#### Scenario: AC-X-5 (koşullu Q3)\n"
+	got := withdrawnIDs(text)
+	if len(got) != 2 || !got["AC-X-18"] || !got["AC-X-22"] {
+		t.Fatalf("withdrawn = %v, want AC-X-18 and AC-X-22 only (prose mentions and other markers do not count)", got)
+	}
+}
