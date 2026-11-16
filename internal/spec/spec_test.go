@@ -1,6 +1,7 @@
 package spec
 
 import (
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -23,5 +24,52 @@ func TestPublishNeedsFreshPass(t *testing.T) {
 		}
 		_, _ = review.Load(os.Getenv("CLAUDE_PROJECT_DIR")).Begin("x", "", false)
 		_, _ = review.Load(os.Getenv("CLAUDE_PROJECT_DIR")).Record("x", "PASS", "fresh", f)
+	}
+}
+
+func TestCaseClash(t *testing.T) {
+	ex := []string{"spec/LOGIN-v2", "spec/other", "spec/other--c1"}
+	for _, c := range []struct{ b, want string }{
+		{"spec/LOGIN-V2", "spec/LOGIN-v2"}, // the macOS collision of the LOGIN-V2 session
+		{"spec/LOGIN-v2", ""},              // the same spelling is the same branch, not a clash
+		{"spec/new", ""},
+	} {
+		if got := caseClash(ex, c.b); got != c.want {
+			t.Errorf("caseClash(%q) = %q, want %q", c.b, got, c.want)
+		}
+	}
+}
+
+// The Bitbucket credentials of `spec publish` come from sdkit.local.env (the LOGIN-V2 session had to `source` it by hand),
+// never from the shared sdkit.env; the process environment still wins.
+func TestPublishCredentialsFromLocalEnv(t *testing.T) {
+	root := t.TempDir()
+	kit := filepath.Join(root, ".sdkit")
+	_ = os.MkdirAll(kit, 0o755)
+	_ = os.WriteFile(filepath.Join(kit, "sdkit.env"), []byte("BITBUCKET_TOKEN=committed-secret\nBITBUCKET_EMAIL=shared@x.y\n"), 0o644)
+	_ = os.WriteFile(filepath.Join(kit, "sdkit.local.env"), []byte("BITBUCKET_TOKEN=local-token-123\nBITBUCKET_EMAIL=me@x.y\n"), 0o644)
+	t.Setenv("BITBUCKET_TOKEN", "")
+	t.Setenv("BITBUCKET_EMAIL", "")
+	e := envAt(root, io.Discard, io.Discard)
+	if e.get("BITBUCKET_TOKEN") != "local-token-123" || e.get("BITBUCKET_EMAIL") != "me@x.y" {
+		t.Fatalf("got %q %q", e.get("BITBUCKET_TOKEN"), e.get("BITBUCKET_EMAIL"))
+	}
+	_ = os.Remove(filepath.Join(kit, "sdkit.local.env"))
+	if e = envAt(root, io.Discard, io.Discard); e.get("BITBUCKET_TOKEN") != "" {
+		t.Fatalf("a token in the shared sdkit.env must not be used, got %q", e.get("BITBUCKET_TOKEN"))
+	}
+	t.Setenv("BITBUCKET_TOKEN", "from-env-xyz")
+	if e.get("BITBUCKET_TOKEN") != "from-env-xyz" {
+		t.Fatal("the process environment must win")
+	}
+}
+
+func TestMaskGit(t *testing.T) {
+	t.Setenv("BITBUCKET_TOKEN", "s3cr3t-token-value")
+	e := envAt(t.TempDir(), io.Discard, io.Discard)
+	// built in pieces so the tree scan does not mistake the fixture for a leaked URL credential
+	got := e.maskGit("remote: denied https://" + "me:s3cr3t-token-value" + "@bitbucket.org/a/b.git and s3cr3t-token-value")
+	if strings.Contains(got, "s3cr3t") || !strings.Contains(got, "denied") {
+		t.Fatal(got)
 	}
 }

@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"io/fs"
@@ -18,10 +19,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/wecii/sdkit/internal/envfile"
 	"github.com/wecii/sdkit/internal/gitx"
 	"github.com/wecii/sdkit/internal/pr"
 	"github.com/wecii/sdkit/internal/proc"
 	"github.com/wecii/sdkit/internal/project"
+	"github.com/wecii/sdkit/internal/redact"
 	"github.com/wecii/sdkit/internal/review"
 )
 
@@ -58,11 +61,19 @@ func envAt(root string, out, errw io.Writer) *env {
 		}
 		return d
 	}
+	// The Bitbucket credentials come from the process environment, else from the personal sdkit.local.env;
+	// never from the shared sdkit.env (a committed token is a leak).
+	local := envfile.New()
+	local.Quiet = true
+	_ = local.LoadFile(filepath.Join(p.Dir(), "sdkit.local.env"))
 	return &env{root: root, specs: val("SPECS_DIR", "specs"), prespec: strings.TrimRight(val("PRESPEC_DIR", "prespec"), "/"), base: val("BASE_BRANCH", "main"),
 		kit: p.KitDir, protected: strings.Fields(strings.ReplaceAll(s.String("PROTECTED_BRANCHES"), ",", " ")), out: out, err: errw,
 		get: func(k string) string {
-			if v := os.Getenv(k); v != "" || k == "BITBUCKET_TOKEN" || k == "BITBUCKET_EMAIL" {
+			if v := os.Getenv(k); v != "" {
 				return v
+			}
+			if k == "BITBUCKET_TOKEN" || k == "BITBUCKET_EMAIL" {
+				return local.String(k)
 			}
 			return s.String(k)
 		}}
@@ -209,6 +220,41 @@ func bump(v string, breaking bool) string {
 		return fmt.Sprintf("%d.0", a+1)
 	}
 	return fmt.Sprintf("%d.%d", a, b+1)
+}
+
+var reURLUser = regexp.MustCompile(`(://)[^/@\s]+@`)
+
+// maskGit hides credentials in what git printed: user:token@ in URLs, the Bitbucket token itself, token-looking assignments.
+func (e *env) maskGit(s string) string {
+	s = reURLUser.ReplaceAllString(s, "${1}***@")
+	if t := e.get("BITBUCKET_TOKEN"); len(t) >= 6 {
+		s = strings.ReplaceAll(s, t, "***")
+	}
+	return redact.Text(s)
+}
+
+// push runs `git push -u origin <branch>`; on failure it prints git's own message (masked) so the cause is visible.
+func (e *env) push(branch string) bool {
+	_, err := e.g("push", "-q", "-u", "origin", branch)
+	if err == nil {
+		return true
+	}
+	var xe *gitx.ExitError
+	if errors.As(err, &xe) && xe.Stderr != "" {
+		fmt.Fprintf(e.err, "spec: git push said:\n%s\n", e.maskGit(xe.Stderr))
+	}
+	return false
+}
+
+// caseClash returns an existing ref name that differs from branch only in letter case ("" when none). On a case-insensitive
+// file system (macOS, Windows) such refs share one file and a push fails with "cannot be resolved to branch".
+func caseClash(existing []string, branch string) string {
+	for _, n := range existing {
+		if n != branch && strings.EqualFold(n, branch) {
+			return n
+		}
+	}
+	return ""
 }
 
 func (e *env) isProtected(b string) bool {
@@ -961,7 +1007,7 @@ func (e *env) publish(id string, a []string) int {
 				return int(e.die("commit failed"))
 			}
 		}
-		if !e.gok("push", "-q", "-u", "origin", e.branch()) {
+		if !e.push(e.branch()) {
 			return int(e.die("push failed; fix the remote and run publish again"))
 		}
 		return e.finishPR(id, slug, title, bf)
@@ -984,7 +1030,7 @@ func (e *env) publish(id string, a []string) int {
 		// Same content as the recorded version: no new version. The PR may still be missing, so when this branch is ahead of the base, push it and open or reuse the PR.
 		if e.branch() == b && e.gok("rev-parse", "--verify", "-q", "origin/"+e.base) {
 			if n, _ := e.g("rev-list", "--count", "origin/"+e.base+"..HEAD"); n != "" && n != "0" {
-				if !e.gok("push", "-q", "-u", "origin", b) {
+				if !e.push(b) {
 					return int(e.die("push failed; fix the remote and run publish again"))
 				}
 				url, err := e.openPR(title, bf)
@@ -1006,6 +1052,16 @@ func (e *env) publish(id string, a []string) int {
 		newv = m.Version // apply already set the revision
 	default:
 		newv = bump(m.Version, brk)
+	}
+	if cst == "" {
+		refs, _ := e.g("for-each-ref", "--format=%(refname:lstrip=2)", "refs/heads/spec", "refs/remotes/origin/spec")
+		var names []string
+		for _, r := range gitx.Lines(refs) {
+			names = append(names, strings.TrimPrefix(r, "origin/"))
+		}
+		if c := caseClash(names, b); c != "" {
+			return int(e.die("branch %s clashes with the existing %s: they differ only in letter case, so a case-insensitive file system (macOS, Windows) treats them as one ref and the push fails. Use the existing spelling of the id (or delete the stale branch); nothing was committed", b, c))
+		}
 	}
 	if cst == "" && !e.ensureBranch(id) {
 		return int(e.die("cannot switch to spec/%s (never forced)", id))
@@ -1047,7 +1103,7 @@ func (e *env) publish(id string, a []string) int {
 		restore()
 		return int(e.die("recording the version failed; meta restored, run publish again"))
 	}
-	if !e.gok("push", "-q", "-u", "origin", b) {
+	if !e.push(b) {
 		if e.gok("reset", "-q", "--soft", "HEAD~1") {
 			restore()
 		}
@@ -1059,6 +1115,11 @@ func (e *env) publish(id string, a []string) int {
 	}
 	e.updatePR(id, title, bf)
 	e.say("spec: published '%s' v%s at %s on %s -> %s", id, newv, sha, b, url)
+	if strings.HasPrefix(newv, "0.") {
+		e.say("spec: next: the Tech Lead reviews this PR; a v0.x is not approved yet, so after it merges run `sdkit spec promote %s` on a new branch, push it and open the promote PR (its merge is the approval). Only the merged SHA of that PR goes to generate-tasks (a SHA of the v0.x merge is refused).", id)
+	} else {
+		e.say("spec: next: the Tech Lead reviews and merges this PR; the merge is the approval. generate-tasks takes the merged SHA.")
+	}
 	return 0
 }
 

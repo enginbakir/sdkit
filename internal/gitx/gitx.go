@@ -15,17 +15,20 @@ const timeout = 60 * time.Second
 // Run runs `git -c core.quotePath=false args...` in dir and returns trimmed-right stdout.
 // A non-zero exit is an error carrying stderr.
 func Run(dir string, args ...string) (string, error) {
-	out, code, err := run(dir, args...)
-	if err == nil && code != 0 {
-		err = &ExitError{Code: code, Args: args}
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	res, err := proc.Run(ctx, dir, nil, "git", append([]string{"-c", "core.quotePath=false"}, args...)...)
+	if err == nil && res.Code != 0 {
+		err = &ExitError{Code: res.Code, Args: args, Stderr: strings.TrimSpace(res.Stderr)}
 	}
-	return out, err
+	return strings.TrimRight(res.Stdout, "\r\n"), err
 }
 
 // ExitError is a git command that exited non-zero.
 type ExitError struct {
-	Code int
-	Args []string
+	Code   int
+	Args   []string
+	Stderr string // what git said; may hold a remote URL with credentials, mask before showing
 }
 
 func (e *ExitError) Error() string {
