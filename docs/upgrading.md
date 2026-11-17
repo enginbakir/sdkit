@@ -23,6 +23,10 @@ To see whether you are up to date: `<project-dir>/.scaffold-version` is the kit 
 
 There is no `<kit>/bin/upgrade.sh` any more: the kit is one binary and a checkout of it is not needed.
 
+## 2.1.2 -> 2.2.0: tasks split by role
+
+No manual step. A spec made with `generate-specs` now carries `roles.json` (the roles the analyst picked) and a `## Roles` section in `design.md`; `generate-tasks` splits each task into one subtask per role (`area`), the task itself becoming a group created as `JIRA_TASK_TYPE` (default `Task`, added to `sdkit.env` by `sdkit upgrade`) under the parent, its role subtasks under it. Check that your Jira project allows a Sub-task under that issue type. Specs and tasks made before have no `roles.json` and work as they did. `sdkit preflight tasks` only warns when the Jira parent cannot be fetched or has no `sdkit-task` block.
+
 ## 2.1.1 -> 2.1.2: task `scope` is optional
 
 No manual step. `generate-tasks` no longer asks the analyst for paths and writes no `scope`; the developer finds the files in the repo at `spec-driven-dev`. The task contract accepts a task without `scope` (one that has it still works, and its `externalId` is unchanged). A new task without `scope` is keyed on its acceptance criteria (and `slug`) alone.
