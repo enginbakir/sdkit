@@ -99,8 +99,19 @@ func (c *Config) Upsert(ext, in string, warn func(string)) (key, action string, 
 		}
 		return key, "updated", c.Update(key, map[string]any{"summary": summary, "description": desc})
 	}
-	key, err = c.Create(map[string]any{"project": map[string]any{"key": c.project(parent)}, "issuetype": map[string]any{"name": c.SubtaskType},
-		"parent": map[string]any{"key": parent}, "summary": summary, "description": desc, "labels": []string{lbl, "sdkit"}})
+	// A role subtask hangs under its group task, so its parent must already be a Jira key (the group is created first).
+	if !reKey.MatchString(parent) {
+		return "", "", fail(4, "parent %q is not a Jira key: create the parent task first and pass --keys to render", parent)
+	}
+	labels, typ := []string{lbl, "sdkit"}, c.SubtaskType
+	if a, _ := t["area"].(string); a != "" {
+		labels = append(labels, "sdkit-area-"+a)
+	}
+	if g, _ := t["group"].(bool); g {
+		typ, labels = c.TaskType, append(labels, "sdkit-group")
+	}
+	key, err = c.Create(map[string]any{"project": map[string]any{"key": c.project(parent)}, "issuetype": map[string]any{"name": typ},
+		"parent": map[string]any{"key": parent}, "summary": summary, "description": desc, "labels": labels})
 	return key, "created", err
 }
 

@@ -74,9 +74,142 @@ func RubricUnfilled(projectMD string) bool {
 	return false
 }
 
-// PlanCheck judges the size and shape of a task plan. gates maps AC -> gates (GateMarkers); projectMD is project.md.
+// PlanCheck judges the size and shape of a task plan. gates maps AC -> gates (GateMarkers); projectMD is project.md;
+// roles are the roles the spec picked (specs/<id>/roles.json, empty when it has none).
 // It advises, it never rewrites: a merge suggestion is a candidate for the analyst, not an order.
-func (d *Doc) PlanCheck(cfg PlanCfg, gates map[string][]string, projectMD string) []Advice {
+// The size, pack, chain and merge rules judge the group (top-level) tasks only: role subtasks multiply the count on purpose.
+func (d *Doc) PlanCheck(cfg PlanCfg, gates map[string][]string, projectMD string, roles []string) []Advice {
+	out := d.roleAdvice(roles)
+	return append(out, d.groups().planSize(cfg, gates, projectMD)...)
+}
+
+// groups is the plan without its role subtasks (d itself when it has none).
+func (d *Doc) groups() *Doc {
+	top := &Doc{SpecID: d.SpecID, SpecVersion: d.SpecVersion, SpecSha: d.SpecSha, Parent: d.Parent}
+	for _, t := range d.Tasks {
+		if t.Of == "" {
+			top.Tasks = append(top.Tasks, t)
+		}
+	}
+	if len(top.Tasks) == len(d.Tasks) {
+		return d
+	}
+	return top
+}
+
+// roleAdvice checks the split by role: every subtask has one valid role and a group task, the ACs stay inside the group's,
+// each group has what its roles need (qa last, after the others) and each picked role has work.
+func (d *Doc) roleAdvice(roles []string) []Advice {
+	used := false
+	for _, t := range d.Tasks {
+		used = used || t.Area != "" || t.Of != ""
+	}
+	if len(roles) == 0 && !used {
+		return nil
+	}
+	var out []Advice
+	warn := func(f string, a ...any) { out = append(out, Advice{false, fmt.Sprintf(f, a...)}) }
+	bad := func(f string, a ...any) { out = append(out, Advice{true, fmt.Sprintf(f, a...)}) }
+	allowed := map[string]bool{}
+	for _, r := range roles {
+		if !ValidRole(r) {
+			bad("roles: %q in roles.json is not a kit role (%s).", r, strings.Join(Roles, ", "))
+		}
+		allowed[r] = true
+	}
+	if len(roles) == 0 {
+		warn("roles: the spec has no roles.json, so any role is accepted. Run generate-specs again or write specs/<id>/roles.json.")
+		for _, r := range Roles {
+			allowed[r] = true
+		}
+	}
+	by := map[string]Task{}
+	kids := map[string][]Task{}
+	for _, t := range d.Tasks {
+		by[t.Ref] = t
+		if t.Of != "" {
+			kids[t.Of] = append(kids[t.Of], t)
+		}
+	}
+	work := map[string]bool{}
+	for _, t := range d.Tasks {
+		if t.Area != "" {
+			work[t.Area] = true
+			if !ValidRole(t.Area) || !allowed[t.Area] {
+				bad("area: task %s has role %q, which the spec did not pick (%s).", t.Ref, t.Area, strings.Join(roles, ", "))
+			}
+		}
+		if t.Of == "" {
+			continue
+		}
+		g, ok := by[t.Of]
+		switch {
+		case t.Area == "":
+			bad("area: role subtask %s (of %s) has no area.", t.Ref, t.Of)
+		case !ok:
+			bad("of: task %s belongs to %s, which is not in the plan.", t.Ref, t.Of)
+		case g.Of != "":
+			bad("of: task %s belongs to %s, which is itself a subtask; there are two levels only (group task, role subtask).", t.Ref, t.Of)
+		case g.Area != "":
+			bad("of: task %s belongs to %s, which has a role itself; a group task has no area.", t.Ref, t.Of)
+		default:
+			in := map[string]bool{}
+			for _, a := range g.ACs {
+				in[a] = true
+			}
+			for _, a := range t.ACs {
+				if !in[a] {
+					bad("ac: %s lists %s, which its group task %s does not carry.", t.Ref, a, g.Ref)
+				}
+			}
+		}
+	}
+	for _, g := range d.Tasks {
+		if g.Of != "" || g.Area != "" {
+			continue
+		}
+		ks := kids[g.Ref]
+		if len(ks) == 0 {
+			warn("roles: task %s has no role subtask; nobody is named to implement it.", g.Ref)
+			continue
+		}
+		var qa *Task
+		var others []string
+		for i, k := range ks {
+			if k.Area == "qa" {
+				qa = &ks[i]
+			} else {
+				others = append(others, k.Ref)
+			}
+		}
+		if allowed["qa"] && qa == nil {
+			warn("qa: task %s has role subtasks but none for qa; qa tests last.", g.Ref)
+		}
+		if qa != nil {
+			dep := map[string]bool{}
+			for _, x := range qa.DependsOn {
+				dep[x] = true
+			}
+			var miss []string
+			for _, o := range others {
+				if !dep[o] {
+					miss = append(miss, o)
+				}
+			}
+			if len(miss) > 0 {
+				warn("qa: %s (qa of %s) should depend on every other role subtask of %s; missing %s.", qa.Ref, g.Ref, g.Ref, strings.Join(miss, " "))
+			}
+		}
+	}
+	for _, r := range roles {
+		if !work[r] {
+			warn("roles: the spec picked %s but no task is for it.", r)
+		}
+	}
+	return out
+}
+
+func (d *Doc) planSize(cfg PlanCfg, gates map[string][]string, projectMD string) []Advice {
 	var out []Advice
 	warn := func(f string, a ...any) { out = append(out, Advice{false, fmt.Sprintf(f, a...)}) }
 	bad := func(f string, a ...any) { out = append(out, Advice{true, fmt.Sprintf(f, a...)}) }
@@ -317,6 +450,12 @@ func (d *Doc) Merge(refs []string) error {
 			return fmt.Errorf("no task with ref %s", r)
 		}
 	}
+	for _, r := range refs {
+		t := d.Tasks[idx[r]]
+		if t.Of != "" || t.Area != "" {
+			return fmt.Errorf("task %s is a role subtask: subtasks are not merged (merge their group tasks instead)", r)
+		}
+	}
 	head := refs[0]
 	union := func(a, b []string) []string {
 		seen := map[string]bool{}
@@ -363,6 +502,9 @@ func (d *Doc) Merge(refs []string) error {
 		case member[t.Ref]:
 			continue
 		}
+		if member[t.Of] { // a role subtask of a merged group follows its group
+			t.Of = head
+		}
 		var nd []string
 		for _, x := range t.DependsOn {
 			if member[x] {
@@ -394,6 +536,8 @@ func (d *Doc) PlanJSON() string {
 		ACs       []string `json:"acceptanceCriteria"`
 		DependsOn []string `json:"dependsOn"`
 		Scope     []string `json:"scope"`
+		Area      string   `json:"area,omitempty"`
+		Of        string   `json:"of,omitempty"`
 		BlockedBy []string `json:"blockedBy,omitempty"`
 	}
 	doc := struct {
@@ -407,7 +551,7 @@ func (d *Doc) PlanJSON() string {
 		if t.DependsOn == nil {
 			t.DependsOn = []string{}
 		}
-		doc.Tasks = append(doc.Tasks, tk{t.Ref, t.Title, t.Summary, t.Slug, t.Change, t.Risk, t.ACs, t.DependsOn, t.Scope, t.BlockedBy})
+		doc.Tasks = append(doc.Tasks, tk{t.Ref, t.Title, t.Summary, t.Slug, t.Change, t.Risk, t.ACs, t.DependsOn, t.Scope, t.Area, t.Of, t.BlockedBy})
 	}
 	b, _ := marshal(doc)
 	var buf bytes.Buffer

@@ -149,7 +149,7 @@ Flows, limits and open decisions: [docs/role-aware.md](docs/role-aware.md).
 | `.sdkit/sdkit.env` (team) | `BASE_BRANCH` | the branch spec PRs target and the Tech Lead merges into (`main`) |
 | | `PR_HOST` | `bitbucket` (or `github`, `gitlab`; `auto` reads the origin URL) |
 | | `TRACKER=jira`, `JIRA_BASE_URL`, `JIRA_PROJECT` | your Jira site and project key (`generate-tasks` creates the subtasks there) |
-| | `JIRA_SUBTASK_TYPE`, `JIRA_CHANGE_TYPE`, `JIRA_LINK_TYPE` | your Jira issue and link type names, if they differ from the defaults |
+| | `JIRA_SUBTASK_TYPE`, `JIRA_TASK_TYPE`, `JIRA_CHANGE_TYPE`, `JIRA_LINK_TYPE` | your Jira issue and link type names, if they differ from the defaults |
 | | `ANALYST_LANGUAGE`, `SPEC_REVIEW_MAX_ROUNDS`, `PRESPEC_DIR` | language of the specs (`tr`), review rounds before a person decides (`4`), the pre-spec folder (`prespec`) |
 | | `SPEC_CHECK_ON_PUSH=1` | optional: the pre-push hook runs `sdkit spec check` for a spec's base branch |
 | `.sdkit/sdkit.local.env` (you) | `BITBUCKET_EMAIL`, `BITBUCKET_TOKEN` | your Bitbucket account e-mail and an API token (repository + pull request write). An `ATCTT...` access token is sent as Bearer and needs no e-mail. Alternatively an origin URL that embeds the credentials, or `PR_TOKEN_REPO` |

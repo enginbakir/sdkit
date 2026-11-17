@@ -178,6 +178,9 @@ func (e *Env) mContract(key string) (jira.Task, string) {
 		fmt.Fprintln(e.Err, "jira: "+err.Error())
 		return nil, fmt.Sprintf("the task contract of %s is incomplete or malformed (jira.sh validate-task)", key)
 	}
+	if g, _ := t["group"].(bool); g {
+		return nil, fmt.Sprintf("%s is a group task: it is done when its role subtasks are, and only they are implemented. Start one of its subtasks (the one for your role).", key)
+	}
 	return t, ""
 }
 

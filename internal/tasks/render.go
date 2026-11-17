@@ -17,6 +17,8 @@ type Contract struct {
 	Risk         any      `json:"risk"`
 	Dependencies []string `json:"dependencies"`
 	Scope        []string `json:"scope,omitempty"`
+	Area         string   `json:"area,omitempty"`  // role subtask: the role that does it
+	Group        bool     `json:"group,omitempty"` // a task that has role subtasks: only they are implemented, it is done when they are
 	Parent       string   `json:"parent"`
 }
 
@@ -32,17 +34,21 @@ type Upsert struct {
 func (d *Doc) Render(ref string, keys map[string]string) (u Upsert, ok bool) {
 	var t *Task
 	byRef := map[string]string{}
+	group := map[string]bool{}
 	for i := range d.Tasks {
 		byRef[d.Tasks[i].Ref] = d.Tasks[i].ExternalID
 		if d.Tasks[i].Ref == ref {
 			t = &d.Tasks[i]
+		}
+		if d.Tasks[i].Of != "" {
+			group[d.Tasks[i].Of] = true
 		}
 	}
 	if t == nil {
 		return u, false
 	}
 	u.Contract = Contract{ExternalID: t.ExternalID, SpecID: d.SpecID, SpecVersion: d.SpecVersion, SpecSha: d.SpecSha, ACs: t.ACs,
-		Risk: t.Risk, Dependencies: []string{}, Scope: t.Scope}
+		Risk: t.Risk, Dependencies: []string{}, Scope: t.Scope, Area: t.Area, Group: group[t.Ref]}
 	u.Description = Str(t.Summary)
 	if len(t.BlockedBy) > 0 {
 		u.Description = "Blocked: " + strings.Join(t.BlockedBy, ", ") + "\n\n" + u.Description
@@ -50,10 +56,21 @@ func (d *Doc) Render(ref string, keys map[string]string) (u Upsert, ok bool) {
 	if p, _ := d.Parent.(string); p != "" {
 		u.Parent = p
 	}
+	if t.Of != "" { // a role subtask hangs under its group task: its Jira key once created, else its externalId (a preview)
+		if e, found := byRef[t.Of]; found {
+			u.Parent = e
+			if k := keys[e]; k != "" {
+				u.Parent = k
+			}
+		}
+	}
 	if t.Title == nil || t.Title == false {
 		u.Summary = t.ExternalID
 	} else {
 		u.Summary = Str(t.Title)
+	}
+	if t.Area != "" {
+		u.Summary = "[" + t.Area + "] " + u.Summary
 	}
 	for _, dep := range t.DependsOn {
 		if e, found := byRef[dep]; found {
@@ -101,14 +118,14 @@ func (d *Doc) Report(results map[string]map[string]any) (md string, ok bool) {
 	var l []string
 	add := func(x ...string) { l = append(l, x...) }
 	add(fmt.Sprintf("# Task creation report: %s v%s @ %s\n\nParent: %s\n", d.SpecID, s(d.SpecVersion), d.SpecSha, s(d.Parent)),
-		"## Results\n\n| Task | externalId | Jira | Result |\n|---|---|---|---|")
+		"## Results\n\n| Task | Role | Group | externalId | Jira | Result |\n|---|---|---|---|---|---|")
 	var miss []string
 	for _, t := range d.Tasks {
 		r, has := results[t.ExternalID]
 		if !has {
 			miss = append(miss, t.Ref)
 		}
-		add(fmt.Sprintf("| %s | %s | %s | %s |", t.Ref, t.ExternalID, or(r["key"], "-"), or(r["action"], "NOT CREATED")))
+		add(fmt.Sprintf("| %s | %s | %s | %s | %s | %s |", t.Ref, dash(t.Area), dash(t.Of), t.ExternalID, or(r["key"], "-"), or(r["action"], "NOT CREATED")))
 	}
 	add("\n## Acceptance criteria to tasks\n")
 	byAC := map[string][]string{}
@@ -139,4 +156,11 @@ func (d *Doc) Report(results map[string]map[string]any) (md string, ok bool) {
 	}
 	md = strings.TrimRight(strings.Join(l, "\n"), "\n")
 	return md, !strings.Contains(md, "NOT CREATED")
+}
+
+func dash(s string) string {
+	if s == "" {
+		return "-"
+	}
+	return s
 }

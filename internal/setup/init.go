@@ -383,6 +383,7 @@ func (s *Setup) initPersona(o InitOptions, persona string) error {
 	s.envKey(envFile, persona, "JIRA_BASE_URL", "", "Your Jira site, e.g. https://your-company.atlassian.net  (FILL IN: sdkit doctor lists what is missing)")
 	s.envKey(envFile, persona, "JIRA_PROJECT", "", "Jira project key the tasks live in, e.g. TFF  (FILL IN)")
 	s.envKey(envFile, persona, "JIRA_SUBTASK_TYPE", "Sub-task", "Issue type of the subtasks the kit creates.")
+	s.envKey(envFile, persona, "JIRA_TASK_TYPE", "Task", "Issue type of the group task a spec task becomes when it has role subtasks (it sits under the parent, its role subtasks under it).")
 	s.envKey(envFile, persona, "JIRA_API_VERSION", "3", "Jira REST version. 3 = Jira Cloud (descriptions are sent as Atlassian Document Format); 2 = Data Center / plain text.")
 	loc := filepath.Join(s.Root, dir, "sdkit.local.env")
 	if _, err := os.Stat(loc); err == nil && !hasEnvKey(loc, "JIRA_EGRESS") {

@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"github.com/wecii/sdkit/internal/tasks"
 	"regexp"
 	"sort"
 	"strings"
@@ -113,6 +114,14 @@ func Problems(t Task) string {
 			p = append(p, "scope (array)")
 		}
 	}
+	if a, has := t["area"]; has && a != nil && !tasks.ValidRole(a) {
+		p = append(p, "area (one of "+strings.Join(tasks.Roles, ", ")+")")
+	}
+	if g, has := t["group"]; has && g != nil {
+		if _, ok := g.(bool); !ok {
+			p = append(p, "group (boolean)")
+		}
+	}
 	if !nes(t["parent"]) {
 		p = append(p, "parent")
 	}
@@ -208,8 +217,8 @@ func Normalise(iss map[string]any) (Task, error) {
 // Block is the task as written into a description.
 func Block(t Task) any {
 	m := map[string]any{}
-	for _, k := range []string{"externalId", "specId", "specVersion", "specSha", "acceptanceCriteria", "risk", "dependencies", "scope", "parent"} {
-		if k == "scope" && t[k] == nil {
+	for _, k := range []string{"externalId", "specId", "specVersion", "specSha", "acceptanceCriteria", "risk", "dependencies", "scope", "area", "group", "parent"} {
+		if (k == "scope" || k == "area" || k == "group") && t[k] == nil {
 			continue
 		}
 		m[k] = t[k]

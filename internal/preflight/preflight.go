@@ -227,8 +227,10 @@ func Tasks(o Opts, file string) []Line {
 		case p.Offline:
 			p.add("WARN", "--offline: parent %s'in varlığı denetlenmedi", "--offline: the parent %s was not checked", parent)
 		default:
-			if _, err := c.Fetch(parent); err != nil {
-				p.add("FAIL", "Jira parent %s alınamadı: %v", "Jira parent %s could not be fetched: %v", parent, err)
+			// The parent is usually an epic or story with no sdkit-task block, so only
+			// its existence matters (Get, not Fetch), and a miss warns instead of blocking.
+			if _, err := c.Get(parent); err != nil {
+				p.add("WARN", "Jira parent %s alınamadı, devam ediliyor: %v", "Jira parent %s could not be fetched, continuing: %v", parent, err)
 			} else {
 				p.add("OK", "Jira parent %s var, token geçerli", "Jira parent %s exists and the token works", parent)
 			}

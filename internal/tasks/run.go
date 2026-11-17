@@ -43,7 +43,7 @@ type runner struct {
 
 var sha40 = regexp.MustCompile(`^[0-9a-f]{40}$`)
 
-const usage = "usage: sdkit tasks acs|changes|trace|cycles|ids|order|plan-check|regroup|render|report <tasks.json> ..."
+const usage = "usage: sdkit tasks acs|changes|roles|trace|cycles|ids|order|plan-check|regroup|render|report <tasks.json> ..."
 
 // Run executes `sdkit tasks <verb> <tasks.json> ...` and returns the exit code.
 func Run(env Env, args []string) int {
@@ -69,7 +69,7 @@ func Run(env Env, args []string) int {
 		return die(exitUsage, "%v", err)
 	}
 	d := r.doc
-	if !strings.Contains(" acs changes trace cycles ids order plan-check regroup render report ", " "+verb+" ") {
+	if !strings.Contains(" acs changes roles trace cycles ids order plan-check regroup render report ", " "+verb+" ") {
 		return die(exitUsage, "unknown verb %s", verb)
 	}
 	if verb != "cycles" && verb != "regroup" {
@@ -80,6 +80,8 @@ func Run(env Env, args []string) int {
 	switch verb {
 	case "cycles":
 		return r.cycles(true)
+	case "roles":
+		fmt.Fprint(r.Out, lines(r.roles()))
 	case "changes":
 		fmt.Fprint(r.Out, lines(r.revChanges()))
 	case "acs":
@@ -177,7 +179,7 @@ func Run(env Env, args []string) int {
 			return die(exitFail, "cannot write %s", out)
 		}
 	case "plan-check":
-		adv := d.PlanCheck(r.Plan, GateMarkers(r.text(false), r.Plan.MarkerWords), r.Project)
+		adv := d.PlanCheck(r.Plan, GateMarkers(r.text(false), r.Plan.MarkerWords), r.Project, r.roles())
 		code := 0
 		for _, a := range adv {
 			tag := "warn"
@@ -255,6 +257,15 @@ func (r *runner) gate() int {
 		return refuse("specVersion in tasks.json differs from %s at %s", meta.Version, d.SpecSha)
 	}
 	return 0
+}
+
+// roles are the roles the spec picked: specs/<id>/roles.json at the SHA, {"roles":["backend",...]}; none when the file is absent.
+func (r *runner) roles() []string {
+	var f struct {
+		Roles []string `json:"roles"`
+	}
+	_ = json.Unmarshal([]byte(r.show(r.dir()+"/roles.json")), &f)
+	return f.Roles
 }
 
 func (r *runner) dir() string { return r.SpecPath + "/" + r.doc.SpecID }

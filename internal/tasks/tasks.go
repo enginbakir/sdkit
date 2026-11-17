@@ -23,6 +23,8 @@ type Task struct {
 	ACs        []string `json:"acceptanceCriteria"`
 	DependsOn  []string `json:"dependsOn"`
 	Scope      []string `json:"scope"`
+	Area       string   `json:"area"`      // role subtask: the one role that does it (one of Roles)
+	Of         string   `json:"of"`        // role subtask: ref of the group task it belongs to; a group task and a legacy task have none
 	BlockedBy  []string `json:"blockedBy"` // gates (open questions) the task waits for; shown as "Blocked: ..." in its summary
 	ExternalID string   `json:"-"`
 	Key        string   `json:"-"`
@@ -36,6 +38,21 @@ type Doc struct {
 	Parent      any
 	Tasks       []Task
 	raw         *obj
+}
+
+// Roles are the roles a spec's tasks are split by. The list is fixed in the kit; a spec picks the subset that works on it
+// (specs/<id>/roles.json, written by generate-specs).
+var Roles = []string{"solution-architect", "backend", "frontend", "devops", "qa", "mobil", "ui", "ux"}
+
+// ValidRole reports whether v is one of Roles.
+func ValidRole(v any) bool {
+	s, ok := v.(string)
+	for _, r := range Roles {
+		if ok && r == s {
+			return true
+		}
+	}
+	return false
 }
 
 // Parse reads tasks.json and checks the shape (a tasks array, each with a ref).
@@ -130,6 +147,9 @@ func (d *Doc) Keys() error {
 		in := a + "|" + c + "|" + s
 		if ch != "" {
 			in += "|" + ch
+		}
+		if t.Area != "" { // only role subtasks: the ids of tasks without an area stay as they were
+			in += "|area:" + t.Area
 		}
 		sum := sha256.Sum256([]byte(in))
 		hashes[r] = hex.EncodeToString(sum[:])[:10]
@@ -237,9 +257,12 @@ func (d *Doc) Cycles() (unknown, cycle string) {
 	for _, t := range d.Tasks {
 		known[t.Ref] = true
 		adj[t.Ref] = append(adj[t.Ref], t.DependsOn...)
+		if t.Of != "" { // a role subtask needs its group task to exist first
+			adj[t.Ref] = append(adj[t.Ref], t.Of)
+		}
 	}
 	for _, t := range d.Tasks {
-		for _, dep := range t.DependsOn {
+		for _, dep := range adj[t.Ref] {
 			if !known[dep] {
 				return t.Ref + " -> " + dep, ""
 			}
@@ -291,6 +314,7 @@ func (d *Doc) Order() []string {
 			for _, dep := range t.DependsOn {
 				ready = ready && done[dep]
 			}
+			ready = ready && (t.Of == "" || done[t.Of])
 			if ready {
 				done[t.Ref] = true
 				out = append(out, t.Ref)
