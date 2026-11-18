@@ -4,6 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"os"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -52,7 +55,7 @@ func TestBrokerAskWaitsForTheAnswer(t *testing.T) {
 	b := NewBroker(func(q Question) { asked <- q })
 	got := make(chan string, 1)
 	go func() {
-		a, err := b.Ask(context.Background(), json.RawMessage(`{"questions":[{"question":"Kapsam?"}]}`))
+		a, err := b.Ask(context.Background(), json.RawMessage(`{"questions":[{"question":"Kapsam?"}]}`), "")
 		if err != nil {
 			got <- "err: " + err.Error()
 			return
@@ -77,7 +80,7 @@ func TestBrokerAskWaitsForTheAnswer(t *testing.T) {
 func TestBrokerRefusesWhatCannotBeShown(t *testing.T) {
 	b := NewBroker(nil)
 	for _, in := range []string{`{}`, `{"questions":[]}`, `nope`} {
-		if _, err := b.Ask(context.Background(), json.RawMessage(in)); err == nil {
+		if _, err := b.Ask(context.Background(), json.RawMessage(in), ""); err == nil {
 			t.Errorf("Ask(%s) must fail at once", in)
 		}
 	}
@@ -87,7 +90,7 @@ func TestBrokerAskEndsWithItsContext(t *testing.T) {
 	b := NewBroker(nil)
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
 	defer cancel()
-	if _, err := b.Ask(ctx, json.RawMessage(`{"questions":[{"question":"q"}]}`)); err == nil {
+	if _, err := b.Ask(ctx, json.RawMessage(`{"questions":[{"question":"q"}]}`), ""); err == nil {
 		t.Fatal("want the context error")
 	}
 	if len(b.Pending()) != 0 {
@@ -149,7 +152,7 @@ func TestAskRoundTrip(t *testing.T) {
 
 	out := make(chan string, 1)
 	go func() {
-		a, err := Ask(ctx, base, "sekret", []byte(`{"questions":[{"question":"Hangisi?","options":[{"label":"A"}]}]}`))
+		a, err := Ask(ctx, base, "sekret", "", []byte(`{"questions":[{"question":"Hangisi?","options":[{"label":"A"}]}]}`))
 		if err != nil {
 			out <- "err: " + err.Error()
 			return
@@ -169,7 +172,7 @@ func TestAskRoundTrip(t *testing.T) {
 	if got := <-out; !strings.Contains(got, `"A"`) {
 		t.Errorf("answer = %s", got)
 	}
-	if _, err := Ask(ctx, "", "", nil); err == nil {
+	if _, err := Ask(ctx, "", "", "", nil); err == nil {
 		t.Error("outside a panel session Ask must say so")
 	}
 }
@@ -180,5 +183,62 @@ func TestBuildArgsKeepsAskUserQuestionOff(t *testing.T) {
 		if !strings.Contains(a, want) {
 			t.Errorf("args %q lack %q", a, want)
 		}
+	}
+}
+
+// A run of a spec that has an earlier session the host still holds continues it; "fresh" starts a new one. The stand-in host prints
+// the arguments it was given as its result.
+func TestRunResumesTheEarlierSession(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("the stand-in host is a shell script")
+	}
+	root := scratchRepo(t, "/prespec/\n/.sdkit/work/\n")
+	WritePrespec(root, "odeme", "metin", false)
+	os.MkdirAll(filepath.Join(root, ".sdkit", "work", "spec-draft", "odeme"), 0o755) // the spec lives in the main tree, where the session ran
+	host := filepath.Join(t.TempDir(), "host.sh")
+	// the stand-in says which session it was told to resume as a message, then ends the way the real host does
+	script := "#!/bin/sh\nR=none\nwhile [ $# -gt 0 ]; do [ \"$1\" = --resume ] && R=\"$2\"; shift; done\n" +
+		"echo \"{\\\"type\\\":\\\"assistant\\\",\\\"message\\\":{\\\"content\\\":[{\\\"type\\\":\\\"text\\\",\\\"text\\\":\\\"RESUME=$R\\\"}]}}\"\n" +
+		"echo '{\"type\":\"result\",\"is_error\":false}'\n"
+	os.WriteFile(host, []byte(script), 0o755)
+	sid := "aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa"
+	RecordRun(root, RunRecord{Session: sid, Spec: "odeme", Action: "generate-specs", Start: "2026-11-17T08:00:00Z"})
+
+	run := func(body string) string {
+		srv := New(Config{Dir: root, Command: host, SessionExists: func(id string) bool { return id == sid }}, "k")
+		l, _ := srv.Listen()
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		go srv.Serve(ctx, l)
+		req, _ := http.NewRequest("POST", "http://"+l.Addr().String()+"/api/run", strings.NewReader(body))
+		req.Header.Set("X-Sdkit-Key", "k")
+		if resp, err := http.DefaultClient.Do(req); err != nil || resp.StatusCode != http.StatusAccepted {
+			t.Fatalf("run: %v %v", err, resp)
+		}
+		for i := 0; i < 100; i++ {
+			past, _, cancel := srv.logFor("odeme").Since(0)
+			cancel()
+			said := ""
+			for _, e := range past {
+				if e.Kind == KindText {
+					said = e.Text
+				}
+				if e.Kind == KindResult {
+					return said
+				}
+			}
+			time.Sleep(50 * time.Millisecond)
+		}
+		t.Fatal("no result")
+		return ""
+	}
+	if got := run(`{"action":"generate-specs","id":"odeme"}`); !strings.Contains(got, "RESUME="+sid) {
+		t.Errorf("the earlier session is continued: %s", got)
+	}
+	if got := run(`{"action":"generate-specs","id":"odeme","fresh":true}`); got != "RESUME=none" {
+		t.Errorf("fresh starts a new session: %s", got)
+	}
+	if got := run(`{"action":"update-specs","id":"odeme"}`); got != "RESUME=none" {
+		t.Errorf("another action has no session of its own to continue: %s", got)
 	}
 }

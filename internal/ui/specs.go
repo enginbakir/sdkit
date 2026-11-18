@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 
 	"github.com/wecii/sdkit/internal/gitx"
@@ -15,11 +16,15 @@ import (
 
 // SpecItem is one row of the home screen.
 type SpecItem struct {
-	ID       string `json:"id"`
-	State    string `json:"state"`
-	Label    string `json:"label"`
-	Waiting  bool   `json:"waiting"`  // someone other than the agent must act (the analyst's answer, the Tech Lead's merge)
-	Continue bool   `json:"continue"` // the agent can take it from here
+	ID       string     `json:"id"`
+	State    string     `json:"state"`
+	Label    string     `json:"label"`
+	Waiting  bool       `json:"waiting"`  // someone other than the agent must act (the analyst's answer, the Tech Lead's merge)
+	Continue bool       `json:"continue"` // the agent can take it from here
+	Update   bool       `json:"update"`   // published: the Tech Lead's comments (or the analyst's edits) can be worked in
+	Merge    bool       `json:"merge"`    // approved: sibling changes can be merged into the next revision
+	Tasks    bool       `json:"tasks"`    // approved: Jira tasks can be made
+	Flow     []FlowStep `json:"flow"`
 }
 
 // stateText is the plain-words state; whether the agent can continue it follows from the state.
@@ -36,17 +41,34 @@ var stateText = map[string]struct {
 	spec.StateApproved:    {"Onaylandı", false},
 }
 
-// ListSpecs is every spec of the project with where it stands, from the same facts `sdkit spec next` reads.
-func ListSpecs(root string) []SpecItem {
+// specItem is the row of one spec entry.
+func specItem(e spec.Entry) SpecItem {
+	t, ok := stateText[e.State]
+	if !ok {
+		t.label = e.State
+	}
+	return SpecItem{ID: e.ID, State: e.State, Label: t.label, Continue: t.cont, Waiting: e.State == spec.StateAwaiting,
+		Update: e.State == spec.StateAwaiting || e.State == spec.StateApproved, Merge: e.State == spec.StateApproved, Tasks: e.State == spec.StateApproved, Flow: Flow(e.State, false)}
+}
+
+// listLocal is every spec of one tree with where it stands, from the same facts `sdkit spec next` reads.
+func listLocal(root string) []SpecItem {
 	var out []SpecItem
 	for _, e := range spec.List(root) {
-		t, ok := stateText[e.State]
-		if !ok {
-			t.label = e.State
-		}
-		out = append(out, SpecItem{ID: e.ID, State: e.State, Label: t.label, Continue: t.cont, Waiting: e.State == spec.StateAwaiting})
+		out = append(out, specItem(e))
 	}
 	return out
+}
+
+// sortItems puts what the analyst can still move first, then what waits for others, then what is done; by id inside each group.
+func sortItems(items []SpecItem) {
+	rank := map[string]int{spec.StateAwaiting: 1, spec.StateApproved: 2}
+	sort.Slice(items, func(i, j int) bool {
+		if ri, rj := rank[items[i].State], rank[items[j].State]; ri != rj {
+			return ri < rj
+		}
+		return items[i].ID < items[j].ID
+	})
 }
 
 // reID is stricter than the kit's own name rule: it becomes a file name, a branch name and part of a Jira link, and a person typed it.
@@ -91,16 +113,34 @@ func WritePrespec(root, id, text string, overwrite bool) error {
 
 // Task is what a run is told to do. The browser names an action and an id; the wording is ours, so a page cannot hand the agent
 // arbitrary instructions.
-func Task(action, id string) (string, error) {
+func Task(root, action, id string, in TaskInput) (string, error) {
 	if !ValidID(id) && !reKitID.MatchString(id) {
 		return "", errors.New("geçersiz ad")
 	}
 	switch action {
 	case "generate-specs":
 		return fmt.Sprintf("Use the generate-specs skill for the spec id %q (the pre-spec has the same name). If work on it already exists, continue from where `sdkit spec next %s` says it stands.", id, id), nil
+	case "update-specs", "update-manual":
+		t := fmt.Sprintf("Use the update-specs skill for the spec id %q.", id)
+		if action == "update-manual" {
+			t += fmt.Sprintf(" The analyst already edited the files by hand in the panel: start from `sdkit spec changed %s` and the git diff, treat the diff as the instruction and their text as authoritative, and re-derive nothing. Then review, publish and open or update the PR as the skill says.", id)
+		} else {
+			t += " Read the Tech Lead's change requests from its pull request, and the analyst's own edits, as the skill says."
+		}
+		if reSlug.MatchString(in.Slug) {
+			t += fmt.Sprintf(" The change %q is already open on the current branch: continue it and do not create another. If you do not yet know what the analyst wants to change, ask them with `sdkit ui ask` first.", in.Slug)
+		}
+		return t, nil
+	case "merge-specs":
+		return fmt.Sprintf("Use the merge-specs skill for the spec id %q. If `sdkit spec drift` and `sdkit spec check` find nothing to merge, say so in one sentence and stop.", id), nil
+	case "generate-tasks":
+		_, pj, _ := project.Load(root)
+		return generateTasksTask(id, in, pj.KitDir)
 	}
 	return "", errors.New("bilinmeyen işlem")
 }
+
+var reSlug = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,40}$`)
 
 // reKitID admits the ids that already exist in a project (they may carry a dot), for continuing them.
 var reKitID = regexp.MustCompile(`^[A-Za-z0-9_-][A-Za-z0-9._-]{0,79}$`)

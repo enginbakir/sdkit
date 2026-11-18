@@ -17,6 +17,9 @@ type Project struct {
 	KitDir  string // project directory relative to Root (".sdkit" unless $KIT_DIR names another that has sdkit.env)
 	EnvFile string // settings file name inside KitDir
 	Found   bool   // false when no KitDir holds an EnvFile yet
+	// Task is the task whose ledger this process's token usage belongs to, named by $SDKIT_TASK ("" when unset). A session that works
+	// on one named thing (a spec id) says so here; without it the kit picks the open task, else the newest work state, else _misc.
+	Task string
 }
 
 // Dir is the absolute project directory.
@@ -27,7 +30,11 @@ func Root(dir string) (string, error) { return gitx.Top(dir) }
 
 // Resolve finds the project directory of root: $KIT_DIR (when set) then .sdkit,
 // each needing sdkit.env. Pre-1.0 directories are not looked at (D2).
-func Resolve(root string) Project { return ResolveWith(root, os.Getenv("KIT_DIR")) }
+func Resolve(root string) Project {
+	p := ResolveWith(root, os.Getenv("KIT_DIR"))
+	p.Task = os.Getenv("SDKIT_TASK")
+	return p
+}
 
 // ResolveWith is Resolve with the KIT_DIR value given.
 func ResolveWith(root, kitDir string) Project {
@@ -36,7 +43,7 @@ func ResolveWith(root, kitDir string) Project {
 			continue
 		}
 		if st, err := os.Stat(filepath.Join(root, d, "sdkit.env")); err == nil && !st.IsDir() {
-			return Project{root, d, "sdkit.env", true}
+			return Project{Root: root, KitDir: d, EnvFile: "sdkit.env", Found: true}
 		}
 	}
 	if kitDir == "" {

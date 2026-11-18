@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"regexp"
 	"runtime"
 
 	"github.com/wecii/sdkit/internal/cli"
@@ -25,9 +26,14 @@ const uiUsage = "usage: sdkit ui [--no-open] [--host <cmd>] | sdkit ui ask [--js
 
 // uiRules is added to every task: the person is not technical and there is no terminal to ask on.
 const uiRules = `You are running inside the sdkit panel, for a person who is not a developer and cannot see a terminal.
-- Never use the AskUserQuestion tool. To ask the person anything, run: sdkit ui ask --json '<questions>' (same JSON shape as AskUserQuestion's input: {"questions":[{"question":"...","header":"...","multiSelect":false,"options":[{"label":"...","description":"..."}]}]}). It waits for the answer and prints it as JSON; read it and continue.
+- Never use the AskUserQuestion tool. To ask the person anything, run sdkit ui ask and give the questions as JSON on its standard input, as a heredoc with a QUOTED delimiter, so an apostrophe or a quote in the text can never break the command:
+sdkit ui ask <<'EOF'
+{"questions":[{"question":"...","header":"...","multiSelect":false,"options":[{"label":"...","description":"..."}]}]}
+EOF
+The shape is AskUserQuestion's input. The command waits for the answer and prints it as JSON; read it and continue. If it prints an error, fix the JSON and run it again; never write the question into your message as plain text instead, because the person only sees the form.
 - Speak to the person in the language the skill names (ANALYST_LANGUAGE in the project's sdkit.env, Turkish when unset), in every message, not only in the questions.
 - When you ask about a review finding (the one-by-one walk at the round cap, or a decision that closes findings), add a "finding" object to that question: {"id":"F2","severity":"BLOCKER|MAJOR|MINOR","where":"file and line","problem":"one plain sentence","class":"FIX|ASK|REJECT","diff":"the proposed edit as unified-diff lines, '-' removed and '+' added"}. The panel draws it as a card, so keep the question text itself short and do not repeat the finding in it. Keep the four answers (apply, answer differently, accept the risk, reject) as the options.
+- At the generate-tasks plan gate, ask ONE question with a "plan" object: {"summary":"the plan-check result in one or two plain sentences","tasks":[{"ref":"T1","title":"...","risk":"low|medium|high","acs":["AC-1","AC-2"],"dependsOn":["T0"],"roles":["backend","qa"]}]} (group tasks only; roles are the subtask roles under it). The panel draws it as the AC-to-task table. Offer exactly two answers, the confirmation first, then "not yet" (the panel shows one confirm button; a typed note comes back with the answer). Write nothing to Jira before the confirm.
 - Write for a non-technical reader: short, plain, no command names or file paths in what you say to them. Keep printing the step banners the skill asks for.
 - Never paste raw lists, tables, file contents or tool output into what you say to them; say in a sentence or two what you found or did.
 - Do not stop to report between steps; stop only when the skill says a person must act.
@@ -62,16 +68,22 @@ func runUI(args []string) int {
 	}
 	env := []string{}
 	if exe, err := os.Executable(); err == nil {
-		// the session calls `sdkit ...` by name; make it find this binary even when it is not on PATH
-		env = append(env, "PATH="+filepath.Dir(exe)+string(os.PathListSeparator)+os.Getenv("PATH"))
+		// the session calls `sdkit ...` by name and must get THIS binary: another sdkit earlier on PATH (an older install) would send
+		// its questions without saying which spec asks, or not know the panel at all
+		dir, err := sdkitShim(exe)
+		if err != nil {
+			dir = filepath.Dir(exe)
+		}
+		env = append(env, "PATH="+dir+string(os.PathListSeparator)+os.Getenv("PATH"))
 	}
 	cfg := ui.Config{
-		Dir:     root,
-		Command: host,
-		Tools:   []string{"Bash", "Read", "Write", "Edit", "Glob", "Grep", "Task", "Skill"},
-		Env:     env,
-		Prompt:  func(task string, _ []string) string { return uiRules + task },
-		Getenv:  os.Getenv,
+		Dir:           root,
+		Command:       host,
+		Tools:         []string{"Bash", "Read", "Write", "Edit", "Glob", "Grep", "Task", "Skill"},
+		Env:           env,
+		Prompt:        func(task string, _ []string) string { return uiRules + task },
+		Getenv:        os.Getenv,
+		SessionExists: claudeSessionExists,
 	}
 	srv := ui.New(cfg, ui.NewSecret())
 	l, err := srv.Listen()
@@ -93,6 +105,50 @@ func runUI(args []string) int {
 	return cli.ExitOK
 }
 
+// sdkitShim is a directory whose `sdkit` is this binary. When the binary is already called sdkit its own directory does; otherwise a
+// small temporary directory holds a link (a copy where links are not allowed) under that name.
+func sdkitShim(exe string) (string, error) {
+	name := "sdkit"
+	if runtime.GOOS == "windows" {
+		name = "sdkit.exe"
+	}
+	if filepath.Base(exe) == name {
+		return filepath.Dir(exe), nil
+	}
+	dir, err := os.MkdirTemp("", "sdkit-ui-bin-")
+	if err != nil {
+		return "", err
+	}
+	dst := filepath.Join(dir, name)
+	if err := os.Symlink(exe, dst); err == nil {
+		return dir, nil
+	}
+	in, err := os.ReadFile(exe)
+	if err != nil {
+		return "", err
+	}
+	return dir, os.WriteFile(dst, in, 0o755)
+}
+
+// claudeSessionExists reports whether Claude Code still holds the session (it can be resumed). The host files a session as
+// <config-dir>/projects/<working directory, encoded>/<id>.jsonl; the encoding is the host's, so the project folder is globbed
+// and only the id (a uuid, checked here so it cannot name a path) is matched.
+func claudeSessionExists(id string) bool {
+	if !regexp.MustCompile(`^[A-Za-z0-9-]{8,64}$`).MatchString(id) {
+		return false
+	}
+	dir := os.Getenv("CLAUDE_CONFIG_DIR")
+	if dir == "" {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return false
+		}
+		dir = filepath.Join(home, ".claude")
+	}
+	m, _ := filepath.Glob(filepath.Join(dir, "projects", "*", id+".jsonl"))
+	return len(m) > 0
+}
+
 func runUIAsk(args []string) int {
 	var q []byte
 	if len(args) == 2 && args[0] == "--json" {
@@ -103,7 +159,7 @@ func runUIAsk(args []string) int {
 		fmt.Fprintln(os.Stderr, uiUsage)
 		return cli.ExitUsage
 	}
-	ans, err := ui.Ask(context.Background(), os.Getenv("SDKIT_UI_URL"), os.Getenv("SDKIT_UI_KEY"), q)
+	ans, err := ui.Ask(context.Background(), os.Getenv("SDKIT_UI_URL"), os.Getenv("SDKIT_UI_KEY"), os.Getenv("SDKIT_UI_SPEC"), q)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "sdkit ui ask:", err)
 		return cli.ExitFail

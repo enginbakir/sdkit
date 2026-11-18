@@ -11,6 +11,7 @@ import (
 // `{"questions":[{"question","header","options":[{"label","description"}],"multiSelect"}]}`.
 type Question struct {
 	ID        int             `json:"id"`
+	Spec      string          `json:"spec,omitempty"` // the spec whose run asks
 	Questions json.RawMessage `json:"questions"`
 }
 
@@ -35,14 +36,14 @@ func NewBroker(onAsk func(Question)) *Broker {
 
 // Ask registers the questions and waits for the answer or for ctx to end. A question that is not a valid questions object is
 // refused at once, so the agent sees the mistake instead of waiting on a form nobody can fill in.
-func (b *Broker) Ask(ctx context.Context, raw json.RawMessage) (json.RawMessage, error) {
+func (b *Broker) Ask(ctx context.Context, raw json.RawMessage, spec string) (json.RawMessage, error) {
 	questions, err := NormalizeQuestions(raw)
 	if err != nil {
 		return nil, err
 	}
 	b.mu.Lock()
 	b.next++
-	p := &pending{q: Question{ID: b.next, Questions: questions}, answer: make(chan json.RawMessage, 1)}
+	p := &pending{q: Question{ID: b.next, Spec: spec, Questions: questions}, answer: make(chan json.RawMessage, 1)}
 	b.pending[p.q.ID] = p
 	b.mu.Unlock()
 	if b.onAsk != nil {

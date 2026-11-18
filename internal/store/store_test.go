@@ -42,3 +42,23 @@ func TestStaleLockTakenOver(t *testing.T) {
 	}
 	unlock()
 }
+
+func TestLockBusy(t *testing.T) {
+	cases := []struct {
+		name string
+		err  error
+		goos string
+		want bool
+	}{
+		{"exists", os.ErrExist, "linux", true},
+		{"exists on windows", os.ErrExist, "windows", true},
+		{"windows says access denied while the holder deletes it", os.ErrPermission, "windows", true},
+		{"elsewhere a permission error is real", os.ErrPermission, "linux", false},
+		{"any other error", os.ErrInvalid, "windows", false},
+	}
+	for _, c := range cases {
+		if got := lockBusy(c.err, c.goos); got != c.want {
+			t.Errorf("%s: lockBusy = %v, want %v", c.name, got, c.want)
+		}
+	}
+}

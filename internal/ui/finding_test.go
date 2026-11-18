@@ -61,3 +61,30 @@ func TestNormalizeQuestions(t *testing.T) {
 		}
 	}
 }
+
+func TestNormalizeQuestionsAcceptsTheShapesAgentsSend(t *testing.T) {
+	cases := []struct{ name, in, wantQ, wantOpt string }{
+		{"the documented shape", `{"questions":[{"question":"Kapsam?","options":[{"label":"Dar"}]}]}`, "Kapsam?", "Dar"},
+		{"a single question without the wrapper", `{"question":"Kapsam?","options":[{"label":"Dar"}]}`, "Kapsam?", "Dar"},
+		{"a bare list of questions", `[{"question":"Kapsam?","options":[{"label":"Dar"}]}]`, "Kapsam?", "Dar"},
+		{"options as plain strings", `{"questions":[{"question":"Kapsam?","options":["Dar","Geniş"]}]}`, "Kapsam?", "Dar"},
+		{"an apostrophe in the text", `{"questions":[{"question":"Spec'in kapsamı?","options":[{"label":"TFF'in"}]}]}`, "Spec'in kapsamı?", "TFF'in"},
+	}
+	for _, c := range cases {
+		out, err := NormalizeQuestions([]byte(c.in))
+		if err != nil {
+			t.Errorf("%s: %v", c.name, err)
+			continue
+		}
+		var got struct{ Questions []QuestionItem }
+		json.Unmarshal(out, &got)
+		if len(got.Questions) != 1 || got.Questions[0].Question != c.wantQ || got.Questions[0].Options[0].Label != c.wantOpt {
+			t.Errorf("%s: %s", c.name, out)
+		}
+	}
+	for _, bad := range []string{`not json`, `{}`, `{"questions":[]}`, `{"questions":[{"question":"  "}]}`, `"just text"`} {
+		if _, err := NormalizeQuestions([]byte(bad)); err == nil {
+			t.Errorf("%q must be refused with a message the agent can act on", bad)
+		}
+	}
+}

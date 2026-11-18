@@ -418,7 +418,7 @@ It is regex-based; unusual syntax (aliases, calls from inside a script) can slip
 **usage-log**: Never blocks; exits silently if there is no transcript or the format is unexpected. Details in section 18.
 (Up to 0.5.0 the `SubagentStop` key was defined twice in `hooks.json` and `settings.copy.json`; since the last definition wins in JSON, subagent usage was never written. Now `record-verdict`, `usage-log`, `result-size` are in a single array; the hook framework registers each hook once.)
 
-**guard-budget**: Runs only if `MAX_SPAWNS` or `TOKEN_BUDGET_TASK` is set. The most recently updated `work/<slug>/state.json` counts as the active task; if there is none, it is silent. If the limit is exceeded, in `strict` mode it asks the user, in `guided` mode it only prints a warning, in `off` mode it does nothing. For the below-threshold warning (`TOKEN_BUDGET_WARN_PCT`) it gives no permission decision, it only writes a message; so it does not change the normal permission flow. A rejected spawn is counted too. It never blocks on its own error.
+**guard-budget**: Runs only if `MAX_SPAWNS` or `TOKEN_BUDGET_TASK` is set. The task named by `SDKIT_TASK`, else the most recently updated `work/<slug>/state.json`, counts as the active task; if there is none, it is silent. If the limit is exceeded, in `strict` mode it asks the user, in `guided` mode it only prints a warning, in `off` mode it does nothing. For the below-threshold warning (`TOKEN_BUDGET_WARN_PCT`) it gives no permission decision, it only writes a message; so it does not change the normal permission flow. A rejected spawn is counted too. It never blocks on its own error.
 
 **result-size**: Takes the answer from the `last_assistant_message` field, otherwise from the subagent transcript. It only warns; writing the output to a file is requested by the role texts and the handoff (`OUT:`).
 
@@ -950,6 +950,8 @@ At `high` risk reviewer and security-auditor start in the same message as the ve
 ---
 
 ## 18. Token economy
+
+**Which task the tokens belong to.** The usage ledger is `work/<slug>/usage.jsonl`. Without more information the kit files usage under the open task, else the most recently updated `work/*/state.json`, else `_misc`; in the analyst flow that is `_misc`, so a spec's cost is spread over sessions. A session that works on one named thing says so with `SDKIT_TASK=<id>` in its environment (the panel sets it to the spec id): the session's hooks and its subagents then file every token under that id, no state file needed, and `sdkit report task <id>` is that spec's report across all its sessions, per role. Unset, nothing changes. A name that is not a valid slug (letters, digits, `_ . -`) is ignored.
 
 Goal: spend where judgement is needed; do not spend on searching, rewriting and rereading. The rules are in `core/rules/token-economy.md` (copied into the project); in summary:
 

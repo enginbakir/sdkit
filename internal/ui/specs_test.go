@@ -61,14 +61,19 @@ func TestWritePrespecNeverWritesWhereGitWouldCommit(t *testing.T) {
 }
 
 func TestTask(t *testing.T) {
-	if got, err := Task("generate-specs", "odeme-akisi"); err != nil || !strings.Contains(got, `"odeme-akisi"`) || !strings.Contains(got, "generate-specs") {
+	if got, err := Task("", "generate-specs", "odeme-akisi", TaskInput{}); err != nil || !strings.Contains(got, `"odeme-akisi"`) || !strings.Contains(got, "generate-specs") {
 		t.Errorf("task = %q, %v", got, err)
 	}
-	if _, err := Task("generate-specs", "FORGOT.PASSWORD-v2"); err != nil {
+	if _, err := Task("", "generate-specs", "FORGOT.PASSWORD-v2", TaskInput{}); err != nil {
 		t.Errorf("an id that already exists in a project (it has a dot) must be continuable: %v", err)
 	}
+	for _, a := range []string{"update-specs", "merge-specs"} {
+		if got, err := Task("", a, "odeme-akisi", TaskInput{}); err != nil || !strings.Contains(got, a) {
+			t.Errorf("%s: %q, %v", a, got, err)
+		}
+	}
 	for _, c := range [][2]string{{"rm -rf", "x"}, {"generate-specs", "x; rm -rf /"}, {"generate-specs", ""}, {"generate-specs", "a b"}, {"", "x"}} {
-		if _, err := Task(c[0], c[1]); err == nil {
+		if _, err := Task("", c[0], c[1], TaskInput{}); err == nil {
 			t.Errorf("Task(%q, %q) must be refused: the page names an action, it does not write instructions", c[0], c[1])
 		}
 	}

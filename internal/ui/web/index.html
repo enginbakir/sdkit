@@ -5,110 +5,253 @@
 <title>sdkit</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
-  :root { --ink:#1b1f24; --mute:#5b6470; --line:#d8dce1; --blue:#2563eb; --ok:#15803d; --bad:#b42318; --warn:#b45309; --bg:#f6f7f9; }
+  :root { color-scheme: dark; --bg:#0b0c0e; --panel:#111316; --panel2:#16191d; --line:#1f242a; --line2:#2b313a; --ink:#e7e9ec; --mute:#8d95a3; --dim:#5d6572;
+    --ok:#3ddc97; --warn:#f5b84a; --bad:#ff6b6b; --run:#6ea8fe; --blue:#6ea8fe;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; --sans: Inter, system-ui, -apple-system, "Segoe UI", sans-serif; }
   * { box-sizing: border-box; }
   [hidden] { display: none !important; }
-  body { font: 15px/1.5 system-ui, sans-serif; margin: 0; color: var(--ink); background: var(--bg); }
-  header { background: #fff; border-bottom: 1px solid var(--line); }
-  .bar { max-width: 780px; margin: 0 auto; padding: 0 1rem; display: flex; align-items: center; gap: 1.5rem; }
-  .bar h1 { font-size: 1.1rem; margin: 0; padding: .9rem 0; }
-  nav { display: flex; gap: .25rem; }
-  nav button { font: inherit; border: 0; background: none; padding: .95rem .8rem; cursor: pointer; color: var(--mute); border-bottom: 3px solid transparent; }
-  nav button[aria-selected=true] { color: var(--ink); border-bottom-color: var(--blue); font-weight: 600; }
-  nav .dot { display: inline-block; width: .5rem; height: .5rem; border-radius: 50%; background: var(--bad); margin-left: .35rem; vertical-align: middle; }
-  main { max-width: 780px; margin: 1.5rem auto; padding: 0 1rem; }
-  section[hidden] { display: none; }
-  .card { background: #fff; border: 1px solid var(--line); border-radius: .6rem; padding: 1.1rem 1.2rem; margin-bottom: 1rem; }
-  .card h2 { font-size: 1rem; margin: 0 0 .6rem; }
-  label { display: block; font-weight: 600; margin: .9rem 0 .2rem; }
-  .hint { color: var(--mute); font-size: .85rem; font-weight: 400; margin: 0 0 .3rem; }
-  input[type=text], input[type=password], input[type=email], textarea { width: 100%; font: inherit; padding: .5rem .6rem; border: 1px solid var(--line); border-radius: .4rem; background: #fff; }
-  input:focus, textarea:focus, button:focus-visible { outline: 2px solid var(--blue); outline-offset: 1px; }
-  textarea { min-height: 7rem; }
-  .btn { font: inherit; padding: .5rem 1.1rem; border-radius: .4rem; border: 1px solid var(--line); background: #fff; cursor: pointer; }
-  .btn.primary { background: var(--blue); color: #fff; border-color: var(--blue); }
-  .btn:disabled { opacity: .5; cursor: default; }
+  html, body { height: 100%; }
+  body { font: 14px/1.5 var(--sans); margin: 0; color: var(--ink); background: var(--bg); -webkit-font-smoothing: antialiased; }
+  a { color: var(--run); text-decoration: none; } a:hover { text-decoration: underline; }
+  ::selection { background: #2b4a7d; }
+  ::-webkit-scrollbar { width: 10px; height: 10px; } ::-webkit-scrollbar-thumb { background: var(--line2); border-radius: 6px; border: 2px solid var(--bg); } ::-webkit-scrollbar-track { background: transparent; }
+  .mono, .num, code, pre { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+
+  /* shell: sidebar | (top bar / content + rail) */
+  .app { display: grid; grid-template-columns: 248px minmax(0, 1fr); height: 100vh; overflow: hidden; }
+  aside.side { background: var(--panel); border-right: 1px solid var(--line); display: flex; flex-direction: column; padding: 14px 12px; gap: 14px; min-height: 0; }
+  .brand { display: flex; align-items: center; gap: .55rem; padding: 2px 6px; font-weight: 650; letter-spacing: .02em; }
+  .brand i { width: 18px; height: 18px; border-radius: 5px; background: var(--ink); display: grid; place-items: center; color: var(--bg); font: 700 11px var(--mono); font-style: normal; }
+  .brand small { color: var(--dim); font-weight: 400; font-family: var(--mono); font-size: .72rem; margin-left: auto; }
+  .searchbox { position: relative; } .searchbox input[type=text] { padding-left: 2rem; }
+  .searchbox::before { content: "⌕"; position: absolute; left: .7rem; top: 50%; transform: translateY(-52%); color: var(--dim); font-size: 1rem; }
+  nav { display: flex; flex-direction: column; gap: 2px; }
+  nav button { font: inherit; text-align: left; border: 0; background: none; padding: .5rem .7rem; cursor: pointer; color: var(--mute); border-radius: 6px; display: flex; align-items: center; gap: .6rem; }
+  nav button:hover { background: var(--panel2); color: var(--ink); }
+  nav button[aria-selected=true] { background: var(--ink); color: var(--bg); font-weight: 600; }
+  nav .ico { width: 1rem; text-align: center; opacity: .9; font-size: .95rem; }
+  nav .dot { margin-left: auto; }
+  .dot { display: inline-block; min-width: .5rem; height: .5rem; border-radius: 50%; background: var(--bad); }
+  .dot.run { background: var(--run); box-shadow: 0 0 0 0 rgba(110,168,254,.6); animation: pulse 1.8s infinite; }
+  .dot.ask { background: var(--warn); color: #1a1205; min-width: 1.15rem; height: 1.15rem; border-radius: .6rem; font: 700 .68rem/1.15rem var(--sans); text-align: center; padding: 0 .3rem; animation: none; }
+  @keyframes pulse { 70% { box-shadow: 0 0 0 7px rgba(110,168,254,0); } 100% { box-shadow: 0 0 0 0 rgba(110,168,254,0); } }
+  .sfoot { margin-top: auto; border-top: 1px solid var(--line); padding-top: 12px; display: flex; gap: .6rem; align-items: center; min-width: 0; }
+  .avatar { width: 30px; height: 30px; border-radius: 50%; background: var(--line2); display: grid; place-items: center; font-weight: 650; color: var(--ink); flex: none; text-transform: uppercase; }
+  .sfoot .who { min-width: 0; line-height: 1.25; } .sfoot .who b { display: block; font-weight: 600; font-size: .82rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .sfoot .who span { color: var(--dim); font: .7rem var(--mono); display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .shell { display: grid; grid-template-rows: 52px minmax(0, 1fr); min-width: 0; min-height: 0; height: 100vh; }
+  .top { border-bottom: 1px solid var(--line); display: flex; align-items: center; justify-content: space-between; padding: 0 22px; gap: 1rem; background: var(--bg); }
+  .crumbs { display: flex; align-items: center; gap: .5rem; font-size: .95rem; min-width: 0; } .crumbs b { font-weight: 650; } .crumbs .sep { color: var(--dim); } .crumbs a { color: var(--mute); } .crumbs a:hover { color: var(--ink); text-decoration: none; }
+  .crumbs .cur { font-family: var(--mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .topr { display: flex; align-items: center; gap: .6rem; flex: none; }
+  .chipbtn { font: inherit; font-size: .8rem; display: inline-flex; align-items: center; gap: .45rem; padding: .28rem .7rem; border-radius: 999px; border: 1px solid var(--line2); background: var(--panel); color: var(--mute); cursor: default; }
+  button.chipbtn { cursor: pointer; } button.chipbtn:hover { color: var(--ink); border-color: var(--dim); }
+  .chipbtn.ask { border-color: #6b4a12; background: #2a1f0a; color: var(--warn); font-weight: 600; }
+  .body { display: grid; grid-template-columns: minmax(0, 1fr) 330px; min-height: 0; }
+  .body.norail { grid-template-columns: minmax(0, 1fr); }
+  main { overflow: auto; padding: 26px 30px 0; min-width: 0; display: flex; flex-direction: column; }
+  main > section { max-width: 1180px; width: 100%; margin: 0 auto; padding-bottom: 30px; flex: 1; }
+  #run { display: flex; flex-direction: column; } #home { flex: 1; display: flex; flex-direction: column; } #home .composer { margin-top: auto; }
+  .rail { border-left: 1px solid var(--line); background: var(--panel); overflow: auto; display: flex; flex-direction: column; min-height: 0; }
+  .body.norail .rail { display: none; }
+  .railh { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px 10px; position: sticky; top: 0; background: var(--panel); z-index: 1; border-bottom: 1px solid var(--line); }
+  .railh b { font-weight: 650; } .railh span { color: var(--dim); font-family: var(--mono); margin-left: .35rem; }
+  .filt { font-size: .74rem; padding: .12rem .55rem; border-radius: 999px; background: var(--line2); color: var(--ink); cursor: pointer; border: 0; font-family: var(--sans); }
+  #rlist { padding: 10px 12px 18px; display: grid; gap: 8px; align-content: start; }
+  .ritem { display: block; text-align: left; font: inherit; color: inherit; width: 100%; background: var(--panel2); border: 1px solid transparent; border-radius: 8px; padding: .65rem .8rem; cursor: pointer; }
+  .ritem:hover { border-color: var(--line2); } .ritem.sel { border-color: var(--ink); }
+  .ritem .t { display: flex; align-items: center; gap: .5rem; font-family: var(--mono); font-size: .84rem; font-weight: 600; word-break: break-all; } .ritem .t .grow { flex: 1; }
+  .ritem .s { color: var(--mute); font-size: .78rem; margin-top: .15rem; }
+  .mini { display: flex; gap: 3px; margin-top: .5rem; } .mini i { flex: 1; height: 3px; border-radius: 2px; background: var(--line2); } .mini i.done { background: var(--ok); } .mini i.current { background: var(--run); }
+  .pill { font-size: .68rem; padding: .02rem .5rem; border-radius: 999px; white-space: nowrap; font-weight: 600; font-family: var(--sans); }
+  .pill.run { background: #14243d; color: var(--run); } .pill.ask { background: #2a1f0a; color: var(--warn); }
+
+  /* content pieces */
+  .hero { text-align: center; padding: 34px 0 22px; } .hero h1 { margin: 0; font-size: 1.9rem; letter-spacing: -.02em; font-weight: 650; } .hero p { color: var(--mute); margin: .5rem 0 0; }
+  .tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin: 8px 0 22px; }
+  .tile { text-align: left; font: inherit; color: inherit; cursor: pointer; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: .9rem 1rem; display: flex; justify-content: space-between; align-items: center; }
+  .tile:hover { border-color: var(--line2); } .tile.sel { border-color: var(--ink); }
+  .tile .n { font: 650 1.5rem var(--mono); } .tile .l { color: var(--mute); font-size: .8rem; }
+  .pagehead { margin: 0 0 18px; } .pagehead h2 { font-size: 1.35rem; margin: 0; font-weight: 650; letter-spacing: -.01em; } .pagehead p { margin: .25rem 0 0; color: var(--mute); }
+  .cols { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 14px; align-items: start; }
+  .cols2 { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px; align-items: start; }
+  .jobgrid { display: grid; grid-template-columns: 230px minmax(0, 1fr); gap: 16px; align-items: start; }
+  @media (max-width: 1250px) { .body { grid-template-columns: minmax(0, 1fr) 290px; } .tiles { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 1000px) { .cols, .cols2, .jobgrid, .editor { grid-template-columns: 1fr; } .body { grid-template-columns: 1fr; } .rail { display: none; } }
+  @media (max-width: 760px) { .app { grid-template-columns: 1fr; } aside.side { display: none; } }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; margin-bottom: 14px; }
+  .card h2 { font-size: .74rem; margin: 0 0 .8rem; color: var(--mute); text-transform: uppercase; letter-spacing: .08em; font-weight: 600; }
+  label { display: block; font-weight: 600; font-size: .82rem; margin: .9rem 0 .25rem; }
+  .hint { color: var(--mute); font-size: .82rem; font-weight: 400; margin: 0 0 .35rem; }
+  input[type=text], input[type=password], input[type=email], textarea, select { width: 100%; font: inherit; color: var(--ink); padding: .5rem .65rem; border: 1px solid var(--line2); border-radius: 7px; background: #0d0f12; }
+  input::placeholder, textarea::placeholder { color: var(--dim); }
+  input:focus, textarea:focus, select:focus { outline: none; border-color: var(--run); box-shadow: 0 0 0 3px rgba(110,168,254,.15); }
+  button:focus-visible { outline: 2px solid var(--run); outline-offset: 2px; }
+  textarea { min-height: 7rem; resize: vertical; }
+  .btn { white-space: nowrap; flex: none; font: inherit; font-size: .85rem; padding: .42rem .95rem; border-radius: 7px; border: 1px solid var(--line2); background: transparent; color: var(--ink); cursor: pointer; }
+  .btn:hover { border-color: var(--dim); background: var(--panel2); }
+  .btn.primary { background: var(--ink); color: var(--bg); border-color: var(--ink); font-weight: 600; } .btn.primary:hover { background: #fff; }
+  .btn:disabled { opacity: .4; cursor: default; pointer-events: none; }
   .row { display: flex; gap: .6rem; align-items: center; margin-top: 1rem; }
-  .item { display: flex; gap: .7rem; padding: .6rem 0; border-top: 1px solid var(--line); }
-  .item:first-child { border-top: 0; }
-  .icon { width: 1.4rem; height: 1.4rem; border-radius: 50%; flex: none; display: grid; place-items: center; color: #fff; font-size: .8rem; margin-top: .1rem; }
-  .icon.ok { background: var(--ok); } .icon.problem, .icon.todo { background: var(--bad); }
-  .item .t { font-weight: 600; } .item .h { color: var(--mute); font-size: .9rem; }
-  .res { margin-top: .8rem; padding: .6rem .8rem; border-radius: .4rem; font-size: .92rem; }
-  .res.ok { background: #e7f6ec; color: var(--ok); } .res.bad { background: #fdecea; color: var(--bad); }
-  .banner { background: #fff7e6; border: 1px solid #f3d38a; color: var(--warn); padding: .7rem 1rem; border-radius: .5rem; margin-bottom: 1rem; }
-  #steps { display: flex; gap: .3rem; flex-wrap: wrap; margin: 1rem 0; }
-  .step { padding: .2rem .65rem; border-radius: 1rem; background: #e6e8eb; font-size: .85rem; }
-  .step.started { background: #fff3c4; } .step.done { background: #c9f0d1; }
-  .msg { white-space: pre-wrap; margin: .6rem 0; }
-  .q { border: 2px solid var(--blue); border-radius: .6rem; padding: .9rem 1rem; margin: 1rem 0; background: #fff; }
-  .q label { font-weight: 400; margin: .25rem 0; display: block; }
-  .q small { color: var(--mute); }
-  .fail { color: var(--bad); }
-  .spec { display:flex; align-items:center; gap:.8rem; padding:.65rem 0; border-top:1px solid var(--line); }
-  .spec:first-child { border-top:0; }
-  .spec .n { font-weight:600; } .spec .l { color:var(--mute); font-size:.88rem; }
-  .spec .grow { flex:1; }
-  .chip { font-size:.78rem; padding:.1rem .55rem; border-radius:1rem; background:#fff3c4; color:var(--warn); }
-  .icon.soft { background: var(--warn); }
-  .fc { border: 1px solid var(--line); border-left: 5px solid var(--mute); border-radius: .5rem; padding: .7rem .9rem; margin: .5rem 0 .8rem; background: #fcfcfd; }
-  .fc.BLOCKER { border-left-color: var(--bad); } .fc.MAJOR { border-left-color: var(--warn); } .fc.MINOR { border-left-color: #6b7280; }
-  .fc .top { display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; font-size: .82rem; }
-  .sev { font-weight: 700; padding: .05rem .5rem; border-radius: 1rem; color: #fff; background: #6b7280; }
-  .sev.BLOCKER { background: var(--bad); } .sev.MAJOR { background: var(--warn); }
-  .cls { color: var(--mute); } .where { color: var(--mute); font-family: ui-monospace, monospace; word-break: break-all; }
-  .fc .prob { margin: .5rem 0 0; font-size: .97rem; }
-  .fc .lbl { margin: .7rem 0 .2rem; font-size: .78rem; font-weight: 700; color: var(--mute); text-transform: uppercase; letter-spacing: .03em; }
-  .diff { margin: 0; border: 1px solid var(--line); border-radius: .35rem; overflow: auto; font: .82rem/1.45 ui-monospace, monospace; background: #fff; }
-  .diff div { padding: 0 .6rem; white-space: pre-wrap; }
-  .diff .add { background: #e6f6ea; color: #14532d; } .diff .del { background: #fdecea; color: #7f1d1d; } .diff .hunk { color: var(--mute); background: #f3f4f6; }
-  .note { margin-top: .4rem; }
-  details { margin-top: 1rem; color: var(--mute); font-size: .85rem; }
-  pre { white-space: pre-wrap; margin: .4rem 0 0; }
+  .item { display: flex; gap: .75rem; padding: .7rem 0; border-top: 1px solid var(--line); } .item:first-child { border-top: 0; }
+  .icon { width: 1.35rem; height: 1.35rem; border-radius: 50%; flex: none; display: grid; place-items: center; color: var(--bg); font-size: .75rem; font-weight: 700; margin-top: .1rem; }
+  .icon.ok { background: var(--ok); } .icon.problem, .icon.todo { background: var(--bad); } .icon.soft { background: var(--warn); }
+  .item .t { font-weight: 600; } .item .h { color: var(--mute); font-size: .86rem; }
+  .res { margin-top: .8rem; padding: .55rem .8rem; border-radius: 7px; font-size: .86rem; border: 1px solid; }
+  .res.ok { background: #0f2a20; color: var(--ok); border-color: #1d5c42; } .res.bad { background: #2c1214; color: var(--bad); border-color: #6b2428; }
+  .banner { background: #231b09; border: 1px solid #5c4210; color: var(--warn); padding: .6rem .9rem; border-radius: 8px; margin-bottom: 16px; font-size: .88rem; }
+  .fail { color: var(--bad); } .chip { font-size: .72rem; padding: .08rem .6rem; border-radius: 999px; background: var(--line2); color: var(--ink); font-weight: 500; vertical-align: middle; }
+  .msg { white-space: pre-wrap; margin: .55rem 0; } .msg.fail { color: var(--bad); } .msg.warn { color: var(--warn); background: #231b09; border: 1px solid #5c4210; padding: .5rem .75rem; border-radius: 8px; }
+  .q { border: 1px solid var(--run); border-radius: 10px; padding: 1rem 1.1rem; margin: 1rem 0; background: var(--panel); box-shadow: 0 0 0 3px rgba(110,168,254,.08); }
+  .q label { font-weight: 400; margin: .3rem 0; display: block; font-size: .92rem; } .q small { color: var(--mute); }
+  .q input[type=radio], .q input[type=checkbox] { accent-color: var(--ink); }
+  details { margin-top: 1rem; color: var(--mute); font-size: .85rem; } summary { cursor: pointer; }
+  pre { white-space: pre-wrap; margin: .5rem 0 0; background: var(--panel2); border: 1px solid var(--line); border-radius: 8px; padding: .7rem .85rem; font-size: .8rem; color: var(--mute); }
+
+  /* flow bar: a thin progress segment per stage */
+  .flow { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px; margin: 0 0 18px; }
+  .flow .fs { padding-top: .5rem; border-top: 3px solid var(--line2); color: var(--dim); font-size: .8rem; }
+  .flow .fs.done { border-top-color: var(--ok); color: var(--mute); } .flow .fs.current { border-top-color: var(--run); color: var(--ink); font-weight: 600; }
+  .flow .fs small { display: block; font-weight: 400; color: var(--run); font-size: .72rem; margin-top: .1rem; }
+  #steps { display: flex; flex-direction: column; gap: 6px; margin: 0; }
+  .step { padding: .38rem .65rem; border-radius: 6px; background: var(--panel2); font-size: .82rem; color: var(--mute); border-left: 3px solid var(--line2); }
+  .step.started { border-left-color: var(--warn); color: var(--ink); } .step.done { border-left-color: var(--ok); color: var(--ink); }
+
+  .acts { display: grid; gap: .2rem; } .act { display: flex; gap: .9rem; align-items: center; justify-content: space-between; padding: .7rem 0; border-top: 1px solid var(--line); } .act:first-child { border-top: 0; padding-top: 0; }
+  .act .h { color: var(--mute); font-size: .82rem; } .resumehint { color: var(--mute); font-size: .78rem; }
+  .linkbtn { font: inherit; font-size: .78rem; background: none; border: 0; color: var(--run); cursor: pointer; padding: 0; text-decoration: underline; }
+  ul.done { margin: 0; padding-left: 1.1rem; color: var(--mute); } ul.done li { margin: .2rem 0; } ul.done li::marker { color: var(--ok); }
+  .busy { display: flex; align-items: center; gap: .7rem; background: #0e1a2e; border: 1px solid #1f3a66; color: #a9c8ff; border-radius: 8px; padding: .55rem .85rem; margin: 0 0 .8rem; font-size: .88rem; }
+  .spin { width: 1rem; height: 1rem; border: 2px solid #1f3a66; border-top-color: var(--run); border-radius: 50%; animation: sp .8s linear infinite; flex: none; } @keyframes sp { to { transform: rotate(360deg); } }
+  .spec { display: flex; align-items: center; gap: .8rem; padding: .65rem 0; border-top: 1px solid var(--line); } .spec:first-child { border-top: 0; } .spec .n { font-weight: 600; } .spec .l { color: var(--mute); font-size: .85rem; } .spec .grow { flex: 1; }
+
+  /* tables, plans, findings, diffs */
+  .tbl { width: 100%; border-collapse: collapse; font-size: .85rem; margin-top: .3rem; }
+  .tbl th { text-align: left; color: var(--dim); font-size: .7rem; text-transform: uppercase; letter-spacing: .07em; padding: .35rem .6rem; border-bottom: 1px solid var(--line); font-weight: 600; }
+  .tbl td { padding: .5rem .6rem; border-top: 1px solid var(--line); vertical-align: top; } .tbl tr:first-child td { border-top: 0; }
+  .tbl .ref { font: 650 .85rem var(--mono); white-space: nowrap; } .tbl .acs { font: .78rem var(--mono); color: var(--mute); } .num { text-align: right; white-space: nowrap; }
+  .tbl tr.click { cursor: pointer; } .tbl tr.click:hover td { background: var(--panel2); }
+  .risk { font-size: .7rem; padding: .05rem .5rem; border-radius: 999px; background: var(--line2); } .risk.high { background: #2c1214; color: var(--bad); } .risk.medium { background: #2a1f0a; color: var(--warn); } .risk.low { background: #0f2a20; color: var(--ok); }
+  .plan { border: 1px solid var(--line2); border-left: 3px solid var(--run); border-radius: 8px; padding: .8rem 1rem; margin: .5rem 0 .8rem; background: var(--panel2); overflow-x: auto; } .plan .sum { margin: 0 0 .4rem; }
+  .fc { border: 1px solid var(--line2); border-left: 3px solid var(--dim); border-radius: 8px; padding: .7rem .9rem; margin: .5rem 0 .8rem; background: var(--panel2); }
+  .fc.BLOCKER { border-left-color: var(--bad); } .fc.MAJOR { border-left-color: var(--warn); } .fc.MINOR { border-left-color: var(--dim); }
+  .fc .top { display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; font-size: .8rem; }
+  .sev { font-weight: 700; padding: .03rem .5rem; border-radius: 999px; color: var(--bg); background: var(--dim); font-size: .7rem; } .sev.BLOCKER { background: var(--bad); } .sev.MAJOR { background: var(--warn); }
+  .cls { color: var(--mute); } .where { color: var(--mute); font-family: var(--mono); word-break: break-all; } .fc .prob { margin: .5rem 0 0; }
+  .fc .lbl { margin: .7rem 0 .2rem; font-size: .7rem; font-weight: 700; color: var(--dim); text-transform: uppercase; letter-spacing: .07em; }
+  .diff { margin: 0; border: 1px solid var(--line2); border-radius: 6px; overflow: auto; font: .8rem/1.45 var(--mono); background: #0d0f12; } .diff div { padding: 0 .6rem; white-space: pre-wrap; }
+  .diff .add { background: #0f2a20; color: #7ee2b0; } .diff .del { background: #2c1214; color: #ff9a9a; } .diff .hunk { color: var(--dim); background: var(--panel2); }
+  .kv { display: grid; grid-template-columns: auto 1fr; gap: .15rem .8rem; font-size: .88rem; margin-top: .5rem; } .kv dt { color: var(--mute); } .kv dd { margin: 0; }
+  .links a { display: inline-block; margin: .15rem .8rem .15rem 0; font: 600 .85rem var(--mono); }
+  .tag { font-size: .72rem; padding: .05rem .5rem; border-radius: 999px; background: var(--line2); } .tag.warn { background: #2a1f0a; color: var(--warn); }
+  .btns { display: flex; gap: .4rem; flex-wrap: wrap; justify-content: flex-end; }
+
+  /* files */
+  .editor { display: grid; grid-template-columns: 270px minmax(0, 1fr); gap: 14px; }
+  .flist { max-height: 30rem; overflow: auto; } .flist .g { font-size: .68rem; font-weight: 700; color: var(--dim); text-transform: uppercase; letter-spacing: .08em; margin: .8rem 0 .25rem; }
+  .flist button { display: block; width: 100%; text-align: left; font: .8rem var(--mono); color: var(--mute); border: 0; background: none; padding: .32rem .55rem; border-radius: 6px; cursor: pointer; word-break: break-all; }
+  .flist button:hover { background: var(--panel2); color: var(--ink); } .flist button.sel { background: var(--panel2); color: var(--ink); box-shadow: inset 2px 0 0 var(--ink); } .flist .lock::after { content: ' 🔒'; font-size: .7rem; }
+  .ftext { width: 100%; min-height: 28rem; font: .82rem/1.55 var(--mono); }
+  .fname { font-family: var(--mono); }
+  /* the writing box at the foot of the specs page */
+  .composer { position: sticky; bottom: 0; background: var(--panel); border: 1px solid var(--line2); border-radius: 12px; padding: .8rem .9rem .6rem; margin: 18px 0 0; box-shadow: 0 -18px 24px -12px var(--bg); }
+  .composer .nm { display: flex; gap: .6rem; align-items: center; margin-bottom: .5rem; } .composer .nm input { font-family: var(--mono); }
+  .composer textarea { border: 0; background: transparent; min-height: 5.5rem; padding: .2rem .1rem; box-shadow: none !important; resize: vertical; }
+  .composer .bar { display: flex; align-items: center; gap: .8rem; border-top: 1px solid var(--line); padding-top: .55rem; margin-top: .3rem; } .composer .bar .hint { margin: 0; flex: 1; }
 </style>
 </head>
 <body>
-<header>
-  <div class="bar">
-    <h1>sdkit</h1>
-    <nav role="tablist">
-      <button role="tab" id="t-run" aria-selected="true" data-tab="run">Başla</button>
-      <button role="tab" id="t-connect" aria-selected="false" data-tab="connect">Bağlantı</button>
-      <button role="tab" id="t-health" aria-selected="false" data-tab="health">Sağlık<span class="dot" id="dot" hidden></span></button>
-    </nav>
-  </div>
+<div class="app">
+<aside class="side">
+  <div class="brand"><i>s</i>sdkit<small id="ver">local</small></div>
+  <div class="searchbox"><input type="text" id="q" placeholder="Spec ara…" autocomplete="off" aria-label="Spec ara"></div>
+  <nav role="tablist" aria-orientation="vertical">
+    <button role="tab" id="t-run" aria-selected="true" data-tab="run"><span class="ico">&#9776;</span>Specs<span class="dot run" id="rundot" hidden></span></button>
+    <button role="tab" id="t-reports" aria-selected="false" data-tab="reports"><span class="ico">&#9638;</span>Reports</button>
+    <button role="tab" id="t-connect" aria-selected="false" data-tab="connect"><span class="ico">&#9881;</span>Configuration</button>
+    <button role="tab" id="t-health" aria-selected="false" data-tab="health"><span class="ico">&#10003;</span>Onboarding<span class="dot" id="dot" hidden></span></button>
+  </nav>
+  <div class="sfoot"><div class="avatar" id="av">?</div><div class="who"><b id="whoname">Yerel panel</b><span id="whorepo"></span></div></div>
+</aside>
+<div class="shell">
+<header class="top">
+  <div class="crumbs" id="crumbs"></div>
+  <div class="topr"><button class="chipbtn ask" id="askchip" hidden></button><span class="chipbtn" id="runchip" hidden></span><a class="chipbtn" id="healthchip" href="#" data-go="health" hidden></a></div>
 </header>
+<div class="body" id="body">
 <main>
   <section id="run">
-    <div class="banner" id="notready" hidden>Kurulumda eksikler var. Başlamadan önce <a href="#" data-go="health">Sağlık</a> sayfasına bakın.</div>
+    <div class="banner" id="notready" hidden>Kurulumda eksikler var. Başlamadan önce <a href="#" data-go="health">Onboarding</a> sayfasına bakın.</div>
     <div id="home">
-      <div class="card">
-        <h2>Yeni spec</h2>
-        <p class="hint">Elinizdeki ön-spec metnini yapıştırın. Eksik noktaları size soracağım.</p>
-        <label for="prespecId">Spec adı</label>
-        <p class="hint">Harf, rakam ve tire kullanın. Örneğin: odeme-akisi</p>
-        <input type="text" id="prespecId" maxlength="60" autocomplete="off">
-        <label for="prespecText">Ön-spec</label>
-        <textarea id="prespecText" aria-label="Ön-spec"></textarea>
-        <div class="row"><button class="btn primary" id="create">Spec üret</button><span class="fail" id="createerr"></span></div>
-      </div>
-      <div class="card">
-        <h2>Spec'lerim</h2>
-        <div id="specs"><p class="hint">Yükleniyor...</p></div>
+      <div class="hero"><h1>Hangi spec üzerinde çalışalım?</h1><p>Yeni bir ön-spec yazın ya da sağdaki listeden bir spec seçin. Aynı anda birkaçı ilerleyebilir.</p></div>
+      <div class="tiles" id="tiles"></div>
+      <div class="composer" id="composer">
+        <div class="nm"><label for="prespecId" style="margin:0;white-space:nowrap">Yeni spec</label><input type="text" id="prespecId" maxlength="60" autocomplete="off" placeholder="spec-adi (harf, rakam, tire)"></div>
+        <textarea id="prespecText" aria-label="Ön-spec" placeholder="Ön-spec metnini buraya yapıştırın. Eksik noktaları size soracağım."></textarea>
+        <div class="bar"><p class="hint">Ön-spec git'e girmeyen bir klasöre kaydedilir.</p><span class="fail" id="createerr"></span><button class="btn primary" id="create">Spec üret &#10148;</button></div>
       </div>
     </div>
+    <div id="detail" hidden>
+      <div class="pagehead"><h2><span id="did"></span> <span class="chip" id="dlabel"></span></h2><p id="dbranch"></p></div>
+      <div class="flow" id="dflow"></div>
+      <div class="busy" id="drun" hidden><span class="spin"></span><span id="drunt"></span><button class="btn" id="drunb" style="margin-left:auto">Çalışmayı göster</button></div>
+      <div class="cols2">
+        <div class="card"><h2>Bu adımda yapabilecekleriniz</h2><div class="acts" id="dacts"></div><div id="dmsg"></div><div id="dwt"></div></div>
+        <div class="card"><h2>Şu ana kadar yapılanlar</h2><ul class="done" id="ddone"></ul></div>
+      </div>
+      <div class="card"><h2>Raporlar</h2><div id="dreports"><p class="hint">Yükleniyor...</p></div></div>
+      <div class="card"><h2>Dosyalar</h2><div id="dfilesHost"></div></div>
+    </div>
+    <div id="tasksetup" hidden>
+      <div class="pagehead"><h2>Task üret: <span id="tsid"></span></h2><p>Onaylanmış spec, Jira'daki bir işin altında atomik task'lara bölünür. Önce planı göreceksiniz; siz onaylamadan Jira'ya hiçbir şey yazılmaz.</p></div>
+      <div class="cols2">
+        <div class="card">
+          <h2>1. Jira üst işi</h2>
+          <p class="hint">Task'ların altına açılacağı mevcut iş (epic veya story). Burada yeni iş açılmaz.</p>
+          <label for="tsParent">Jira anahtarı</label>
+          <input type="text" id="tsParent" placeholder="TFF-123" autocomplete="off" maxlength="30">
+          <div id="tsParentRes"></div>
+        </div>
+        <div class="card">
+          <h2>2. Spec sürümü</h2>
+          <p class="hint">main'de onaylanmış sürümler. Tech Lead'in birleştirdiği son sürüm en üsttedir.</p>
+          <label for="tsSha">Sürüm</label>
+          <select id="tsSha" disabled></select>
+          <div id="tsShaRes"></div>
+        </div>
+      </div>
+      <div class="row"><button class="btn primary" id="tsStart" disabled>Planı hazırla</button><button class="btn" id="tsCancel">Vazgeç</button><span class="fail" id="tsErr"></span></div>
+    </div>
     <div id="job" hidden>
-      <h2 id="jobtitle" style="font-size:1.05rem"></h2>
-      <div id="steps"></div>
-      <div id="log"></div>
-      <div id="questions"></div>
-      <div class="row"><button class="btn" id="stop" hidden>Durdur</button><button class="btn primary" id="back" hidden>Listeye dön</button></div>
-      <details><summary>Ayrıntılar</summary><pre id="tools"></pre></details>
+      <div class="pagehead"><h2 id="jobtitle"></h2><p id="jobsub"></p></div>
+      <div class="jobgrid">
+        <div class="card"><h2>Adımlar</h2><div id="steps"></div></div>
+        <div>
+          <div class="busy" id="busy" hidden><span class="spin"></span><span id="busytext"></span></div>
+          <div id="log"></div>
+          <div id="questions"></div>
+          <div id="taskresult"></div>
+          <div class="row"><button class="btn" id="stop" hidden>Durdur</button><button class="btn primary" id="back" hidden>Listeye dön</button></div>
+          <details><summary>Ayrıntılar</summary><pre id="tools"></pre></details>
+        </div>
+      </div>
+      <div class="card" style="margin-top:1rem"><h2>Bu spec'in dosyaları</h2><p class="hint">Çalışma sürerken salt okunur. Ön-spec ve üretilen dosyalar açılır, bu ekrandan çıkmanız gerekmez.</p><div id="jfilesHost"></div></div>
     </div>
   </section>
 
+  <section id="reports" hidden>
+    <div class="pagehead"><h2>Reports</h2><p>Her çalışmanın oturum raporu: kaç token, tahmini maliyet, hangi rol ne yaptı. Panelden başlattığınız çalışmalar spec'iyle eşleşir.</p></div>
+    <div class="card"><h2>Spec bazında</h2><div id="repspecs"></div></div>
+    <div class="card"><h2>Oturumlar</h2><div id="repsessions"></div>
+      <p class="hint">Maliyet, API fiyatlarıyla hesaplanmış tahmini karşılıktır; faturanız değildir. &ldquo;kısmi&rdquo;: ölçülemeyen çalışmalar var, gerçek değer bundan yüksek olabilir. Panel dışında (terminalde) başlatılan oturumların hangi spec'e ait olduğu bilinmez, eşleştirilmez.</p></div>
+    <div class="card" id="repview" hidden><h2 id="repviewtitle">Rapor</h2><pre id="reptext"></pre></div>
+  </section>
+
   <section id="connect" hidden>
-    <form class="card" id="form" autocomplete="off">
+    <div class="pagehead"><h2>Configuration</h2><p>Jira ve Bitbucket bilgileriniz. Kaydedince hemen denenir.</p></div>
+    <form id="form" autocomplete="off">
+      <div class="cols2">
+      <div class="card">
       <h2>Jira</h2>
       <label for="jiraBaseUrl">Jira adresi</label>
       <p class="hint">Tarayıcıda Jira'yı açtığınızda adres çubuğunda gördüğünüz kısım.</p>
@@ -121,12 +264,16 @@
       <label for="jiraToken">Jira token'ı</label>
       <p class="hint">id.atlassian.com &rsaquo; Güvenlik &rsaquo; API token'ları bölümünden oluşturun.</p>
       <input type="password" id="jiraToken" autocomplete="new-password">
-      <h2 style="margin-top:1.6rem">Bitbucket</h2>
+      </div>
+      <div class="card">
+      <h2>Bitbucket</h2>
       <label for="bitbucketEmail">Bitbucket e-posta adresiniz</label>
       <input type="email" id="bitbucketEmail">
       <label for="bitbucketToken">Bitbucket token'ı</label>
       <p class="hint">Bitbucket &rsaquo; Kişisel ayarlar &rsaquo; API token'ları. Depoyu okuma ve pull request yazma izni olmalı.</p>
       <input type="password" id="bitbucketToken" autocomplete="new-password">
+      </div>
+      </div>
       <div class="row"><button class="btn primary" id="save" type="submit">Kaydet ve dene</button></div>
       <div id="saveres"></div>
     </form>
@@ -134,34 +281,64 @@
   </section>
 
   <section id="health" hidden>
+    <div class="pagehead"><h2>Onboarding</h2><p>Kurulumun hazır olup olmadığı.</p></div>
     <div class="card"><h2 id="healthtitle">Kontrol ediliyor...</h2><div id="items"></div>
       <div class="row"><button class="btn" id="recheck">Tekrar kontrol et</button></div></div>
     <details><summary>Teknik ayrıntılar</summary><pre id="raw"></pre></details>
   </section>
 </main>
+<aside class="rail" id="rail">
+  <div class="railh"><div><b>Specs</b><span id="railn"></span></div><button class="filt" id="rfilt" hidden></button></div>
+  <div id="rlist"><p class="hint" style="padding:.5rem .3rem">Yükleniyor…</p></div>
+</aside>
+</div>
+</div>
+</div>
 <script>
 const key = new URLSearchParams(location.search).get('k');
 const H = { 'X-Sdkit-Key': key, 'Content-Type': 'application/json' };
 const $ = id => document.getElementById(id);
 const steps = {}, seen = new Set();
 
+let curTab = 'run', curView = 'home';
+const TABNAME = { reports: 'Reports', connect: 'Configuration', health: 'Onboarding' };
+function setReady(ready) {
+  $('dot').hidden = ready; $('notready').hidden = ready;
+  const c = $('healthchip'); c.hidden = ready; c.textContent = ready ? '' : '● Kurulumda eksik var';
+}
 function show(tab) {
-  for (const s of ['run', 'connect', 'health']) {
+  curTab = tab;
+  for (const s of ['run', 'reports', 'connect', 'health']) {
     $(s).hidden = s !== tab;
     $('t-' + s).setAttribute('aria-selected', s === tab);
   }
+  $('body').classList.toggle('norail', tab !== 'run');
   if (tab === 'health') loadHealth();
   if (tab === 'run') loadSpecs();
+  if (tab === 'reports') loadReports();
   if (tab === 'connect') loadConnection();
+  setCrumbs();
 }
-document.querySelectorAll('[data-tab]').forEach(b => b.onclick = () => show(b.dataset.tab));
+// "Specs" is the list, wherever in a spec the person is: the sidebar and the first crumb both go there
+function goSpecs() { show('run'); showHome(); }
+function setCrumbs() {
+  const c = $('crumbs'); c.textContent = '';
+  const add = (text, fn, cls) => { if (c.childNodes.length) { const sp = document.createElement('span'); sp.className = 'sep'; sp.textContent = '/'; c.appendChild(sp); } const e = document.createElement(fn ? 'a' : 'span'); e.textContent = text; if (cls) e.className = cls; if (fn) { e.href = '#'; e.onclick = ev => { ev.preventDefault(); fn(); }; } else e.style.fontWeight = '650'; c.appendChild(e); };
+  if (curTab !== 'run') { add(TABNAME[curTab] || curTab); return; }
+  if (curView === 'home') { add('Specs'); return; }
+  add('Specs', goSpecs);
+  const id = jobId;
+  if (curView === 'detail') add(id, null, 'cur');
+  else { add(id, () => openDetail(id), 'cur'); add(curView === 'job' ? 'çalışma' : 'task üret'); }
+}
+document.querySelectorAll('[data-tab]').forEach(b => b.onclick = () => b.dataset.tab === 'run' ? goSpecs() : show(b.dataset.tab));
 document.querySelectorAll('[data-go]').forEach(a => a.onclick = e => { e.preventDefault(); show(a.dataset.go); });
 
 // ---- Health
 async function loadHealth() {
   $('healthtitle').textContent = 'Kontrol ediliyor...';
   const h = await (await fetch('/api/health', { headers: H })).json();
-  $('dot').hidden = h.ready; $('notready').hidden = h.ready;
+  setReady(h.ready);
   $('healthtitle').textContent = h.ready ? 'Her şey hazır' : 'Tamamlanması gerekenler var';
   const box = $('items'); box.textContent = '';
   for (const it of h.items.filter(i => i.main)) {
@@ -204,7 +381,7 @@ $('form').onsubmit = async e => {
       $('jiraToken').value = $('bitbucketToken').value = '';
       loadConnection();
       const h = await (await fetch('/api/health', { headers: H })).json();
-      $('dot').hidden = h.ready; $('notready').hidden = h.ready;
+      setReady(h.ready);
       if (h.ready && j.jira.ok && (!j.bitbucket || j.bitbucket.ok)) setTimeout(() => show('run'), 1200); else loadHealth();
     }
   } finally { $('save').disabled = false; }
@@ -236,33 +413,233 @@ function findingCard(f) {
 }
 
 // ---- Run
-let jobId = '';
-function showJob(id) { jobId = id || jobId; $('home').hidden = true; $('job').hidden = false; $('jobtitle').textContent = jobId; }
-function showHome() { $('job').hidden = true; $('home').hidden = false; loadSpecs(); }
-function resetJob() { for (const k in steps) delete steps[k]; $('steps').textContent = ''; $('log').textContent = ''; $('tools').textContent = ''; $('questions').textContent = ''; $('back').hidden = true; }
+const ACTIONS = {
+  'generate-specs': ['Spec üretimi', 'Eksik noktaları soracağım, taslağı hazırlayıp gözden geçireceğim.'],
+  'update-specs': ['Spec güncelleme', 'Tech Lead yorumlarını ve sizin düzenlemelerinizi işliyorum.'],
+  'update-manual': ['Elle düzeltmeden sonra güncelleme', 'Düzenlemelerinizin farkını esas alıp review ediyorum, PR\'ı güncelliyorum.'],
+  'merge-specs': ['Değişiklikleri birleştirme', 'Aynı onaylı sürüm üzerinde yazılmış değişiklikler tek revizyonda birleştirilir.'],
+  'generate-tasks': ['Task üretimi', 'Önce plan hazırlanır; siz onaylamadan Jira\'ya yazılmaz.'],
+};
+let jobId = '', jobAction = 'generate-specs', lastText = '';
+function view(v) { curView = v; for (const x of ['home', 'detail', 'tasksetup', 'job']) $(x).hidden = x !== v; setCrumbs(); renderRail(); }
+function showJob(id, action) { jobId = id || jobId; jobAction = action || jobAction; view('job'); const t = ACTIONS[jobAction]; $('jobtitle').textContent = t[0] + ': ' + jobId; $('jobsub').textContent = t[1]; }
+function showHome() { view('home'); loadSpecs(); }
+function resetJob() { seen.clear(); lastText = ''; for (const k in steps) delete steps[k]; $('steps').textContent = ''; $('log').textContent = ''; $('tools').textContent = ''; $('questions').textContent = ''; $('taskresult').textContent = ''; $('back').hidden = true; }
 
+let specCache = [], railFilter = '';
+const FILTERS = { open: ['Devam eden', x => x.continue], awaiting: ['Tech Lead bekliyor', x => x.waiting], approved: ['Onaylı', x => x.state === 'approved'], running: ['Çalışıyor', x => !!activity[x.id]] };
 async function loadSpecs() {
-  const list = await (await fetch('/api/specs', { headers: H })).json();
-  const box = $('specs'); box.textContent = '';
-  if (!list.length) { box.innerHTML = '<p class="hint">Henüz spec yok. Yukarıdan yeni bir tane başlatın.</p>'; return; }
-  for (const sp of list) {
-    const d = document.createElement('div'); d.className = 'spec';
-    const g = document.createElement('div'); g.className = 'grow';
-    const n = document.createElement('div'); n.className = 'n'; n.textContent = sp.id;
-    const l = document.createElement('div'); l.className = 'l'; l.textContent = sp.label;
-    g.append(n, l); d.appendChild(g);
-    if (sp.continue) {
-      const b = document.createElement('button'); b.className = 'btn'; b.textContent = 'Devam et';
-      b.onclick = () => start(sp.id); d.appendChild(b);
-    }
-    box.appendChild(d);
+  try { specCache = await (await fetch('/api/specs', { headers: H })).json(); } catch (e) { return; }
+  renderTiles(); renderRail();
+}
+function renderTiles() {
+  const box = $('tiles'); box.textContent = '';
+  for (const [k, [label, fn]] of Object.entries(FILTERS)) {
+    const b = document.createElement('button'); b.className = 'tile' + (railFilter === k ? ' sel' : '');
+    const l = document.createElement('div'); l.className = 'l'; l.textContent = label;
+    const n = document.createElement('div'); n.className = 'n'; n.textContent = String(specCache.filter(fn).length);
+    b.append(l, n); b.onclick = () => { railFilter = railFilter === k ? '' : k; renderTiles(); renderRail(); }; box.appendChild(b);
   }
 }
-async function start(id) {
-  resetJob(); showJob(id);
-  const r = await fetch('/api/run', { method: 'POST', headers: H, body: JSON.stringify({ action: 'generate-specs', id }) });
-  if (!r.ok) { addMsg(await r.text(), 'fail'); $('back').hidden = false; }
+function renderRail() {
+  const box = $('rlist'); if (!box) return; box.textContent = '';
+  const q = $('q').value.trim().toLowerCase(), f = FILTERS[railFilter];
+  const list = specCache.filter(x => (!f || f[1](x)) && (!q || x.id.toLowerCase().includes(q)));
+  $('railn').textContent = '(' + list.length + (list.length !== specCache.length ? '/' + specCache.length : '') + ')';
+  const fb = $('rfilt'); fb.hidden = !railFilter; if (f) { fb.textContent = f[0] + ' ✕'; fb.onclick = () => { railFilter = ''; renderTiles(); renderRail(); }; }
+  if (!list.length) { const p = document.createElement('p'); p.className = 'hint'; p.style.padding = '.5rem .3rem'; p.textContent = specCache.length ? 'Eşleşen spec yok.' : 'Henüz spec yok. Aşağıdan yeni bir tane başlatın.'; box.appendChild(p); return; }
+  for (const sp of list) {
+    const act = activity[sp.id];
+    const b = document.createElement('button'); b.className = 'ritem' + (sp.id === jobId && curView !== 'home' && curTab === 'run' ? ' sel' : '');
+    const t = document.createElement('div'); t.className = 't'; const nm = document.createElement('span'); nm.className = 'grow'; nm.textContent = sp.id; t.appendChild(nm);
+    if (act) { const pl = document.createElement('span'); pl.className = 'pill ' + (act.asks ? 'ask' : 'run'); pl.textContent = act.asks ? 'cevap bekliyor' : 'çalışıyor'; t.appendChild(pl); }
+    const l = document.createElement('div'); l.className = 's'; l.textContent = sp.label;
+    const mini = document.createElement('div'); mini.className = 'mini';
+    for (const fs of sp.flow || []) { const i = document.createElement('i'); i.className = fs.status; i.title = fs.label; mini.appendChild(i); }
+    b.append(t, l, mini);
+    b.onclick = () => { show('run'); act && act.asks ? openJob(sp.id) : openDetail(sp.id); };
+    box.appendChild(b);
+  }
 }
+$('q').oninput = renderRail;
+// ---- Reports: what each run cost, and which spec it was for
+const ACT_LABEL = { 'generate-specs': 'Spec üretimi', 'update-specs': 'Güncelleme', 'update-manual': 'Elle düzeltme sonrası güncelleme', 'merge-specs': 'Birleştirme', 'generate-tasks': 'Task üretimi' };
+const OUTCOME = { done: 'bitti', failed: 'hata', stopped: 'durduruldu' };
+const outcomeText = x => x.outcome ? (OUTCOME[x.outcome] || x.outcome) : (x.state === 'interrupted' ? 'kesildi' : x.state);
+const nf = n => Number(n || 0).toLocaleString('tr-TR');
+const money = (v, state) => state === 'unavailable' ? 'N/A' : '$' + Number(v || 0).toFixed(2) + (state === 'partial' ? ' (kısmi)' : '');
+const when = iso => { const d = new Date(iso); return isNaN(d) ? (iso || '-') : d.toLocaleString('tr-TR', { dateStyle: 'short', timeStyle: 'short' }); };
+function table(heads, rows) {
+  const t = document.createElement('table'); t.className = 'tbl';
+  const hr = t.createTHead().insertRow(); for (const h of heads) { const th = document.createElement('th'); th.textContent = h; hr.appendChild(th); }
+  const tb = t.createTBody();
+  for (const r of rows) { const tr = tb.insertRow(); if (r.onclick) { tr.className = 'click'; tr.onclick = r.onclick; }
+    for (const c of r.cells) { const td = tr.insertCell(); if (c && c.num) td.className = 'num'; const v = c && c.el ? c.el : (c && c.text !== undefined ? c.text : c); if (v instanceof Node) td.appendChild(v); else td.textContent = v; } }
+  return t;
+}
+function openBtn(id) { const b = document.createElement('button'); b.className = 'btn'; b.textContent = 'Raporu aç'; b.onclick = e => { e.stopPropagation(); showReport(id); }; return b; }
+async function showReport(id) {
+  show('reports');
+  const r = await fetch('/api/report?id=' + encodeURIComponent(id), { headers: H }); const j = await r.json();
+  $('repview').hidden = false; $('repviewtitle').textContent = 'Rapor: ' + id; $('reptext').textContent = r.ok ? j.text : (j.error || 'Rapor okunamadı');
+  $('repview').scrollIntoView();
+}
+async function loadReports() {
+  const d = await (await fetch('/api/reports', { headers: H })).json();
+  const sp = $('repspecs'); sp.textContent = '';
+  if (!d.specs.length) { sp.innerHTML = '<p class="hint">Henüz panelden çalıştırılmış bir spec yok. Bir çalışma bitince raporu burada, spec adıyla eşleşmiş görünür.</p>'; }
+  else sp.appendChild(table(['Spec', 'Oturum', 'Token', 'Tahmini maliyet', 'Son çalışma'], d.specs.map(x => ({ onclick: () => openDetail(x.spec), cells: [x.spec, { text: x.sessions, num: 1 }, { text: nf(x.tokens), num: 1 }, { text: money(x.costUsd, x.partial ? 'partial' : 'complete'), num: 1 }, when(x.last)] }))));
+  const se = $('repsessions'); se.textContent = '';
+  if (!d.sessions.length) { se.innerHTML = '<p class="hint">Bu projede henüz oturum raporu yok.</p>'; return; }
+  se.appendChild(table(['Zaman', 'Spec ve işlem', 'Durum', 'Token', 'Tahmini maliyet', ''], d.sessions.map(x => ({ cells: [
+    when(x.last),
+    x.spec ? { el: (() => { const a = document.createElement('a'); a.href = '#'; a.textContent = x.spec; a.onclick = e => { e.preventDefault(); openDetail(x.spec); }; const s = document.createElement('span'); s.textContent = x.action ? ' · ' + (ACT_LABEL[x.action] || x.action) : ''; const f = document.createElement('span'); f.append(a, s); return f; })() } : 'Panel dışı oturum',
+    outcomeText(x),
+    { text: nf(x.tokens), num: 1 }, { text: money(x.costUsd, x.costState), num: 1 }, { el: openBtn(x.id) }] }))));
+}
+async function loadSpecReports(id) {
+  const box = $('dreports'); box.textContent = '';
+  const view = await (await fetch('/api/spec/reports?id=' + encodeURIComponent(id), { headers: H })).json();
+  const list = view.sessions;
+  if (!list.length) { box.innerHTML = '<p class="hint">Bu spec için panelden çalıştırılmış bir oturum raporu yok. Çalıştırdığınızda burada görünür.</p>'; return; }
+  const tok = list.reduce((a, r) => a + r.tokens, 0), usd = list.reduce((a, r) => a + r.costUsd, 0), part = list.some(r => r.costState === 'partial' || r.costState === 'unavailable' || r.tokenState === 'partial');
+  const sum = document.createElement('p'); sum.textContent = list.length + ' oturum · ' + nf(tok) + ' token · tahmini ' + money(usd, part ? 'partial' : 'complete'); box.appendChild(sum);
+  box.appendChild(table(['Zaman', 'İşlem', 'Sonuç', 'Token', 'Tahmini maliyet', ''], list.map(x => ({ cells: [when(x.last), ACT_LABEL[x.action] || x.action || '-', outcomeText(x), { text: nf(x.tokens), num: 1 }, { text: money(x.costUsd, x.costState), num: 1 }, { el: openBtn(x.id) }] }))));
+  if (view.roles.length) {
+    const h = document.createElement('p'); h.className = 'hint'; h.style.marginTop = '1rem'; h.textContent = 'Bu spec için kim ne harcadı (tüm oturumlar, alt ajanlar dahil):'; box.appendChild(h);
+    box.appendChild(table(['Rol', 'Çalışma', 'Token', 'Tahmini maliyet'], view.roles.map(r => ({ cells: [r.role + (r.kind === 'subagent' ? ' (alt ajan)' : ''), { text: r.runs, num: 1 }, { text: nf(r.tokens), num: 1 }, { text: money(r.cost_usd), num: 1 }] }))));
+  }
+}
+
+// ---- Spec page: where it is, what can be done now, what was done, and its files
+// The files of a spec, in a list and an editor: one component, used on the spec page and under a running job
+function filesPanel(host) {
+  host.innerHTML = '<div class="sw"></div><div class="editor"><div class="flist"></div><div><div class="hint fname"></div><textarea class="ftext" hidden spellcheck="false"></textarea><div class="row"><button class="btn primary fsave" hidden>Kaydet</button><span class="fres"></span></div></div></div>';
+  const q = c => host.querySelector(c); let cur = '', specId = '';
+  async function open(f, btn) {
+    host.querySelectorAll('.flist button').forEach(x => x.classList.remove('sel')); if (btn) btn.classList.add('sel');
+    const r = await fetch('/api/spec/file?id=' + encodeURIComponent(specId) + '&path=' + encodeURIComponent(f.path), { headers: H });
+    const j = await r.json(); q('.fres').textContent = '';
+    if (!r.ok) { q('.ftext').hidden = true; q('.fsave').hidden = true; note(q('.fres'), false, j.error); return; }
+    cur = f.path; q('.fname').textContent = f.path + (f.editable ? '' : '  ·  salt okunur: ' + (f.why || ''));
+    const ta = q('.ftext'); ta.hidden = false; ta.value = j.text; ta.readOnly = !f.editable; q('.fsave').hidden = !f.editable;
+    q('.fsave').onclick = async () => {
+      const r = await fetch('/api/spec/file', { method: 'PUT', headers: H, body: JSON.stringify({ id: specId, path: cur, text: ta.value }) });
+      if (r.ok) note(q('.fres'), true, 'Kaydedildi. Hazır olunca \u201cElle düzelttim, devam et\u201d deyin.'); else note(q('.fres'), false, (await r.json().catch(() => ({}))).error || 'Kaydedilemedi');
+    };
+  }
+  return {
+    // keepOpen: a list refreshed under a running job keeps the open file and shows what the agent has written since
+    render(d, keepOpen) {
+      specId = d.id; const sw = q('.sw'); sw.textContent = '';
+      if (d.wantBranch && !d.running) {
+        const b = document.createElement('button'); b.className = 'btn'; b.textContent = 'Düzenlemek için ' + d.wantBranch + ' dalına geç';
+        b.onclick = async () => { const r = await fetch('/api/spec/branch', { method: 'POST', headers: H, body: JSON.stringify({ id: d.id }) }); if (r.ok) openDetail(d.id); else note(sw, false, (await r.json().catch(() => ({}))).error || 'Dal değiştirilemedi'); };
+        sw.appendChild(b);
+      }
+      const box = q('.flist'); box.textContent = ''; let grp = '', reopen = null;
+      if (!keepOpen) { cur = ''; q('.ftext').hidden = true; q('.fsave').hidden = true; q('.fname').textContent = ''; q('.fres').textContent = ''; }
+      for (const f of d.files) {
+        if (f.group !== grp) { grp = f.group; const g = document.createElement('div'); g.className = 'g'; g.textContent = grp; box.appendChild(g); }
+        const b = document.createElement('button'); b.textContent = f.path.startsWith(d.info.dir + '/') ? f.path.slice(d.info.dir.length + 1) : f.path.split('/').slice(-2).join('/'); b.title = f.path; if (!f.editable) b.className = 'lock';
+        b.onclick = () => open(f, b); box.appendChild(b);
+        if (keepOpen && f.path === cur) { b.classList.add('sel'); reopen = [f, b]; }
+      }
+      if (!d.files.length) { const p = document.createElement('p'); p.className = 'hint'; p.textContent = 'Henüz dosya yok.'; box.appendChild(p); }
+      if (reopen) open(reopen[0], reopen[1]);
+    },
+  };
+}
+const detailFiles = filesPanel($('dfilesHost')), jobFiles = filesPanel($('jfilesHost'));
+
+let jobFilesTimer = null, jobFilesDebounce = null;
+async function refreshJobFiles() {
+  if (!jobId) return;
+  const r = await fetch('/api/spec?id=' + encodeURIComponent(jobId), { headers: H }); if (!r.ok) return;
+  jobFiles.render(await r.json(), true);
+}
+function scheduleJobFiles() { clearTimeout(jobFilesDebounce); jobFilesDebounce = setTimeout(refreshJobFiles, 1500); }
+
+async function openDetail(id) {
+  const r = await fetch('/api/spec?id=' + encodeURIComponent(id), { headers: H });
+  const d = await r.json();
+  if (!r.ok) { showHome(); return; }
+  jobId = id; lastResume = d.resume || {}; view('detail');
+  $('did').textContent = d.id; $('dlabel').textContent = d.label;
+  $('dbranch').textContent = 'Şu an bulunduğunuz dal: ' + (d.branch || '-') + (d.info.version ? '  ·  sürüm ' + d.info.version : '');
+  const fl = $('dflow'); fl.textContent = '';
+  d.flow.forEach((f, i) => { const e = document.createElement('div'); e.className = 'fs ' + f.status; e.textContent = (i + 1) + '. ' + f.label; if (f.status === 'current') { const s = document.createElement('small'); s.textContent = 'şu an buradasınız'; e.appendChild(s); } fl.appendChild(e); });
+  const ac = $('dacts'); ac.textContent = ''; $('dmsg').textContent = '';
+  if (!d.actions.length) { const p = document.createElement('p'); p.className = 'hint'; p.textContent = 'Bu adımda yapılacak bir şey yok. Önce ön-spec ekleyin.'; ac.appendChild(p); }
+  for (const a of d.actions) {
+    const row = document.createElement('div'); row.className = 'act';
+    const t = document.createElement('div'); const n = document.createElement('div'); n.style.fontWeight = '600'; n.textContent = a.label; const h = document.createElement('div'); h.className = 'h'; h.textContent = a.hint || ''; t.append(n, h);
+    const rs = d.resume && d.resume[a.key];
+    if (rs) {
+      const m = document.createElement('div'); m.className = 'resumehint'; m.textContent = 'Önceki oturumdan (' + when(rs.at) + ') kaldığı yerden sürer. ';
+      const fb = document.createElement('button'); fb.className = 'linkbtn'; fb.textContent = 'Yeni oturumla başla'; fb.onclick = () => doAction(a.key, d.id, true); m.appendChild(fb); t.appendChild(m);
+    }
+    const b = document.createElement('button'); b.className = 'btn' + (a.primary ? ' primary' : ''); b.textContent = rs ? a.label + ' (sürdür)' : a.label; b.onclick = () => doAction(a.key, d.id);
+    row.append(t, b); ac.appendChild(row);
+  }
+  const dr = $('drun'); dr.hidden = !d.running; $('drunt').textContent = 'Bu spec için bir çalışma sürüyor; yeni bir işlem başlatılamaz.'; $('drunb').onclick = () => openJob(d.id);
+  if (d.running) document.querySelectorAll('#dacts .btn').forEach(b => { b.disabled = true; });
+  const wt = $('dwt'); wt.textContent = '';
+  if (d.worktree) {
+    const p = document.createElement('p'); p.className = 'hint'; p.textContent = 'Bu spec kendi çalışma alanında (ayrı bir git worktree) ilerliyor; diğer spec\'lerle aynı anda çalışabilir.'; wt.appendChild(p);
+    if (d.state === 'approved' && !d.running) { const b = document.createElement('button'); b.className = 'btn'; b.textContent = 'Çalışma alanını temizle'; b.onclick = async () => { const r = await fetch('/api/spec/cleanup', { method: 'POST', headers: H, body: JSON.stringify({ id: d.id }) }); if (r.ok) openDetail(d.id); else note($('dmsg'), false, (await r.json().catch(() => ({}))).error || 'Silinemedi'); }; wt.appendChild(b); }
+  }
+  loadSpecReports(d.id);
+  const dn = $('ddone'); dn.textContent = '';
+  for (const t of d.done) { const li = document.createElement('li'); li.textContent = t; dn.appendChild(li); }
+  if (!d.done.length) { const li = document.createElement('li'); li.textContent = 'Henüz bir şey yapılmadı.'; dn.appendChild(li); }
+  detailFiles.render(d, false);
+}
+async function doAction(key, id, fresh) {
+  if (key === 'generate-tasks') return taskSetup(id);
+  if (key === 'start-change' || key === 'edit-change') {
+    const r = await fetch('/api/spec/change', { method: 'POST', headers: H, body: JSON.stringify({ id }) });
+    if (!r.ok) { note($('dmsg'), false, (await r.json().catch(() => ({}))).error || 'Değişiklik açılamadı'); return; }
+    return key === 'start-change' ? start('update-specs', id) : openDetail(id);
+  }
+  start(key, id, fresh ? { fresh: true } : null);
+}
+let runStart = 0, gotWork = false, resuming = false, curStep = '', lastResume = {};
+async function start(action, id, extra) {
+  resetJob(); showJob(id, action);
+  resuming = !(extra && extra.fresh) && !!lastResume[action];
+  running = true; runStart = Date.now(); gotWork = false; curStep = ''; refreshBusy(); refreshJobFiles();
+  const r = await fetch('/api/run', { method: 'POST', headers: H, body: JSON.stringify(Object.assign({ action, id }, extra || {})) });
+  if (!r.ok) { running = false; refreshBusy(); addMsg(await r.text(), 'fail'); $('back').hidden = false; return; }
+  openStream(id); pollRuns();
+}
+
+// ---- Several specs run at once: each has its own stream and its own questions; the page follows the one it shows
+let es = null;
+function openStream(id) {
+  if (es) es.close();
+  es = new EventSource('/api/events?id=' + encodeURIComponent(id) + '&k=' + encodeURIComponent(key));
+  es.onmessage = m => on(JSON.parse(m.data));
+}
+async function openJob(id) {
+  const st = await (await fetch('/api/run?id=' + encodeURIComponent(id), { headers: H })).json();
+  resetJob(); running = false; gotWork = false; resuming = false; curStep = '';
+  showJob(id, st.action || 'generate-specs'); $('back').hidden = false; $('stop').hidden = !st.running;
+  openStream(id); loadQuestions(id); refreshJobFiles();
+}
+let activity = {}, maxRuns = 3, looseAsks = 0;
+async function pollRuns() {
+  let d; try { d = await (await fetch('/api/runs', { headers: H })).json(); } catch (e) { return; }
+  const next = {}; for (const r of d.runs) next[r.id] = r; maxRuns = d.max; looseAsks = d.loose || 0;
+  const changed = JSON.stringify(next) !== JSON.stringify(activity); activity = next;
+  if (jobId && activity[jobId] && !running && !$('job').hidden) running = true;
+  refreshIndicator();
+  if (changed) loadSpecs();
+  // a question the page missed (the stream dropped, a render failed) is fetched again: the agent is waiting for it
+  if (!$('job').hidden && jobId && activity[jobId] && activity[jobId].asks > document.querySelectorAll('#questions .q').length) loadQuestions(jobId);
+  if (looseAsks && !$('job').hidden && jobId && document.querySelectorAll('#questions .q').length < looseAsks) loadQuestions(jobId);
+}
+setInterval(pollRuns, 2000);
 $('create').onclick = async () => {
   $('createerr').textContent = '';
   const id = $('prespecId').value.trim(), text = $('prespecText').value;
@@ -270,9 +647,72 @@ $('create').onclick = async () => {
   const j = await r.json().catch(() => ({}));
   if (!r.ok) { $('createerr').textContent = j.error || 'Kaydedilemedi'; return; }
   $('prespecId').value = $('prespecText').value = '';
-  start(j.id);
+  start('generate-specs', j.id);
 };
-$('back').onclick = showHome;
+$('back').onclick = () => jobId ? openDetail(jobId) : showHome();
+
+// ---- Tasks: parent and version are chosen and checked here, never typed as free text into the agent
+let tsId = '', tsParentOK = false;
+function tsReady() { $('tsStart').disabled = !(tsParentOK && !$('tsSha').disabled && $('tsSha').value); }
+function note(el, ok, text) { el.textContent = ''; const d = document.createElement('div'); d.className = 'res ' + (ok ? 'ok' : 'bad'); d.textContent = text; el.appendChild(d); }
+async function taskSetup(id) {
+  tsId = id; jobId = id; tsParentOK = false; view('tasksetup'); $('tsid').textContent = id; $('tsErr').textContent = '';
+  $('tsParent').value = ''; $('tsParentRes').textContent = ''; $('tsShaRes').textContent = ''; tsReady();
+  const sel = $('tsSha'); sel.textContent = ''; sel.disabled = true;
+  const cs = await (await fetch('/api/tasks/commits?id=' + encodeURIComponent(id), { headers: H })).json();
+  if (!cs.length) { note($('tsShaRes'), false, 'main\'de bu spec için onaylanmış bir sürüm bulunamadı. Tech Lead\'in PR\'ı birleştirdiğinden emin olun.'); return; }
+  for (const c of cs) { const o = document.createElement('option'); o.value = c.sha; o.textContent = 'v' + c.version + '  ·  ' + c.date + '  ·  ' + c.short + '  ·  ' + c.subject; sel.appendChild(o); }
+  sel.disabled = false; tsReady();
+}
+let tsTimer;
+$('tsParent').oninput = () => {
+  tsParentOK = false; tsReady(); clearTimeout(tsTimer);
+  const k = $('tsParent').value.trim().toUpperCase();
+  if (!k) { $('tsParentRes').textContent = ''; return; }
+  tsTimer = setTimeout(async () => {
+    const p = await (await fetch('/api/tasks/parent?key=' + encodeURIComponent(k), { headers: H })).json();
+    if ($('tsParent').value.trim().toUpperCase() !== k) return;
+    tsParentOK = p.ok; tsReady();
+    note($('tsParentRes'), p.ok, p.ok ? k + ': ' + p.summary + (p.type ? ' (' + p.type + (p.status ? ', ' + p.status : '') + ')' : '') : p.message);
+  }, 450);
+};
+$('tsSha').onchange = tsReady;
+$('tsCancel').onclick = () => openDetail(tsId);
+$('tsStart').onclick = () => start('generate-tasks', tsId, { parent: $('tsParent').value.trim().toUpperCase(), sha: $('tsSha').value });
+
+// ---- Plan gate card: the AC-to-task table the person confirms
+function planCard(p) {
+  const c = document.createElement('div'); c.className = 'plan';
+  if (p.summary) { const s = document.createElement('p'); s.className = 'sum'; s.textContent = p.summary; c.appendChild(s); }
+  const t = document.createElement('table'); t.className = 'tbl';
+  const hr = t.createTHead().insertRow();
+  for (const h of ['Task', 'Ne yapılacak', 'Risk', 'Kabul kriterleri', 'Bağımlı', 'Roller']) { const th = document.createElement('th'); th.textContent = h; hr.appendChild(th); }
+  const tb = t.createTBody();
+  for (const x of p.tasks) {
+    const r = tb.insertRow();
+    const cell = (text, cls) => { const d = r.insertCell(); if (cls) d.className = cls; d.textContent = text; return d; };
+    cell(x.ref, 'ref'); cell(x.title);
+    const rk = r.insertCell(); if (x.risk) { const s = document.createElement('span'); s.className = 'risk ' + x.risk.toLowerCase(); s.textContent = x.risk; rk.appendChild(s); }
+    cell((x.acs || []).join(', '), 'acs'); cell((x.dependsOn || []).join(', ') || '-'); cell((x.roles || []).join(', ') || '-');
+  }
+  c.appendChild(t); return c;
+}
+
+async function showTaskResult() {
+  const r = await (await fetch('/api/tasks/result?id=' + encodeURIComponent(jobId), { headers: H })).json();
+  const box = $('taskresult'); box.textContent = '';
+  if (!r.tasks.length && !r.report) return;
+  const c = document.createElement('div'); c.className = 'card';
+  const h = document.createElement('h2'); h.textContent = r.done ? 'Jira\'da oluşturulan task\'lar' : 'Tamamlanmadı: bazı task\'lar oluşturulamadı'; c.appendChild(h);
+  const ln = document.createElement('div'); ln.className = 'links';
+  for (const t of r.tasks) {
+    const a = document.createElement(t.url ? 'a' : 'span'); a.textContent = t.key + (t.action ? ' (' + (t.action === 'created' ? 'yeni' : t.action === 'updated' ? 'güncellendi' : t.action) + ')' : '');
+    if (t.url) { a.href = t.url; a.target = '_blank'; a.rel = 'noopener'; } ln.appendChild(a);
+  }
+  c.appendChild(ln);
+  if (r.report) { const d = document.createElement('details'); const sm = document.createElement('summary'); sm.textContent = 'Rapor'; const pr = document.createElement('pre'); pr.textContent = r.report; d.append(sm, pr); c.appendChild(d); }
+  box.appendChild(c);
+}
 
 function renderStep(e) {
   let el = steps[e.step];
@@ -284,20 +724,54 @@ function addMsg(text, cls) {
   const d = document.createElement('div'); d.className = 'msg ' + (cls || ''); d.textContent = text; $('log').appendChild(d);
 }
 function on(e) {
+  if (e.kind === 'result') running = false; else if (e.kind === 'status' && e.text === 'started') { running = true; if (!runStart || Date.now() - runStart > 5000) runStart = Date.now(); gotWork = false; }
+  if (e.kind === 'text' || e.kind === 'tool' || e.kind === 'step') gotWork = true;
+  if (e.kind === 'step') curStep = e.step + '/' + e.total + (e.name ? ' ' + e.name : '');
+  if (e.kind === 'step' || e.kind === 'tool') scheduleJobFiles();
+  if (e.kind === 'result') refreshJobFiles();
+  refreshIndicator(); refreshBusy();
   if (e.kind === 'step') renderStep(e);
-  else if (e.kind === 'text') addMsg(e.text);
+  else if (e.kind === 'text') { addMsg(e.text); lastText = e.text; }
   else if (e.kind === 'tool') $('tools').textContent += e.name + ': ' + e.text + '\n';
   else if (e.kind === 'result') {
     addMsg(e.failed ? (e.text || 'Durdu.') : 'Bitti.', e.failed ? 'fail' : '');
+    // the agent says it is asking but never sent the form: the person sees a question mark and no way to answer
+    if (!e.failed && /\?\s*$/.test(lastText || '') && !document.querySelectorAll('#questions .q').length) addMsg('Ajan bir soru sormuş görünüyor ama panelden soru formu göndermedi, bu yüzden cevap veremezsiniz. Spec sayfasından "Devam et" deyin; ajan soruyu form olarak yeniden sorar.', 'warn');
     $('stop').hidden = true; $('back').hidden = false;
+    if (jobAction === 'generate-tasks') showTaskResult();
   } else if (e.kind === 'status') {
-    if (e.name === 'question') loadQuestions();
+    if (e.name === 'question') loadQuestions(jobId);
+    if (e.name === 'ask-expired') addMsg('Ajanın sorusu zaman aşımına uğradı ve panelden kalktı. Ajan yeniden soracak; sormazsa Durdur\'a basıp Devam edin.', 'warn');
+    if (e.name === 'ask-refused') addMsg('Ajan bir soru sormayı denedi ama panel kabul etmedi: ' + e.text + '. Ajan düzeltip yeniden denemeli; olmazsa Durdur\'a basıp Devam edin.', 'warn');
     if (e.text === 'started') { resetJob(); showJob(); $('stop').hidden = false; }
   }
 }
-async function loadQuestions() {
-  const qs = await (await fetch('/api/questions', { headers: H })).json();
-  for (const q of qs) { if (!seen.has(q.id)) { seen.add(q.id); renderQuestion(q); } }
+async function loadQuestions(id) {
+  if (!id) return;
+  const qs = await (await fetch('/api/questions?id=' + encodeURIComponent(id), { headers: H })).json();
+  for (const q of qs) {
+    if (seen.has(q.id)) continue;
+    try { renderQuestion(q); } catch (e) { renderFallbackQuestion(q); }
+    seen.add(q.id);
+  }
+}
+// if a question cannot be drawn as a form it is still shown, as plain text with a box for the answer: the agent is waiting on it
+function renderFallbackQuestion(q) {
+  document.querySelectorAll('#questions .q').forEach(x => { if (x.dataset.qid === String(q.id)) x.remove(); });
+  const box = document.createElement('div'); box.className = 'q'; box.dataset.qid = String(q.id);
+  const inputs = [];
+  let items = []; try { items = q.questions.questions || []; } catch (e) {}
+  for (const item of items) {
+    const p = document.createElement('p'); const b = document.createElement('b'); b.textContent = String(item.question || 'Soru'); p.appendChild(b); box.appendChild(p);
+    const inp = document.createElement('input'); inp.type = 'text'; inp.placeholder = 'Cevabınız...'; box.appendChild(inp); inputs.push([String(item.question || 'Soru'), inp]);
+  }
+  const btn = document.createElement('button'); btn.className = 'btn primary'; btn.style.marginTop = '.8rem'; btn.textContent = 'Gönder';
+  btn.onclick = async () => {
+    const answers = {}; for (const [qq, inp] of inputs) if (inp.value.trim()) answers[qq] = inp.value.trim();
+    const r = await fetch('/api/answer', { method: 'POST', headers: H, body: JSON.stringify({ id: q.id, answers }) });
+    if (r.ok) box.remove(); else alert(await r.text());
+  };
+  box.appendChild(btn); $('questions').appendChild(box);
 }
 function renderQuestion(q) {
   const box = document.createElement('div'); box.className = 'q';
@@ -305,6 +779,22 @@ function renderQuestion(q) {
   for (const [i, item] of q.questions.questions.entries()) {
     const p = document.createElement('p'); const b = document.createElement('b'); b.textContent = item.question; p.appendChild(b); box.appendChild(p);
     if (item.finding) p.after(findingCard(item.finding));
+    if (item.plan) {
+      p.after(planCard(item.plan));
+      // one confirm button (the plan gate): the first answer confirms, the second declines; a typed note travels with a decline
+      const note = document.createElement('input'); note.type = 'text'; note.placeholder = 'Değişmesini istediğiniz bir şey varsa yazın (isteğe bağlı)...'; note.style.marginTop = '.4rem';
+      const row = document.createElement('div'); row.className = 'row';
+      const opts = item.options || [];
+      const send = async label => {
+        const ans = {}; const n = note.value.trim(); ans[item.question] = n ? label + ': ' + n : label;
+        const r = await fetch('/api/answer', { method: 'POST', headers: H, body: JSON.stringify({ id: q.id, answers: ans }) });
+        if (r.ok) box.remove(); else alert(await r.text());
+      };
+      const ok = document.createElement('button'); ok.className = 'btn primary'; ok.textContent = 'Planı onayla ve Jira\'da oluştur'; ok.onclick = () => send(opts[0] ? opts[0].label : 'Onaylıyorum');
+      const no = document.createElement('button'); no.className = 'btn'; no.textContent = 'Henüz değil'; no.onclick = () => send(opts[1] ? opts[1].label : 'Henüz değil');
+      row.append(ok, no); box.append(note, row);
+      continue;
+    }
     for (const o of item.options || []) {
       const l = document.createElement('label'); const inp = document.createElement('input');
       inp.type = item.multiSelect ? 'checkbox' : 'radio'; inp.name = 'q' + q.id + '_' + i; inp.value = o.label;
@@ -315,6 +805,7 @@ function renderQuestion(q) {
     const other = document.createElement('input'); other.type = 'text'; other.placeholder = item.finding ? 'Kendi cevabınız veya gerekçeniz (isteğe bağlı)...' : 'Başka bir cevap...'; other.style.marginTop = '.4rem';
     box.appendChild(other); inputs.push([item.question, other]);
   }
+  if (!inputs.length) { $('questions').appendChild(box); return; }
   const btn = document.createElement('button'); btn.className = 'btn primary'; btn.style.marginTop = '.8rem'; btn.textContent = 'Gönder';
   btn.onclick = async () => {
     const answers = {};
@@ -327,13 +818,33 @@ function renderQuestion(q) {
   };
   box.appendChild(btn); $('questions').appendChild(box);
 }
-$('stop').onclick = () => fetch('/api/stop', { method: 'POST', headers: H });
+$('stop').onclick = () => fetch('/api/stop', { method: 'POST', headers: H, body: JSON.stringify({ id: jobId }) });
 
-const es = new EventSource('/api/events?k=' + encodeURIComponent(key));
-es.onmessage = m => on(JSON.parse(m.data));
-loadQuestions(); loadSpecs();
+// ---- A run goes on whatever page is open; the sidebar and the tab title say so, and say when it waits for an answer
+let running = false;
+function refreshIndicator() {
+  const runs = Object.values(activity), asks = runs.reduce((a, r) => a + r.asks, 0) + looseAsks, d = $('rundot');
+  d.hidden = !runs.length && !asks; d.className = 'dot ' + (asks ? 'ask' : 'run'); d.textContent = asks ? String(asks) : '';
+  document.title = asks ? '(' + asks + ') Cevabınız bekleniyor · sdkit' : runs.length ? 'Çalışıyor (' + runs.length + ') · sdkit' : 'sdkit';
+  const ac = $('askchip'), rc = $('runchip'), waiting = runs.find(r => r.asks) || runs[0];
+  ac.hidden = !asks; if (asks) { ac.textContent = '● ' + asks + ' soru cevabınızı bekliyor →'; ac.onclick = () => { if (waiting) { show('run'); openJob(waiting.id); } }; }
+  rc.hidden = !runs.length; rc.textContent = runs.length + ' çalışıyor';
+}
+// while the agent works the page says so: a long first wait (a big resumed session loads before it says anything) must not look like a hang
+function refreshBusy() {
+  const asks = document.querySelectorAll('#questions .q').length, b = $('busy');
+  b.hidden = !(running && !asks);
+  if (b.hidden) return;
+  const sec = Math.max(0, Math.floor((Date.now() - runStart) / 1000)), t = String(Math.floor(sec / 60)).padStart(2, '0') + ':' + String(sec % 60).padStart(2, '0');
+  $('busytext').textContent = (gotWork ? 'Çalışıyor' + (curStep ? ' · ' + curStep : '') : resuming ? 'Önceki oturum açılıyor; büyük oturumlarda birkaç dakika sürebilir' : 'Oturum başlatılıyor') + '… ' + t;
+}
+let tick = 0;
+setInterval(() => { refreshBusy(); if (running && !$('job').hidden && ++tick % 6 === 0) refreshJobFiles(); }, 1000);
+new MutationObserver(() => { refreshIndicator(); refreshBusy(); }).observe($('questions'), { childList: true });
+pollRuns(); loadSpecs(); setCrumbs();
+fetch('/api/info', { headers: H }).then(r => r.json()).then(i => { $('whoname').textContent = i.user || 'Yerel panel'; $('whorepo').textContent = i.repo + (i.branch ? ' · ' + i.branch : ''); $('av').textContent = (i.user || i.repo || '?').slice(0, 1); });
 // onboarding decides where the person lands: everything in order means the start page, anything missing means the checklist
-fetch('/api/health', { headers: H }).then(r => r.json()).then(h => { $('dot').hidden = h.ready; $('notready').hidden = h.ready; if (!h.ready) show('health'); });
+fetch('/api/health', { headers: H }).then(r => r.json()).then(h => { setReady(h.ready); if (!h.ready) show('health'); });
 </script>
 </body>
 </html>

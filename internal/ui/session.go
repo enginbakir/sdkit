@@ -2,10 +2,13 @@ package ui
 
 import (
 	"bufio"
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
+	"regexp"
 	"strings"
 	"sync"
 
@@ -62,6 +65,10 @@ type RunSpec struct {
 	Env     []string // added to the process environment (the ask bridge address and its secret, tokens)
 	Command string   // the host executable, `claude` by default
 	Tools   []string // tools the session may use without asking, since nobody is at a terminal
+	// Resume is a host session to continue instead of starting a new one (the host keeps the same session id when resumed).
+	Resume string
+	// OnSession is told the host's session id once, when the host first prints it: the id the kit's reports are filed under.
+	OnSession func(id string)
 }
 
 // BuildArgs is the host command line of a run. AskUserQuestion is disallowed: there is no terminal to show it on, and the skills
@@ -75,6 +82,9 @@ func BuildArgs(s RunSpec) []string {
 	}
 	if len(s.Tools) > 0 {
 		args = append(args, "--allowedTools", strings.Join(s.Tools, ","))
+	}
+	if s.Resume != "" {
+		args = append(args, "--resume", s.Resume)
 	}
 	return args
 }
@@ -114,9 +124,15 @@ func Run(ctx context.Context, s RunSpec, log *Log) error {
 	// the host prints a result at the end of every turn (a background subagent finishing starts a new one); the run is over only
 	// when the process is, so keep the last result and send it then
 	var last *Event
+	sid := ""
 	sc := bufio.NewScanner(out)
 	sc.Buffer(make([]byte, 1<<20), 16<<20) // one tool result can be a whole file
 	for sc.Scan() {
+		if sid == "" {
+			if sid = sessionID(sc.Bytes()); sid != "" && s.OnSession != nil {
+				s.OnSession(sid)
+			}
+		}
 		for _, e := range ParseLine(sc.Bytes()) {
 			if e.Kind == KindResult {
 				e := e
@@ -138,3 +154,19 @@ func Run(ctx context.Context, s RunSpec, log *Log) error {
 	}
 	return werr
 }
+
+// sessionID is the session_id a stream-json line carries, "" when it has none. The pre-check keeps the common line from being parsed twice.
+func sessionID(line []byte) string {
+	if !bytes.Contains(line, []byte(`"session_id"`)) {
+		return ""
+	}
+	var m struct {
+		SessionID string `json:"session_id"`
+	}
+	if json.Unmarshal(line, &m) != nil || !reSession.MatchString(m.SessionID) {
+		return ""
+	}
+	return m.SessionID
+}
+
+var reSession = regexp.MustCompile(`^[A-Za-z0-9-]{8,64}$`)

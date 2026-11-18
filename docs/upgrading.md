@@ -23,6 +23,12 @@ To see whether you are up to date: `<project-dir>/.scaffold-version` is the kit 
 
 There is no `<kit>/bin/upgrade.sh` any more: the kit is one binary and a checkout of it is not needed.
 
+## 2.3.0 -> 2.3.1: the panel grows up
+
+No manual step. `sdkit ui` is much more than the three screens of 2.3.0: a sidebar layout in a dark console look; a page per spec with a six-stage flow bar, what was done, what can be done now, and its files in a browser editor (hand edits, the pre-spec included); starting a change on an approved spec and continuing after hand edits; the tasks screen with the plan gate (Jira parent checked in Jira, the version listed from `main`); update and merge entries; Reports (tokens and estimated cost per session and per spec); "continue" resumes the earlier host session; several specs run at once, each in its own git worktree (`../<repo>-wt/spec/<id>`, up to 3 runs; see [design-ui.md](design-ui.md)); and questions that used to go missing (an apostrophe breaking the command, the host's two-minute command limit, a question with no owner) now reach the page.
+
+New in the kit: `SDKIT_TASK=<id>` in a session's environment files its token usage under that task, so `sdkit report task <id>` is one spec's report across all its sessions (the panel sets it to the spec id; unset, nothing changes). Things to know: the panel's sessions run the panel's own `sdkit`; a spec worktree keeps its copies of the host skills until it is removed (`Çalışma alanını temizle` on an approved spec) and made again; run one panel per repo.
+
 ## 2.2.0 -> 2.3.0: a local panel for non-technical roles
 
 No manual step. `sdkit ui` starts a local web panel in the repo it is run from: Connect (Jira and Bitbucket settings, written to `sdkit.local.env` and checked on save), Health (`sdkit doctor` in plain words), and Start (new spec from a pasted pre-spec, the list of specs with their state, a `generate-specs` run with its questions and review findings as cards). It drives a headless Claude Code session on the analyst's machine and needs `sdkit` on `PATH`; see [design-ui.md](design-ui.md). Also new: `sdkit scan secrets`, `sdkit pr` accepts SSH origins for Bitbucket, and `sdkit spec publish` lets `git push` ask for credentials on the terminal.
