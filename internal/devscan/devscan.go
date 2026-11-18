@@ -18,14 +18,12 @@ import (
 	"github.com/wecii/sdkit/internal/gitx"
 	"github.com/wecii/sdkit/internal/proc"
 	"github.com/wecii/sdkit/internal/redact"
+	"github.com/wecii/sdkit/internal/secretscan"
 )
 
 var (
-	secret  = regexp.MustCompile(`-----BEGIN [A-Z ]*PRIVATE KEY|AKIA[0-9A-Z]{16}|ghp_[A-Za-z0-9]{20,}|gho_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|xox[baprs]-[A-Za-z0-9-]{10,}|sk-ant-[A-Za-z0-9_-]{10,}|sk-[A-Za-z0-9]{32,}|AIza[0-9A-Za-z_-]{35}|ATBB[A-Za-z0-9_=-]{20,}|glpat-[A-Za-z0-9_-]{20,}|eyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}\.`)
-	assign  = regexp.MustCompile(`(password|passwd|secret|api[_-]?key|apikey|access[_-]?token|auth[_-]?token|bearer)[A-Za-z_]*[[:space:]]*[:=][[:space:]]*["'][^"'$ ]{8,}["']`)
-	urlCred = regexp.MustCompile(`://[^/[:space:]:@]+:[^/[:space:]@]+@[A-Za-z0-9.-]+`)
-	soft    = regexp.MustCompile(`/Users/[A-Za-z]|/home/[a-z]+/|C:\\Users`)
-	skip    = regexp.MustCompile(`^packaging/(scan-publishable\.sh|scan-allow\.txt)$|^tests/security\.test\.sh$`)
+	soft = regexp.MustCompile(`/Users/[A-Za-z]|/home/[a-z]+/|C:\\Users`)
+	skip = regexp.MustCompile(`^packaging/(scan-publishable\.sh|scan-allow\.txt)$|^tests/security\.test\.sh$`)
 )
 
 type hit struct{ loc, text string }
@@ -75,27 +73,30 @@ func Run(root string, history bool, w io.Writer) int {
 	}
 
 	tree := scanTree(root)
-	find := func(re *regexp.Regexp) (out []hit) {
+	findIf := func(match func(string) bool) (out []hit) {
 		for _, h := range tree {
-			if re.MatchString(h.text) {
+			if match(h.text) {
 				out = append(out, h)
 			}
 		}
 		return
 	}
-	report("tree: secret-shaped strings", "hard", find(secret), true)
-	report("tree: quoted credential assignments", "hard", find(assign), true)
-	report("tree: credentials in URLs", "hard", drop(find(urlCred)), true)
-	report("tree: machine paths / names / identities", "soft", drop(find(soft)), false)
+	find := func(k secretscan.Kind) []hit {
+		return findIf(func(l string) bool { return len(secretscan.Of(k, l)) > 0 })
+	}
+	report("tree: secret-shaped strings", "hard", find(secretscan.Token), true)
+	report("tree: quoted credential assignments", "hard", find(secretscan.Assignment), true)
+	report("tree: credentials in URLs", "hard", drop(find(secretscan.URLCred)), true)
+	report("tree: machine paths / names / identities", "soft", drop(findIf(soft.MatchString)), false)
 
 	if history {
 		added, ids := scanHistory(root)
 		var hs, hu []hit
 		for _, h := range added {
-			if secret.MatchString(h.text) {
+			if len(secretscan.Of(secretscan.Token, h.text)) > 0 {
 				hs = append(hs, h)
 			}
-			if urlCred.MatchString(h.text) {
+			if len(secretscan.Of(secretscan.URLCred, h.text)) > 0 {
 				hu = append(hu, h)
 			}
 		}
@@ -132,18 +133,8 @@ func loadAllow(root string) (out []*regexp.Regexp) {
 	return
 }
 
-// maskLine keeps the first 4 characters of each hard match and masks the rest, then applies the kit redactor.
-func maskLine(l string) string {
-	for _, re := range []*regexp.Regexp{secret, assign, urlCred} {
-		l = re.ReplaceAllStringFunc(l, func(m string) string {
-			if len(m) <= 4 {
-				return "***"
-			}
-			return m[:4] + "***"
-		})
-	}
-	return redact.Line(l)
-}
+// maskLine hides the secret part of each hard match, then applies the kit redactor.
+func maskLine(l string) string { return redact.Line(secretscan.Mask(l)) }
 
 func scanTree(root string) (out []hit) {
 	files, err := gitx.Run(root, "ls-files")
