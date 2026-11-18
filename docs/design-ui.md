@@ -139,6 +139,12 @@ The kit files a session report under the host's session id (`<project-dir>/repor
 - **Honesty about numbers.** Cost is the API-priced equivalent, not the bill. Only the kit's `partial` (unmeasured or unpriced runs) and `unavailable` states make a figure a lower bound and say so; `estimated` and `recorded` do not.
 - Seen against the real `tff-specs` reports (18 sessions, all unlinked, as they should be) and a scratch repo whose ledger links two of them to a spec.
 
+## Continue where it stopped, files under a running job
+
+- **Resume.** "Devam et" (and the update and merge runs) continue the latest panel session of that spec and action that the host still holds (`claude --resume <id>`; the host keeps the same session id, so the run ledger and the reports stay one session). `cmd` answers "does the host still have it" by looking for `<config-dir>/projects/*/<id>.jsonl` (`Config.SessionExists`), so a session the host has dropped starts a new one instead of failing. The spec page says "Önceki oturumdan kaldığı yerden sürer" and offers "Yeni oturumla başla" (`fresh`). The resumed task adds one sentence: carry on, check `sdkit spec next` first, do not start the steps over. A tasks run is never resumed (its parent and version are chosen again). A resumed session carries its whole context, so a long one is not cheap; fresh is the way out.
+- **Loading.** From the click until the host says anything the page shows a spinner with a clock ("Oturum başlatılıyor", or "Önceki oturum açılıyor; büyük oturumlarda birkaç dakika sürebilir" when resuming), then "Çalışıyor · <step>"; it hides while a question waits for the person.
+- **Files while it runs.** The running screen carries the same file panel as the spec page, read-only (the server marks every file non-editable while a run is going), refreshed on each step and every few seconds, keeping the open file. The pre-spec is in the list as its own group: readable at every stage, editable only until a draft exists.
+
 ## Open questions
 
 - Who pays for the Claude Code access of each analyst (subscription or API key)?

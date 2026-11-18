@@ -249,3 +249,62 @@ func TestStartChangeOnApprovedSpec(t *testing.T) {
 		t.Errorf("with an open change the person can continue after editing by hand: %v", keys)
 	}
 }
+
+func TestResumeFor(t *testing.T) {
+	root := scratchRepo(t, "/.sdkit/work/\n")
+	a, b, c := "aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa", "bbbbbbbb-2222-4222-8222-bbbbbbbbbbbb", "cccccccc-3333-4333-8333-cccccccccccc"
+	for _, r := range []RunRecord{
+		{Session: a, Spec: "odeme", Action: "generate-specs", Start: "2026-11-17T08:00:00Z"},
+		{Session: b, Spec: "odeme", Action: "generate-specs", Start: "2026-11-18T08:00:00Z"}, // newer, but the host no longer has it
+		{Session: c, Spec: "baska", Action: "generate-specs", Start: "2026-11-19T08:00:00Z"},
+	} {
+		RecordRun(root, r)
+	}
+	has := func(id string) bool { return id != b }
+	got := ResumeFor(root, "odeme", has)
+	if got["generate-specs"].Session != a || len(got) != 1 {
+		t.Errorf("the latest session the host still has, of this spec and this action: %+v", got)
+	}
+	if len(ResumeFor(root, "odeme", nil)) != 0 {
+		t.Error("without a way to ask the host nothing is resumed")
+	}
+	RecordRun(root, RunRecord{Session: a, Spec: "odeme", Action: "generate-tasks", Start: "2026-11-20T08:00:00Z"})
+	if _, ok := ResumeFor(root, "odeme", has)["generate-tasks"]; ok {
+		t.Error("a tasks run is never resumed: its parent and version are chosen again")
+	}
+}
+
+func TestResumeArgs(t *testing.T) {
+	args := BuildArgs(RunSpec{Prompt: "p", Resume: "aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa"})
+	if strings.Join(args, " ") != strings.Join(BuildArgs(RunSpec{Prompt: "p"}), " ")+" --resume aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa" {
+		t.Errorf("args = %v", args)
+	}
+}
+
+func TestPrespecIsInTheFileList(t *testing.T) {
+	root := scratchRepo(t, "/prespec/\n")
+	WritePrespec(root, "odeme", "# Ön-spec\n", false)
+	find := func() FileItem {
+		d, err := GetDetail(root, "odeme")
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, f := range d.Files {
+			if f.Group == "Ön-spec" {
+				return f
+			}
+		}
+		t.Fatal("pre-spec not listed")
+		return FileItem{}
+	}
+	if f := find(); !f.Editable || f.Path != "prespec/odeme.md" {
+		t.Errorf("before a draft exists the pre-spec is the person's to change: %+v", f)
+	}
+	os.MkdirAll(filepath.Join(root, ".sdkit", "work", "spec-draft", "odeme"), 0o755)
+	if f := find(); f.Editable || f.Why == "" {
+		t.Errorf("once a draft exists the pre-spec is the source, read-only: %+v", f)
+	}
+	if text, _, err := ReadFile(root, "odeme", "prespec/odeme.md"); err != nil || !strings.Contains(text, "Ön-spec") {
+		t.Errorf("readable at any stage: %q %v", text, err)
+	}
+}

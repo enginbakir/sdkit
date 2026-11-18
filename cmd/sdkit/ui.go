@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"regexp"
 	"runtime"
 
 	"github.com/wecii/sdkit/internal/cli"
@@ -67,12 +68,13 @@ func runUI(args []string) int {
 		env = append(env, "PATH="+filepath.Dir(exe)+string(os.PathListSeparator)+os.Getenv("PATH"))
 	}
 	cfg := ui.Config{
-		Dir:     root,
-		Command: host,
-		Tools:   []string{"Bash", "Read", "Write", "Edit", "Glob", "Grep", "Task", "Skill"},
-		Env:     env,
-		Prompt:  func(task string, _ []string) string { return uiRules + task },
-		Getenv:  os.Getenv,
+		Dir:           root,
+		Command:       host,
+		Tools:         []string{"Bash", "Read", "Write", "Edit", "Glob", "Grep", "Task", "Skill"},
+		Env:           env,
+		Prompt:        func(task string, _ []string) string { return uiRules + task },
+		Getenv:        os.Getenv,
+		SessionExists: claudeSessionExists,
 	}
 	srv := ui.New(cfg, ui.NewSecret())
 	l, err := srv.Listen()
@@ -92,6 +94,25 @@ func runUI(args []string) int {
 		return cli.ExitFail
 	}
 	return cli.ExitOK
+}
+
+// claudeSessionExists reports whether Claude Code still holds the session (it can be resumed). The host files a session as
+// <config-dir>/projects/<working directory, encoded>/<id>.jsonl; the encoding is the host's, so the project folder is globbed
+// and only the id (a uuid, checked here so it cannot name a path) is matched.
+func claudeSessionExists(id string) bool {
+	if !regexp.MustCompile(`^[A-Za-z0-9-]{8,64}$`).MatchString(id) {
+		return false
+	}
+	dir := os.Getenv("CLAUDE_CONFIG_DIR")
+	if dir == "" {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return false
+		}
+		dir = filepath.Join(home, ".claude")
+	}
+	m, _ := filepath.Glob(filepath.Join(dir, "projects", "*", id+".jsonl"))
+	return len(m) > 0
 }
 
 func runUIAsk(args []string) int {

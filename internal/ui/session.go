@@ -65,6 +65,8 @@ type RunSpec struct {
 	Env     []string // added to the process environment (the ask bridge address and its secret, tokens)
 	Command string   // the host executable, `claude` by default
 	Tools   []string // tools the session may use without asking, since nobody is at a terminal
+	// Resume is a host session to continue instead of starting a new one (the host keeps the same session id when resumed).
+	Resume string
 	// OnSession is told the host's session id once, when the host first prints it: the id the kit's reports are filed under.
 	OnSession func(id string)
 }
@@ -80,6 +82,9 @@ func BuildArgs(s RunSpec) []string {
 	}
 	if len(s.Tools) > 0 {
 		args = append(args, "--allowedTools", strings.Join(s.Tools, ","))
+	}
+	if s.Resume != "" {
+		args = append(args, "--resume", s.Resume)
 	}
 	return args
 }

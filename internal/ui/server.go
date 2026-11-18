@@ -36,6 +36,8 @@ type Config struct {
 	Prompt  func(task string, askEnv []string) string
 	Getenv  func(string) string // the process environment, handed in by cmd (this package reads none of it)
 	HTTP    *http.Client        // for the credential checks; default has a timeout
+	// SessionExists says whether the host still has this session (it can be resumed); cmd answers from the host's own store.
+	SessionExists func(id string) bool
 	// BitbucketAPI is the REST base of the Bitbucket checks; default https://api.bitbucket.org/2.0. Tests point it elsewhere.
 	BitbucketAPI string
 }
@@ -201,6 +203,7 @@ func (s *Server) run(w http.ResponseWriter, r *http.Request) {
 		ID     string `json:"id"`
 		Parent string `json:"parent"`
 		SHA    string `json:"sha"`
+		Fresh  bool   `json:"fresh"` // start a new session even when an earlier one could be continued
 	}
 	if json.NewDecoder(io.LimitReader(r.Body, 1<<16)).Decode(&in) != nil {
 		http.Error(w, `expected {"action":"generate-specs","id":"..."}`, http.StatusBadRequest)
@@ -240,7 +243,14 @@ func (s *Server) run(w http.ResponseWriter, r *http.Request) {
 	if s.cfg.Prompt != nil {
 		prompt = s.cfg.Prompt(task, askEnv)
 	}
-	spec := RunSpec{Dir: s.cfg.Dir, Prompt: prompt, Env: append(append(append([]string{}, s.cfg.Env...), askEnv...), GitAuthEnv(s.cfg.Dir)...), Command: s.cfg.Command, Tools: s.cfg.Tools}
+	resume := ""
+	if !in.Fresh {
+		resume = ResumeFor(s.cfg.Dir, in.ID, s.cfg.SessionExists)[in.Action].Session
+	}
+	if resume != "" {
+		prompt += "\n\nThis is the earlier session, resumed: carry on from where it stopped (check `sdkit spec next " + in.ID + "` first) and do not start the steps over."
+	}
+	spec := RunSpec{Resume: resume, Dir: s.cfg.Dir, Prompt: prompt, Env: append(append(append([]string{}, s.cfg.Env...), askEnv...), GitAuthEnv(s.cfg.Dir)...), Command: s.cfg.Command, Tools: s.cfg.Tools}
 	// the run ledger is how a report finds its spec: the host's session id, written down with what the run was for
 	var session string
 	spec.OnSession = func(id string) {
@@ -465,6 +475,13 @@ func (s *Server) specDetail(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": err.Error()})
 		return
+	}
+	d.Running = s.running()
+	d.Resume = ResumeFor(s.cfg.Dir, d.ID, s.cfg.SessionExists)
+	for i := range d.Files {
+		if d.Running && d.Files[i].Editable {
+			d.Files[i].Editable, d.Files[i].Why = false, "Çalışma sürerken dosyalar salt okunur."
+		}
 	}
 	writeJSON(w, http.StatusOK, d)
 }

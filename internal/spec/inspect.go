@@ -25,6 +25,7 @@ type ChangeInfo struct {
 type Info struct {
 	Dir     string       `json:"dir"`
 	Draft   string       `json:"draft"`
+	Prespec string       `json:"prespec"` // the pre-spec file, relative to the repo (it may not exist)
 	Version string       `json:"version"`
 	Status  string       `json:"status"`
 	Verdict string       `json:"verdict"`
@@ -35,7 +36,7 @@ type Info struct {
 // Inspect reads the spec's meta and its changes. Nothing is written; a spec with no meta (not yet published) gives empty fields.
 func Inspect(root, id string) Info {
 	e := envAt(root, nil, nil)
-	in := Info{Dir: e.dir(id), Draft: e.kit + "/work/spec-draft/" + id, History: []Rev{}, Changes: []ChangeInfo{}}
+	in := Info{Dir: e.dir(id), Draft: e.kit + "/work/spec-draft/" + id, Prespec: e.prespec + "/" + id + ".md", History: []Rev{}, Changes: []ChangeInfo{}}
 	m := e.meta(id)
 	in.Version, in.Status, in.Verdict = m.Version, m.Status, m.Review.Verdict
 	for _, h := range m.History {

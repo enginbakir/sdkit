@@ -115,17 +115,48 @@ type FileItem struct {
 
 // Detail is the spec page.
 type Detail struct {
-	ID         string            `json:"id"`
-	State      string            `json:"state"`
-	Label      string            `json:"label"`
-	Flow       []FlowStep        `json:"flow"`
-	Done       []string          `json:"done"`
-	Actions    []ActionItem      `json:"actions"`
-	Branch     string            `json:"branch"`
-	WantBranch string            `json:"wantBranch,omitempty"` // the branch the editable files live on, when it is not the current one
-	Files      []FileItem        `json:"files"`
-	Info       spec.Info         `json:"info"`
-	Changes    []spec.ChangeInfo `json:"changes"`
+	ID         string                `json:"id"`
+	State      string                `json:"state"`
+	Label      string                `json:"label"`
+	Flow       []FlowStep            `json:"flow"`
+	Done       []string              `json:"done"`
+	Actions    []ActionItem          `json:"actions"`
+	Branch     string                `json:"branch"`
+	WantBranch string                `json:"wantBranch,omitempty"` // the branch the editable files live on, when it is not the current one
+	Files      []FileItem            `json:"files"`
+	Running    bool                  `json:"running"`
+	Resume     map[string]ResumeInfo `json:"resume"` // per action: the earlier session "Devam et" would continue
+	Info       spec.Info             `json:"info"`
+	Changes    []spec.ChangeInfo     `json:"changes"`
+}
+
+// ResumeInfo is an earlier host session of a spec that a run of the same action can continue.
+type ResumeInfo struct {
+	Session string `json:"session,omitempty"`
+	At      string `json:"at"`
+}
+
+// resumable are the actions whose conversation is worth continuing: the same skill picks up where `sdkit spec next` says. A tasks run
+// is not one: its parent and version are chosen again each time.
+var resumable = []string{"generate-specs", "update-specs", "update-manual", "merge-specs"}
+
+// ResumeFor finds, for each resumable action, the latest panel session of this spec that the host still has.
+func ResumeFor(root, id string, exists func(string) bool) map[string]ResumeInfo {
+	out := map[string]ResumeInfo{}
+	if exists == nil {
+		return out
+	}
+	for _, r := range ReadRuns(root) {
+		if r.Spec != id || !exists(r.Session) {
+			continue
+		}
+		for _, a := range resumable {
+			if r.Action == a {
+				out[a] = ResumeInfo{Session: r.Session, At: r.Start}
+			}
+		}
+	}
+	return out
 }
 
 // Branch is the branch the repo is on now.
@@ -202,6 +233,14 @@ func day(at string) string {
 func listFiles(root, id, state string, info spec.Info, branch string) ([]FileItem, string) {
 	var out []FileItem
 	want := ""
+	// the pre-spec is the input of everything below it: always readable, and editable only until a draft is made from it
+	if st, err := os.Lstat(filepath.Join(root, filepath.FromSlash(info.Prespec))); err == nil && st.Mode().IsRegular() && strings.HasSuffix(info.Prespec, ".md") {
+		it := FileItem{Path: info.Prespec, Group: "Ön-spec", Editable: state == spec.StateNew}
+		if !it.Editable {
+			it.Why = "Spec üretimi başladı; ön-spec artık kaynak olarak okunur."
+		}
+		out = append(out, it)
+	}
 	walk := func(dir, group string, skipChanges bool, edit func(rel string) (bool, string)) {
 		base := filepath.Join(root, filepath.FromSlash(dir))
 		var rels []string
