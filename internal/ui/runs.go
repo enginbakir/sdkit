@@ -76,8 +76,11 @@ func (s *Server) events(w http.ResponseWriter, r *http.Request) {
 
 // runsList is what is going on now, for the badges: each running spec, its action and how many questions wait for the person.
 func (s *Server) runsList(w http.ResponseWriter, r *http.Request) {
-	asks := map[string]int{}
+	asks, loose := map[string]int{}, 0
 	for _, q := range s.broker.Pending() {
+		if q.Spec == "" {
+			loose++
+		}
 		asks[q.Spec]++
 	}
 	type item struct {
@@ -86,9 +89,10 @@ func (s *Server) runsList(w http.ResponseWriter, r *http.Request) {
 		Asks   int    `json:"asks"`
 	}
 	out := struct {
-		Runs []item `json:"runs"`
-		Max  int    `json:"max"`
-	}{Runs: []item{}, Max: s.maxRuns()}
+		Runs  []item `json:"runs"`
+		Max   int    `json:"max"`
+		Loose int    `json:"loose"` // questions whose spec is not known: shown on every spec page
+	}{Runs: []item{}, Max: s.maxRuns(), Loose: loose}
 	s.mu.Lock()
 	for id, rs := range s.runs {
 		out.Runs = append(out.Runs, item{id, rs.action, asks[id]})
@@ -214,6 +218,9 @@ func (s *Server) run(w http.ResponseWriter, r *http.Request) {
 		// every token the session and its subagents spend is filed under the spec's id, so `sdkit report task <id>` is the spec's report
 		askEnv = append(askEnv, "SDKIT_TASK="+in.ID)
 	}
+	// `sdkit ui ask` waits for a person inside the host's Bash tool, which ends a command after two minutes unless told otherwise; the
+	// question would then vanish from the page while the agent carries on. Hours, not minutes.
+	askEnv = append(askEnv, "BASH_DEFAULT_TIMEOUT_MS=7200000", "BASH_MAX_TIMEOUT_MS=14400000")
 	prompt := task
 	if s.cfg.Prompt != nil {
 		prompt = s.cfg.Prompt(task, askEnv)
@@ -265,7 +272,7 @@ func (s *Server) questions(w http.ResponseWriter, r *http.Request) {
 	id := r.URL.Query().Get("id")
 	out := []Question{}
 	for _, q := range s.broker.Pending() {
-		if id == "" || q.Spec == id {
+		if id == "" || q.Spec == id || q.Spec == "" {
 			out = append(out, q)
 		}
 	}
@@ -283,11 +290,24 @@ func (s *Server) ask(w http.ResponseWriter, r *http.Request) {
 	if !ValidID(spec) && !reKitID.MatchString(spec) {
 		spec = ""
 	}
+	if spec == "" {
+		// an older `sdkit` (or none of ours first on PATH) does not say which spec asks. With one run going it is that one; with
+		// several the question is shown on every spec page rather than on none
+		s.mu.Lock()
+		if len(s.runs) == 1 {
+			for id := range s.runs {
+				spec = id
+			}
+		}
+		s.mu.Unlock()
+	}
 	a, err := s.broker.Ask(r.Context(), body, spec)
 	if err != nil {
 		// the agent is told, and so is the person: a question that never reached the form must not look like one that was asked
 		if r.Context().Err() == nil {
 			s.logFor(spec).Add(Event{Kind: KindStatus, Name: "ask-refused", Text: clip(err.Error(), 300)})
+		} else {
+			s.logFor(spec).Add(Event{Kind: KindStatus, Name: "ask-expired", Text: "ajanın soruyu bekleyen komutu kapandı"})
 		}
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return

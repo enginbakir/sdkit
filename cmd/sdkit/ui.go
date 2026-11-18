@@ -68,8 +68,13 @@ func runUI(args []string) int {
 	}
 	env := []string{}
 	if exe, err := os.Executable(); err == nil {
-		// the session calls `sdkit ...` by name; make it find this binary even when it is not on PATH
-		env = append(env, "PATH="+filepath.Dir(exe)+string(os.PathListSeparator)+os.Getenv("PATH"))
+		// the session calls `sdkit ...` by name and must get THIS binary: another sdkit earlier on PATH (an older install) would send
+		// its questions without saying which spec asks, or not know the panel at all
+		dir, err := sdkitShim(exe)
+		if err != nil {
+			dir = filepath.Dir(exe)
+		}
+		env = append(env, "PATH="+dir+string(os.PathListSeparator)+os.Getenv("PATH"))
 	}
 	cfg := ui.Config{
 		Dir:           root,
@@ -98,6 +103,31 @@ func runUI(args []string) int {
 		return cli.ExitFail
 	}
 	return cli.ExitOK
+}
+
+// sdkitShim is a directory whose `sdkit` is this binary. When the binary is already called sdkit its own directory does; otherwise a
+// small temporary directory holds a link (a copy where links are not allowed) under that name.
+func sdkitShim(exe string) (string, error) {
+	name := "sdkit"
+	if runtime.GOOS == "windows" {
+		name = "sdkit.exe"
+	}
+	if filepath.Base(exe) == name {
+		return filepath.Dir(exe), nil
+	}
+	dir, err := os.MkdirTemp("", "sdkit-ui-bin-")
+	if err != nil {
+		return "", err
+	}
+	dst := filepath.Join(dir, name)
+	if err := os.Symlink(exe, dst); err == nil {
+		return dir, nil
+	}
+	in, err := os.ReadFile(exe)
+	if err != nil {
+		return "", err
+	}
+	return dir, os.WriteFile(dst, in, 0o755)
 }
 
 // claudeSessionExists reports whether Claude Code still holds the session (it can be resumed). The host files a session as

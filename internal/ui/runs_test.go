@@ -163,3 +163,105 @@ func TestRefusedQuestionIsShownToThePerson(t *testing.T) {
 		t.Errorf("the person is told too: %+v", past)
 	}
 }
+
+// postAsk sends a question the way `sdkit ui ask` does and stays waiting for the answer until the test ends.
+func postAsk(t *testing.T, addr, spec string) context.CancelFunc {
+	ctx, cancel := context.WithCancel(context.Background())
+	req, _ := http.NewRequestWithContext(ctx, "POST", "http://"+addr+"/api/ask", strings.NewReader(`{"questions":[{"question":"Risk ölçütü?","options":[{"label":"Yaz"}]}]}`))
+	req.Header.Set("X-Sdkit-Key", "k")
+	if spec != "" {
+		req.Header.Set("X-Sdkit-Spec", spec)
+	}
+	go http.DefaultClient.Do(req)
+	time.Sleep(300 * time.Millisecond)
+	return cancel
+}
+
+func TestAQuestionWithoutAnOwnerIsStillSeen(t *testing.T) {
+	root := mainWithRemote(t)
+	for _, id := range []string{"a", "b"} {
+		WritePrespec(root, id, "metin", false)
+	}
+	srv, call := panel(t, root, 3)
+	addr := srv.addr
+
+	if code, body := call("POST", "/api/run", `{"action":"generate-specs","id":"a"}`); code != http.StatusAccepted {
+		t.Fatalf("a: %d %s", code, body)
+	}
+	defer postAsk(t, addr, "")() // an older sdkit does not say which spec asks
+	var qs []Question
+	_, body := call("GET", "/api/questions?id=a", "")
+	json.Unmarshal([]byte(body), &qs)
+	if len(qs) != 1 || qs[0].Spec != "a" {
+		t.Errorf("with one run going the question is that run's: %s", body)
+	}
+
+	if code, body := call("POST", "/api/run", `{"action":"generate-specs","id":"b"}`); code != http.StatusAccepted {
+		t.Fatalf("b: %d %s", code, body)
+	}
+	defer postAsk(t, addr, "")()
+	for _, id := range []string{"a", "b"} {
+		_, body := call("GET", "/api/questions?id="+id, "")
+		if !strings.Contains(body, `"id":2`) {
+			t.Errorf("with two runs an unowned question is shown on both pages, not on neither: %s", body)
+		}
+	}
+	var list struct{ Loose int }
+	_, body = call("GET", "/api/runs", "")
+	json.Unmarshal([]byte(body), &list)
+	if list.Loose != 1 {
+		t.Errorf("the page is told how many are unowned: %s", body)
+	}
+}
+
+func TestTheSessionGetsLongBashTimeouts(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("the stand-in host is a shell script")
+	}
+	root := scratchRepo(t, "")
+	os.MkdirAll(filepath.Join(root, ".sdkit", "work", "spec-draft", "odeme"), 0o755)
+	host := filepath.Join(t.TempDir(), "host.sh")
+	script := "#!/bin/sh\necho \"{\\\"type\\\":\\\"assistant\\\",\\\"message\\\":{\\\"content\\\":[{\\\"type\\\":\\\"text\\\",\\\"text\\\":\\\"T=$BASH_DEFAULT_TIMEOUT_MS/$BASH_MAX_TIMEOUT_MS\\\"}]}}\"\necho '{\"type\":\"result\",\"is_error\":false}'\n"
+	os.WriteFile(host, []byte(script), 0o755)
+	srv := New(Config{Dir: root, Command: host}, "k")
+	l, _ := srv.Listen()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go srv.Serve(ctx, l)
+	req, _ := http.NewRequest("POST", "http://"+l.Addr().String()+"/api/run", strings.NewReader(`{"action":"generate-specs","id":"odeme"}`))
+	req.Header.Set("X-Sdkit-Key", "k")
+	if resp, err := http.DefaultClient.Do(req); err != nil || resp.StatusCode != http.StatusAccepted {
+		t.Fatalf("run: %v %v", err, resp)
+	}
+	for i := 0; i < 100; i++ {
+		past, _, c := srv.logFor("odeme").Since(0)
+		c()
+		for _, e := range past {
+			if e.Kind == KindText {
+				if e.Text != "T=7200000/14400000" {
+					t.Errorf("the host's Bash tool must not end a waiting `sdkit ui ask` after two minutes: %s", e.Text)
+				}
+				return
+			}
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	t.Fatal("no output")
+}
+
+func TestAWithdrawnQuestionIsSaidSo(t *testing.T) {
+	root := scratchRepo(t, "")
+	srv, _ := panel(t, root, 3)
+	cancel := postAsk(t, srv.addr, "odeme")
+	cancel() // the host's command ended while the person had not answered
+	time.Sleep(400 * time.Millisecond)
+	past, _, c := srv.logFor("odeme").Since(0)
+	c()
+	found := false
+	for _, e := range past {
+		found = found || e.Name == "ask-expired"
+	}
+	if !found {
+		t.Errorf("the person must be told the question went away: %+v", past)
+	}
+}

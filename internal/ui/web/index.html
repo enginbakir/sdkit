@@ -627,16 +627,17 @@ async function openJob(id) {
   showJob(id, st.action || 'generate-specs'); $('back').hidden = false; $('stop').hidden = !st.running;
   openStream(id); loadQuestions(id); refreshJobFiles();
 }
-let activity = {}, maxRuns = 3;
+let activity = {}, maxRuns = 3, looseAsks = 0;
 async function pollRuns() {
   let d; try { d = await (await fetch('/api/runs', { headers: H })).json(); } catch (e) { return; }
-  const next = {}; for (const r of d.runs) next[r.id] = r; maxRuns = d.max;
+  const next = {}; for (const r of d.runs) next[r.id] = r; maxRuns = d.max; looseAsks = d.loose || 0;
   const changed = JSON.stringify(next) !== JSON.stringify(activity); activity = next;
   if (jobId && activity[jobId] && !running && !$('job').hidden) running = true;
   refreshIndicator();
   if (changed) loadSpecs();
   // a question the page missed (the stream dropped, a render failed) is fetched again: the agent is waiting for it
   if (!$('job').hidden && jobId && activity[jobId] && activity[jobId].asks > document.querySelectorAll('#questions .q').length) loadQuestions(jobId);
+  if (looseAsks && !$('job').hidden && jobId && document.querySelectorAll('#questions .q').length < looseAsks) loadQuestions(jobId);
 }
 setInterval(pollRuns, 2000);
 $('create').onclick = async () => {
@@ -740,6 +741,7 @@ function on(e) {
     if (jobAction === 'generate-tasks') showTaskResult();
   } else if (e.kind === 'status') {
     if (e.name === 'question') loadQuestions(jobId);
+    if (e.name === 'ask-expired') addMsg('Ajanın sorusu zaman aşımına uğradı ve panelden kalktı. Ajan yeniden soracak; sormazsa Durdur\'a basıp Devam edin.', 'warn');
     if (e.name === 'ask-refused') addMsg('Ajan bir soru sormayı denedi ama panel kabul etmedi: ' + e.text + '. Ajan düzeltip yeniden denemeli; olmazsa Durdur\'a basıp Devam edin.', 'warn');
     if (e.text === 'started') { resetJob(); showJob(); $('stop').hidden = false; }
   }
@@ -821,11 +823,11 @@ $('stop').onclick = () => fetch('/api/stop', { method: 'POST', headers: H, body:
 // ---- A run goes on whatever page is open; the sidebar and the tab title say so, and say when it waits for an answer
 let running = false;
 function refreshIndicator() {
-  const runs = Object.values(activity), asks = runs.reduce((a, r) => a + r.asks, 0), d = $('rundot');
+  const runs = Object.values(activity), asks = runs.reduce((a, r) => a + r.asks, 0) + looseAsks, d = $('rundot');
   d.hidden = !runs.length && !asks; d.className = 'dot ' + (asks ? 'ask' : 'run'); d.textContent = asks ? String(asks) : '';
   document.title = asks ? '(' + asks + ') Cevabınız bekleniyor · sdkit' : runs.length ? 'Çalışıyor (' + runs.length + ') · sdkit' : 'sdkit';
-  const ac = $('askchip'), rc = $('runchip'), waiting = runs.find(r => r.asks);
-  ac.hidden = !asks; if (asks) { ac.textContent = '● ' + asks + ' soru cevabınızı bekliyor →'; ac.onclick = () => { show('run'); openJob(waiting.id); }; }
+  const ac = $('askchip'), rc = $('runchip'), waiting = runs.find(r => r.asks) || runs[0];
+  ac.hidden = !asks; if (asks) { ac.textContent = '● ' + asks + ' soru cevabınızı bekliyor →'; ac.onclick = () => { if (waiting) { show('run'); openJob(waiting.id); } }; }
   rc.hidden = !runs.length; rc.textContent = runs.length + ' çalışıyor';
 }
 // while the agent works the page says so: a long first wait (a big resumed session loads before it says anything) must not look like a hang
