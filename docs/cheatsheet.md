@@ -138,6 +138,7 @@ sdkit verify --since-head # uncommitted changes only
 sdkit verify --no-cache   # ignore the green-result cache for the same tree
 sdkit doctor <repo>                     # install check
 sdkit upgrade <repo>                    # upgrade to a new kit version (refresh the plugin with /plugin first)
+sdkit scan secrets [--history|--staged] [--json]   # credential-shaped strings; accepted ones in secret-baseline.json
 sdkit dev adapters --check            # (kit maintainer) are the roles and generated files in sync
 go test ./... && sdkit dev scan                     # (kit maintainer) the whole test suite, publish-safety scan
 ```
