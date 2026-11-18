@@ -111,25 +111,30 @@ func Run(ctx context.Context, s RunSpec, log *Log) error {
 		case <-done:
 		}
 	}()
-	closed := false
+	// the host prints a result at the end of every turn (a background subagent finishing starts a new one); the run is over only
+	// when the process is, so keep the last result and send it then
+	var last *Event
 	sc := bufio.NewScanner(out)
 	sc.Buffer(make([]byte, 1<<20), 16<<20) // one tool result can be a whole file
 	for sc.Scan() {
 		for _, e := range ParseLine(sc.Bytes()) {
 			if e.Kind == KindResult {
-				closed = true
+				e := e
+				last = &e
+				continue
 			}
 			log.Add(e)
 		}
 	}
 	werr := cmd.Wait()
 	close(done)
-	if !closed {
-		text := "the session ended without a result"
-		if ctx.Err() != nil {
-			text = "stopped"
-		}
-		log.Add(Event{Kind: KindResult, Failed: true, Text: text})
+	switch {
+	case ctx.Err() != nil:
+		log.Add(Event{Kind: KindResult, Failed: true, Text: "stopped"})
+	case last == nil:
+		log.Add(Event{Kind: KindResult, Failed: true, Text: "the session ended without a result"})
+	default:
+		log.Add(*last)
 	}
 	return werr
 }

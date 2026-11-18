@@ -26,6 +26,7 @@ const uiUsage = "usage: sdkit ui [--no-open] [--host <cmd>] | sdkit ui ask [--js
 // uiRules is added to every task: the person is not technical and there is no terminal to ask on.
 const uiRules = `You are running inside the sdkit panel, for a person who is not a developer and cannot see a terminal.
 - Never use the AskUserQuestion tool. To ask the person anything, run: sdkit ui ask --json '<questions>' (same JSON shape as AskUserQuestion's input: {"questions":[{"question":"...","header":"...","multiSelect":false,"options":[{"label":"...","description":"..."}]}]}). It waits for the answer and prints it as JSON; read it and continue.
+- Speak to the person in the language the skill names (ANALYST_LANGUAGE in the project's sdkit.env, Turkish when unset), in every message, not only in the questions.
 - Write for a non-technical reader: short, plain, no command names or file paths in what you say to them. Keep printing the step banners the skill asks for.
 - Do not stop to report between steps; stop only when the skill says a person must act.
 

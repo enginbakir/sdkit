@@ -32,7 +32,8 @@ type Event struct {
 }
 
 // banner is the line every skill prints per step: "[sdkit] generate-specs - Step 3/8: Draft - started".
-var banner = regexp.MustCompile(`\[sdkit\]\s+(\S+)\s+-\s+Step\s+(\d+)/(\d+):\s+(.+?)\s+-\s+(started|done)\b`)
+// Models drop the name or the colon now and then ("Step 1/8 done"), so both are optional; the stepper must not lose a step over punctuation.
+var banner = regexp.MustCompile(`\[sdkit\]\s+(\S+)\s+-\s+Step\s+(\d+)/(\d+):?\s*(?:(.+?)\s+-\s+)?(started|done)\b`)
 
 // ParseLine turns one stream-json line of a Claude Code session into the events it carries. An unknown or malformed line
 // gives none: the panel must never fail because the host added a field.

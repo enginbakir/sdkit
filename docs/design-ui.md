@@ -78,7 +78,11 @@ Checked against Claude Code 2.1 with a real session, not a mock:
 - `AskUserQuestion` is disallowed in panel sessions and the run prompt tells the model to use `sdkit ui ask` with the same JSON shape, so skill text stays unchanged.
 - Step banners reach the stepper from the agent's text and from tool output (the model sometimes prints them with `echo`).
 - The session must find this binary as `sdkit`; the panel prepends its own directory to `PATH` for the session.
-- Not done yet: running a real skill (`generate-specs`) through the panel, session resume after a restart, the screens of phases 1-4.
+- A real `generate-specs` run (pre-spec `communication-form`, a clone of the analyst repo, push disabled) went through the panel from step 1 to the output review: 3 question rounds (Turkish, single and multi select), draft review PASS, output review BLOCK then PASS, 18 acceptance criteria, stopped before publish as told. The skill text was not changed.
+- The host prints a `result` line at the end of every turn, not only at the end of the session (a background subagent finishing starts a new turn), so the panel sends the last one when the process exits.
+- Models write the step banner loosely (`Step 1/8 done`), so the parser accepts a missing name or colon.
+- The agent's narration came out in English although `ANALYST_LANGUAGE=tr`; the run prompt now says to speak the skill's language in every message.
+- Not done yet: publishing from the panel (git credentials, see Risks), session resume after a restart, the screens of phases 1-4, a look at the page in a browser.
 
 ## Open questions
 
