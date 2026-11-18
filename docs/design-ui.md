@@ -125,6 +125,10 @@ One finding of this pass: Jira being unreachable (offline, service down) was cou
 - **Start a change.** On an approved spec the panel runs the kit's `sdkit spec change new` itself, named by who is connected and the time (`<user>-yymmdd-hhmm`, from `JIRA_USER`; the page sends no name), then either hands the run to `update-specs` (which asks the person what changes, through the ask bridge) or opens the empty change for hand edits. Git refuses when the working tree has unsaved edits and the person is told in plain words.
 - **Publishing from a session.** The agent's `sdkit spec publish` pushes and opens the PR as it always did; what was missing is the credential. Every session gets `GIT_TERMINAL_PROMPT=0` and an `Authorization` header for `https://bitbucket.org/` only, made from the saved Bitbucket token (`x-token-auth` for `ATCTT` tokens, the e-mail otherwise), passed in the process environment of that session, never on a command line and never written to git's config. An SSH remote or another host gets nothing and keeps what git has. Not yet seen against a real Bitbucket push.
 
+## Sidebar names and a run that goes on
+
+The sidebar reads Specs (the list and the spec pages), Configuration (the Connect screen) and Onboarding (Health). A run is a process on the server, so it goes on whichever page or browser tab is open. Two things made that look like a stall and are fixed: a question waiting for the person was drawn on a page they had left, so Specs now shows a count badge and the tab title says "(1) Cevabınız bekleniyor", and a blue dot while a run is going; and a reloaded page did not know what the replayed events were a run of, so `GET /api/run` returns the running flag and the last action and id.
+
 ## Open questions
 
 - Who pays for the Claude Code access of each analyst (subscription or API key)?

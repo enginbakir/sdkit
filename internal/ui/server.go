@@ -49,6 +49,8 @@ type Server struct {
 
 	mu     sync.Mutex
 	cancel context.CancelFunc
+	// the last run, kept after it ends: a page that is reloaded must know what the replayed events were a run of
+	lastAction, lastID string
 }
 
 // NewSecret is the per-start secret that every request must carry.
@@ -175,6 +177,17 @@ func (s *Server) events(w http.ResponseWriter, r *http.Request) {
 
 // run starts a session for {"task": "..."}; one at a time.
 func (s *Server) run(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodGet {
+		s.mu.Lock()
+		st := struct {
+			Running bool   `json:"running"`
+			Action  string `json:"action"`
+			ID      string `json:"id"`
+		}{s.cancel != nil, s.lastAction, s.lastID}
+		s.mu.Unlock()
+		writeJSON(w, http.StatusOK, st)
+		return
+	}
 	if r.Method != http.MethodPost {
 		http.Error(w, "POST only", http.StatusMethodNotAllowed)
 		return
@@ -210,6 +223,7 @@ func (s *Server) run(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	s.cancel = cancel
+	s.lastAction, s.lastID = in.Action, in.ID
 	s.mu.Unlock()
 
 	// the session reaches the ask bridge through these two variables; `sdkit ui ask` reads them

@@ -42,7 +42,7 @@ func CheckParent(ctx context.Context, c *http.Client, base, user, token, key str
 		return Parent{Message: "Anahtar, TFF-123 gibi harfler, tire ve rakamdan oluşmalı"}
 	}
 	if base == "" || user == "" || token == "" {
-		return Parent{Message: "Önce Bağlantı sayfasından Jira bilgilerini kaydedin"}
+		return Parent{Message: "Önce Configuration sayfasından Jira bilgilerini kaydedin"}
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, strings.TrimRight(base, "/")+"/rest/api/2/issue/"+url.PathEscape(key)+"?fields=summary,issuetype,status", nil)
 	if err != nil {
@@ -70,7 +70,7 @@ func CheckParent(ctx context.Context, c *http.Client, base, user, token, key str
 		json.NewDecoder(resp.Body).Decode(&v)
 		return Parent{OK: true, Key: key, Summary: clip(v.Fields.Summary, 200), Type: v.Fields.IssueType.Name, Status: v.Fields.Status.Name}
 	case http.StatusUnauthorized, http.StatusForbidden:
-		return Parent{Message: "Jira bu işe erişime izin vermedi; Bağlantı sayfasındaki bilgileri ve işin izinlerini kontrol edin"}
+		return Parent{Message: "Jira bu işe erişime izin vermedi; Configuration sayfasındaki bilgileri ve işin izinlerini kontrol edin"}
 	case http.StatusNotFound:
 		return Parent{Message: key + " Jira'da bulunamadı. Task'lar var olan bir işin altına açılır; anahtarı kontrol edin"}
 	}
