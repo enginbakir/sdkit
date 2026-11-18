@@ -105,6 +105,10 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/health", s.health)
 	mux.HandleFunc("/api/specs", s.specs)
 	mux.HandleFunc("/api/prespec", s.prespec)
+	mux.HandleFunc("/api/spec", s.specDetail)
+	mux.HandleFunc("/api/spec/file", s.specFile)
+	mux.HandleFunc("/api/spec/branch", s.specBranch)
+	mux.HandleFunc("/api/spec/change", s.specChange)
 	mux.HandleFunc("/api/tasks/commits", s.taskCommits)
 	mux.HandleFunc("/api/tasks/parent", s.taskParent)
 	mux.HandleFunc("/api/tasks/result", s.taskResult)
@@ -185,7 +189,11 @@ func (s *Server) run(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `expected {"action":"generate-specs","id":"..."}`, http.StatusBadRequest)
 		return
 	}
-	task, err := Task(s.cfg.Dir, in.Action, in.ID, TaskInput{Parent: in.Parent, SHA: in.SHA})
+	ti := TaskInput{Parent: in.Parent, SHA: in.SHA}
+	if b, ok := strings.CutPrefix(Branch(s.cfg.Dir), "spec/"+in.ID+"--"); ok {
+		ti.Slug = b // the change this branch carries; what the page says about it is never read
+	}
+	task, err := Task(s.cfg.Dir, in.Action, in.ID, ti)
 	if err == nil && in.Action == "generate-tasks" {
 		// the page lists and checks these too, but a run is only started on what the server has verified itself
 		err = s.checkTaskInput(r.Context(), in.ID, in.Parent, in.SHA)
@@ -210,7 +218,7 @@ func (s *Server) run(w http.ResponseWriter, r *http.Request) {
 	if s.cfg.Prompt != nil {
 		prompt = s.cfg.Prompt(task, askEnv)
 	}
-	spec := RunSpec{Dir: s.cfg.Dir, Prompt: prompt, Env: append(append([]string{}, s.cfg.Env...), askEnv...), Command: s.cfg.Command, Tools: s.cfg.Tools}
+	spec := RunSpec{Dir: s.cfg.Dir, Prompt: prompt, Env: append(append(append([]string{}, s.cfg.Env...), askEnv...), GitAuthEnv(s.cfg.Dir)...), Command: s.cfg.Command, Tools: s.cfg.Tools}
 	go func() {
 		Run(ctx, spec, s.log)
 		s.mu.Lock()
@@ -400,4 +408,86 @@ func (s *Server) taskCommits(w http.ResponseWriter, r *http.Request) {
 func (s *Server) taskResult(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(ReadTaskResult(s.cfg.Dir, r.URL.Query().Get("id"), ReadConnection(s.cfg.Dir).JiraBaseURL))
+}
+
+func (s *Server) running() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.cancel != nil
+}
+
+func writeJSON(w http.ResponseWriter, code int, v any) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(code)
+	json.NewEncoder(w).Encode(v)
+}
+
+// specDetail is the page of one spec: the flow bar, what was done, what can be done now, and its files.
+func (s *Server) specDetail(w http.ResponseWriter, r *http.Request) {
+	d, err := GetDetail(s.cfg.Dir, r.URL.Query().Get("id"))
+	if err != nil {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, d)
+}
+
+// specFile reads (GET ?id&path) or replaces (PUT {id,path,text}) a file the detail lists as editable.
+func (s *Server) specFile(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodGet {
+		text, f, err := ReadFile(s.cfg.Dir, r.URL.Query().Get("id"), r.URL.Query().Get("path"))
+		if err != nil {
+			writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"error": err.Error()})
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"text": text, "editable": f.Editable, "why": f.Why})
+		return
+	}
+	var in struct{ ID, Path, Text string }
+	if r.Method != http.MethodPut || json.NewDecoder(io.LimitReader(r.Body, maxFile+8192)).Decode(&in) != nil {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	if err := WriteFile(s.cfg.Dir, in.ID, in.Path, in.Text, s.running()); err != nil {
+		writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"error": err.Error()})
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// specBranch moves the repo to the spec's own branch ({"id"}); git refuses with unsaved edits and the person is told.
+func (s *Server) specBranch(w http.ResponseWriter, r *http.Request) {
+	var in struct{ ID string }
+	if r.Method != http.MethodPost || json.NewDecoder(io.LimitReader(r.Body, 1<<12)).Decode(&in) != nil || !(ValidID(in.ID) || reKitID.MatchString(in.ID)) {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	if s.running() {
+		writeJSON(w, http.StatusConflict, map[string]string{"error": "Bir çalışma sürerken dal değiştirilemez"})
+		return
+	}
+	if err := SwitchBranch(s.cfg.Dir, in.ID); err != nil {
+		writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"error": err.Error()})
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// specChange opens a change on an approved spec ({"id"}); its name comes from who is connected and the time, not from the page.
+func (s *Server) specChange(w http.ResponseWriter, r *http.Request) {
+	var in struct{ ID string }
+	if r.Method != http.MethodPost || json.NewDecoder(io.LimitReader(r.Body, 1<<12)).Decode(&in) != nil || !(ValidID(in.ID) || reKitID.MatchString(in.ID)) {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	if s.running() {
+		writeJSON(w, http.StatusConflict, map[string]string{"error": "Bir çalışma sürerken değişiklik açılamaz"})
+		return
+	}
+	slug, err := StartChange(s.cfg.Dir, in.ID, ReadConnection(s.cfg.Dir).JiraUser, time.Now())
+	if err != nil {
+		writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"error": err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"slug": slug})
 }

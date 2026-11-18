@@ -82,6 +82,20 @@
   .kv { display: grid; grid-template-columns: auto 1fr; gap: .15rem .8rem; font-size: .9rem; margin-top: .5rem; } .kv dt { color: var(--mute); } .kv dd { margin: 0; }
   select { font: inherit; padding: .5rem .6rem; border: 1px solid var(--line); border-radius: .4rem; background: #fff; width: 100%; }
   .links a { display: inline-block; margin: .15rem .6rem .15rem 0; font-weight: 600; }
+  .flow { display: flex; gap: 0; margin: 0 0 1.2rem; flex-wrap: wrap; }
+  .flow .fs { flex: 1 1 0; min-width: 8.5rem; padding: .7rem .9rem .7rem 1.4rem; background: #e6e8eb; color: var(--mute); position: relative; font-size: .88rem; clip-path: polygon(0 0, calc(100% - 14px) 0, 100% 50%, calc(100% - 14px) 100%, 0 100%, 14px 50%); margin-left: -8px; }
+  .flow .fs:first-child { margin-left: 0; clip-path: polygon(0 0, calc(100% - 14px) 0, 100% 50%, calc(100% - 14px) 100%, 0 100%); padding-left: .9rem; }
+  .flow .fs.done { background: #c9f0d1; color: #14532d; } .flow .fs.current { background: var(--blue); color: #fff; font-weight: 700; }
+  .flow .fs small { display: block; font-weight: 400; opacity: .85; }
+  .mini { display: flex; gap: 3px; margin-top: .35rem; } .mini i { width: 1.6rem; height: .35rem; border-radius: 2px; background: #d8dce1; } .mini i.done { background: var(--ok); } .mini i.current { background: var(--blue); }
+  .acts { display: grid; gap: .6rem; } .act { display: flex; gap: .8rem; align-items: center; justify-content: space-between; padding: .6rem 0; border-top: 1px solid var(--line); } .act:first-child { border-top: 0; } .act .h { color: var(--mute); font-size: .86rem; }
+  ul.done { margin: 0; padding-left: 1.1rem; } ul.done li { margin: .15rem 0; }
+  .editor { display: grid; grid-template-columns: 270px minmax(0, 1fr); gap: 1rem; }
+  .flist { max-height: 30rem; overflow: auto; } .flist .g { font-size: .75rem; font-weight: 700; color: var(--mute); text-transform: uppercase; margin: .7rem 0 .2rem; }
+  .flist button { display: block; width: 100%; text-align: left; font: inherit; font-size: .86rem; border: 0; background: none; padding: .3rem .5rem; border-radius: .3rem; cursor: pointer; word-break: break-all; }
+  .flist button:hover { background: #f1f3f6; } .flist button.sel { background: #eef3ff; font-weight: 600; } .flist .lock::after { content: ' \1F512'; font-size: .75rem; }
+  #ftext { width: 100%; min-height: 28rem; font: .86rem/1.5 ui-monospace, monospace; }
+  @media (max-width: 1000px) { .editor { grid-template-columns: 1fr; } }
   .btns { display: flex; gap: .4rem; flex-wrap: wrap; justify-content: flex-end; }
   details { margin-top: 1rem; color: var(--mute); font-size: .85rem; }
   pre { white-space: pre-wrap; margin: .4rem 0 0; }
@@ -117,6 +131,28 @@
         <div class="card">
           <h2>Spec'lerim</h2>
           <div id="specs"><p class="hint">Yükleniyor...</p></div>
+        </div>
+      </div>
+    </div>
+    <div id="detail" hidden>
+      <div class="row" style="margin:0 0 .6rem"><button class="btn" id="dback">&larr; Spec'ler</button></div>
+      <div class="pagehead"><h2><span id="did"></span> <span class="chip" id="dlabel"></span></h2><p id="dbranch"></p></div>
+      <div class="flow" id="dflow"></div>
+      <div class="cols2">
+        <div class="card"><h2>Bu adımda yapabilecekleriniz</h2><div class="acts" id="dacts"></div><div id="dmsg"></div></div>
+        <div class="card"><h2>Şu ana kadar yapılanlar</h2><ul class="done" id="ddone"></ul></div>
+      </div>
+      <div class="card">
+        <h2>Dosyalar</h2>
+        <p class="hint" id="dfilehint">Bir dosya seçin. Düzenlediğinizde &ldquo;Elle düzelttim, devam et&rdquo; farkı esas alır.</p>
+        <div id="dswitch"></div>
+        <div class="editor">
+          <div class="flist" id="dfiles"></div>
+          <div>
+            <div id="fname" class="hint"></div>
+            <textarea id="ftext" hidden spellcheck="false"></textarea>
+            <div class="row"><button class="btn primary" id="fsave" hidden>Kaydet</button><span id="fres"></span></div>
+          </div>
         </div>
       </div>
     </div>
@@ -300,7 +336,7 @@ const ACTIONS = {
   'generate-tasks': ['Task üretimi', 'Önce plan hazırlanır; siz onaylamadan Jira\'ya yazılmaz.'],
 };
 let jobId = '', jobAction = 'generate-specs';
-function view(v) { for (const x of ['home', 'tasksetup', 'job']) $(x).hidden = x !== v; }
+function view(v) { for (const x of ['home', 'detail', 'tasksetup', 'job']) $(x).hidden = x !== v; }
 function showJob(id, action) { jobId = id || jobId; jobAction = action || jobAction; view('job'); const t = ACTIONS[jobAction]; $('jobtitle').textContent = t[0] + ': ' + jobId; $('jobsub').textContent = t[1]; }
 function showHome() { view('home'); loadSpecs(); }
 function resetJob() { for (const k in steps) delete steps[k]; $('steps').textContent = ''; $('log').textContent = ''; $('tools').textContent = ''; $('questions').textContent = ''; $('taskresult').textContent = ''; $('back').hidden = true; }
@@ -315,15 +351,72 @@ async function loadSpecs() {
     const n = document.createElement('div'); n.className = 'n'; n.textContent = sp.id;
     const l = document.createElement('div'); l.className = 'l'; l.textContent = sp.label;
     g.append(n, l); d.appendChild(g);
-    const btns = document.createElement('div'); btns.className = 'btns';
-    const add = (text, fn, primary) => { const b = document.createElement('button'); b.className = 'btn' + (primary ? ' primary' : ''); b.textContent = text; b.onclick = fn; btns.appendChild(b); };
-    if (sp.continue) add('Devam et', () => start('generate-specs', sp.id));
-    if (sp.tasks) add('Task üret', () => taskSetup(sp.id), true);
-    if (sp.update) add(sp.merge ? 'Değişiklik yap' : 'Yorumları işle', () => start('update-specs', sp.id));
-    if (sp.merge) add('Birleştir', () => start('merge-specs', sp.id));
-    d.appendChild(btns);
+    const mini = document.createElement('div'); mini.className = 'mini';
+    for (const f of sp.flow || []) { const i = document.createElement('i'); i.className = f.status; i.title = f.label; mini.appendChild(i); }
+    g.appendChild(mini);
+    const b = document.createElement('button'); b.className = 'btn' + (sp.continue ? ' primary' : ''); b.textContent = 'Aç'; b.onclick = () => openDetail(sp.id);
+    d.appendChild(b);
     box.appendChild(d);
   }
+}
+// ---- Spec page: where it is, what can be done now, what was done, and its files
+let curFile = '';
+async function openDetail(id) {
+  const r = await fetch('/api/spec?id=' + encodeURIComponent(id), { headers: H });
+  const d = await r.json();
+  if (!r.ok) { showHome(); return; }
+  jobId = id; view('detail'); curFile = '';
+  $('did').textContent = d.id; $('dlabel').textContent = d.label;
+  $('dbranch').textContent = 'Şu an bulunduğunuz dal: ' + (d.branch || '-') + (d.info.version ? '  ·  sürüm ' + d.info.version : '');
+  const fl = $('dflow'); fl.textContent = '';
+  d.flow.forEach((f, i) => { const e = document.createElement('div'); e.className = 'fs ' + f.status; e.textContent = (i + 1) + '. ' + f.label; if (f.status === 'current') { const s = document.createElement('small'); s.textContent = 'şu an buradasınız'; e.appendChild(s); } fl.appendChild(e); });
+  const ac = $('dacts'); ac.textContent = ''; $('dmsg').textContent = '';
+  if (!d.actions.length) { const p = document.createElement('p'); p.className = 'hint'; p.textContent = 'Bu adımda yapılacak bir şey yok. Önce ön-spec ekleyin.'; ac.appendChild(p); }
+  for (const a of d.actions) {
+    const row = document.createElement('div'); row.className = 'act';
+    const t = document.createElement('div'); const n = document.createElement('div'); n.style.fontWeight = '600'; n.textContent = a.label; const h = document.createElement('div'); h.className = 'h'; h.textContent = a.hint || ''; t.append(n, h);
+    const b = document.createElement('button'); b.className = 'btn' + (a.primary ? ' primary' : ''); b.textContent = a.label; b.onclick = () => doAction(a.key, d.id);
+    row.append(t, b); ac.appendChild(row);
+  }
+  const dn = $('ddone'); dn.textContent = '';
+  for (const t of d.done) { const li = document.createElement('li'); li.textContent = t; dn.appendChild(li); }
+  if (!d.done.length) { const li = document.createElement('li'); li.textContent = 'Henüz bir şey yapılmadı.'; dn.appendChild(li); }
+  const sw = $('dswitch'); sw.textContent = '';
+  if (d.wantBranch) {
+    const b = document.createElement('button'); b.className = 'btn'; b.textContent = 'Düzenlemek için ' + d.wantBranch + ' dalına geç';
+    b.onclick = async () => { const r = await fetch('/api/spec/branch', { method: 'POST', headers: H, body: JSON.stringify({ id: d.id }) }); if (r.ok) openDetail(d.id); else note(sw, false, (await r.json().catch(() => ({}))).error || 'Dal değiştirilemedi'); };
+    sw.appendChild(b);
+  }
+  const box = $('dfiles'); box.textContent = ''; $('ftext').hidden = true; $('fsave').hidden = true; $('fname').textContent = ''; $('fres').textContent = '';
+  let grp = '';
+  for (const f of d.files) {
+    if (f.group !== grp) { grp = f.group; const g = document.createElement('div'); g.className = 'g'; g.textContent = grp; box.appendChild(g); }
+    const b = document.createElement('button'); b.textContent = f.path.startsWith(d.info.dir + '/') ? f.path.slice(d.info.dir.length + 1) : f.path.split('/').slice(-2).join('/'); b.title = f.path; if (!f.editable) b.className = 'lock';
+    b.onclick = () => openFile(d.id, f, b); box.appendChild(b);
+  }
+  if (!d.files.length) { const p = document.createElement('p'); p.className = 'hint'; p.textContent = 'Henüz dosya yok.'; box.appendChild(p); }
+}
+async function openFile(id, f, btn) {
+  document.querySelectorAll('#dfiles button').forEach(x => x.classList.remove('sel')); btn.classList.add('sel');
+  const r = await fetch('/api/spec/file?id=' + encodeURIComponent(id) + '&path=' + encodeURIComponent(f.path), { headers: H });
+  const j = await r.json();
+  $('fres').textContent = '';
+  if (!r.ok) { $('ftext').hidden = true; $('fsave').hidden = true; note($('fres'), false, j.error); return; }
+  curFile = f.path; $('fname').textContent = f.path + (f.editable ? '' : '  ·  salt okunur: ' + (f.why || ''));
+  const ta = $('ftext'); ta.hidden = false; ta.value = j.text; ta.readOnly = !f.editable; $('fsave').hidden = !f.editable;
+  $('fsave').onclick = async () => {
+    const r = await fetch('/api/spec/file', { method: 'PUT', headers: H, body: JSON.stringify({ id, path: curFile, text: ta.value }) });
+    if (r.ok) note($('fres'), true, 'Kaydedildi. Hazır olunca \u201cElle düzelttim, devam et\u201d deyin.'); else note($('fres'), false, (await r.json().catch(() => ({}))).error || 'Kaydedilemedi');
+  };
+}
+async function doAction(key, id) {
+  if (key === 'generate-tasks') return taskSetup(id);
+  if (key === 'start-change' || key === 'edit-change') {
+    const r = await fetch('/api/spec/change', { method: 'POST', headers: H, body: JSON.stringify({ id }) });
+    if (!r.ok) { note($('dmsg'), false, (await r.json().catch(() => ({}))).error || 'Değişiklik açılamadı'); return; }
+    return key === 'start-change' ? start('update-specs', id) : openDetail(id);
+  }
+  start(key, id);
 }
 async function start(action, id, extra) {
   resetJob(); showJob(id, action);
@@ -339,7 +432,7 @@ $('create').onclick = async () => {
   $('prespecId').value = $('prespecText').value = '';
   start('generate-specs', j.id);
 };
-$('back').onclick = showHome;
+$('back').onclick = () => jobId ? openDetail(jobId) : showHome();
 
 // ---- Tasks: parent and version are chosen and checked here, never typed as free text into the agent
 let tsId = '', tsParentOK = false;
@@ -367,7 +460,7 @@ $('tsParent').oninput = () => {
   }, 450);
 };
 $('tsSha').onchange = tsReady;
-$('tsCancel').onclick = showHome;
+$('tsCancel').onclick = () => openDetail(tsId);
 $('tsStart').onclick = () => start('generate-tasks', tsId, { parent: $('tsParent').value.trim().toUpperCase(), sha: $('tsSha').value });
 
 // ---- Plan gate card: the AC-to-task table the person confirms

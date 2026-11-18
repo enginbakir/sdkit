@@ -21,12 +21,12 @@ func TestGenerateTasksTask(t *testing.T) {
 		in   TaskInput
 		ok   bool
 	}{
-		{"parent and full sha", TaskInput{"TFF-12", sha}, true},
-		{"lower-case key", TaskInput{"tff-12", sha}, false},
-		{"key with a JQL tail", TaskInput{"TFF-12 OR 1=1", sha}, false},
-		{"short sha", TaskInput{"TFF-12", "abc1234"}, false},
-		{"branch name instead of sha", TaskInput{"TFF-12", "main"}, false},
-		{"no parent", TaskInput{"", sha}, false},
+		{"parent and full sha", TaskInput{Parent: "TFF-12", SHA: sha}, true},
+		{"lower-case key", TaskInput{Parent: "tff-12", SHA: sha}, false},
+		{"key with a JQL tail", TaskInput{Parent: "TFF-12 OR 1=1", SHA: sha}, false},
+		{"short sha", TaskInput{Parent: "TFF-12", SHA: "abc1234"}, false},
+		{"branch name instead of sha", TaskInput{Parent: "TFF-12", SHA: "main"}, false},
+		{"no parent", TaskInput{Parent: "", SHA: sha}, false},
 	}
 	for _, c := range cases {
 		got, err := Task("", "generate-tasks", "odeme-akisi", c.in)

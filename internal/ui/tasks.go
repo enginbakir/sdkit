@@ -81,6 +81,7 @@ func CheckParent(ctx context.Context, c *http.Client, base, user, token, key str
 type TaskInput struct {
 	Parent string
 	SHA    string
+	Slug   string // an open change on the current branch; filled by the server from git, never by the page
 }
 
 // generateTasksTask is the whole instruction of a tasks run. The files live in one directory so the panel can read the outcome
