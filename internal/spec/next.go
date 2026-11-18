@@ -15,7 +15,19 @@ type Step struct {
 	Action string
 	Human  bool
 	Why    string
+	State  string // where the spec is, one of the State* values; for a screen, not for the orchestrator
 }
+
+// Where a spec is in its life, from the pre-spec to the Tech Lead's approval. The names are a contract with the panel.
+const (
+	StateNoInput     = "no-input"    // no pre-spec, no draft, no output
+	StateNew         = "new"         // a pre-spec exists, nothing is drafted
+	StateDraft       = "draft"       // drafted, in review (or about to become the output)
+	StateOutput      = "output"      // the OpenSpec output exists and is in review
+	StateUnpublished = "unpublished" // the output passed review and has not gone to a PR
+	StateAwaiting    = "awaiting"    // published, waiting for the Tech Lead's merge
+	StateApproved    = "approved"    // merged
+)
 
 // Next reads the facts on disk (pre-spec, draft, review evidence, lint, spec dir, meta) and names the single next step of
 // generate-specs. It decides nothing about content: it only stops the orchestrator from guessing where it is, and says when
@@ -48,24 +60,26 @@ func Next(root, id string) Step {
 	}
 	switch {
 	case !exists(filepath.Join(e.prespec, id+".md")) && !exists(draft) && !exists(out):
-		return Step{Action: fmt.Sprintf("sdkit prespec check %s: there is no pre-spec", id), Human: true, Why: "no input"}
+		return Step{Action: fmt.Sprintf("sdkit prespec check %s: there is no pre-spec", id), Human: true, Why: "no input", State: StateNoInput}
 	case !exists(draft) && !exists(out):
-		return Step{Action: "collect every open point of the pre-spec as ONE batch of questions (decision / fact / default), settle the answers, then draft in a fresh subagent", Human: true, Why: "questions come first, once"}
+		return Step{Action: "collect every open point of the pre-spec as ONE batch of questions (decision / fact / default), settle the answers, then draft in a fresh subagent", Human: true, Why: "questions come first, once", State: StateNew}
 	case exists(draft) && !exists(out):
 		if s := round(id+"-draft", draft); s.Action != "" {
+			s.State = StateDraft
 			return s
 		}
-		return Step{Action: "propose: openspec-propose from the reviewed draft into " + out + " (copy work/decisions/" + id + ".md to " + out + "/decisions.md)", Why: "draft is PASS"}
+		return Step{Action: "propose: openspec-propose from the reviewed draft into " + out + " (copy work/decisions/" + id + ".md to " + out + "/decisions.md)", Why: "draft is PASS", State: StateDraft}
 	}
 	if s := round(id, out); s.Action != "" {
+		s.State = StateOutput
 		return s
 	}
 	m := e.meta(id)
 	switch {
 	case !e.hasMeta(id) || len(m.History) == 0:
-		return Step{Action: fmt.Sprintf("sdkit preflight spec-publish %s, then sdkit spec init-meta %s and sdkit spec publish %s --title ... --body-file ...", id, id, id), Why: "output is PASS, not published"}
+		return Step{Action: fmt.Sprintf("sdkit preflight spec-publish %s, then sdkit spec init-meta %s and sdkit spec publish %s --title ... --body-file ...", id, id, id), Why: "output is PASS, not published", State: StateUnpublished}
 	case m.Status != "approved":
-		return Step{Action: "wait for the Tech Lead's merge of the PR; the merge is the approval. For a v0.x, then promote (sdkit spec promote) on a new branch", Human: true, Why: "approval is not ours"}
+		return Step{Action: "wait for the Tech Lead's merge of the PR; the merge is the approval. For a v0.x, then promote (sdkit spec promote) on a new branch", Human: true, Why: "approval is not ours", State: StateAwaiting}
 	}
-	return Step{Action: "done: give generate-tasks the merged SHA", Why: "approved"}
+	return Step{Action: "done: give generate-tasks the merged SHA", Why: "approved", State: StateApproved}
 }

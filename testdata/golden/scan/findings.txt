@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "findings": [
+    {
+      "rule": "aws-key-id",
+      "severity": "high",
+      "source": "tree",
+      "path": "local.env",
+      "line": 2,
+      "excerpt": "k=AKIA***",
+      "fingerprint": "063fc525d5a5cb3e3de1ff95"
+    }
+  ],
+  "baselined": []
+}

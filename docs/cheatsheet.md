@@ -75,6 +75,7 @@ sdkit pricing status                # price table: missing/stale/unpriced models
 sdkit usage prices                    # which price table is in force (pricing.json v2: model, provider, effective date)
 sdkit usage budget [slug]            # usage against TOKEN_BUDGET_TASK (exit 3 warning, 4 exceeded)
 sdkit usage context [transcript]     # which tool results a session carried and what carrying them cost (Claude Code)
+sdkit ui [--no-open] [--host <cmd>]  # local panel for non-technical roles (docs/design-ui.md); `sdkit ui ask` is the question bridge used inside its sessions
 sdkit capped -- <command>            # run tests/builds; keep failures + tail in the session, full log in work/<slug>/out/
 sdkit telemetry summary [slug] [--json]  # run summary: phase/agent durations, tokens (measured/total), retries, failures, verification (needs TELEMETRY=1)
 sdkit telemetry archive <slug>         # before closeout: move the events under work/_archive/
@@ -138,6 +139,7 @@ sdkit verify --since-head # uncommitted changes only
 sdkit verify --no-cache   # ignore the green-result cache for the same tree
 sdkit doctor <repo>                     # install check
 sdkit upgrade <repo>                    # upgrade to a new kit version (refresh the plugin with /plugin first)
+sdkit scan secrets [--history|--staged] [--json]   # credential-shaped strings; accepted ones in secret-baseline.json
 sdkit dev adapters --check            # (kit maintainer) are the roles and generated files in sync
 go test ./... && sdkit dev scan                     # (kit maintainer) the whole test suite, publish-safety scan
 ```
