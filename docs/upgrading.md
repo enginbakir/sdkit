@@ -23,6 +23,10 @@ To see whether you are up to date: `<project-dir>/.scaffold-version` is the kit 
 
 There is no `<kit>/bin/upgrade.sh` any more: the kit is one binary and a checkout of it is not needed.
 
+## 2.2.0 -> 2.3.0: a local panel for non-technical roles
+
+No manual step. `sdkit ui` starts a local web panel in the repo it is run from: Connect (Jira and Bitbucket settings, written to `sdkit.local.env` and checked on save), Health (`sdkit doctor` in plain words), and Start (new spec from a pasted pre-spec, the list of specs with their state, a `generate-specs` run with its questions and review findings as cards). It drives a headless Claude Code session on the analyst's machine and needs `sdkit` on `PATH`; see [design-ui.md](design-ui.md). Also new: `sdkit scan secrets`, `sdkit pr` accepts SSH origins for Bitbucket, and `sdkit spec publish` lets `git push` ask for credentials on the terminal.
+
 ## 2.1.2 -> 2.2.0: tasks split by role
 
 No manual step. A spec made with `generate-specs` now carries `roles.json` (the roles the analyst picked) and a `## Roles` section in `design.md`; `generate-tasks` splits each task into one subtask per role (`area`), the task itself becoming a group created as `JIRA_TASK_TYPE` (default `Task`, added to `sdkit.env` by `sdkit upgrade`) under the parent, its role subtasks under it. Check that your Jira project allows a Sub-task under that issue type. Specs and tasks made before have no `roles.json` and work as they did. `sdkit preflight tasks` only warns when the Jira parent cannot be fetched or has no `sdkit-task` block.
