@@ -30,6 +30,7 @@ type QuestionItem struct {
 	MultiSelect bool     `json:"multiSelect,omitempty"`
 	Options     []Option `json:"options,omitempty"`
 	Finding     *Finding `json:"finding,omitempty"`
+	Plan        *Plan    `json:"plan,omitempty"` // the plan gate of generate-tasks
 }
 
 var (
@@ -67,6 +68,7 @@ func NormalizeQuestions(raw []byte) ([]byte, error) {
 		for j := range q.Options {
 			q.Options[j].Label, q.Options[j].Description = clip(q.Options[j].Label, 200), clip(q.Options[j].Description, 600)
 		}
+		q.Plan = normalizePlan(q.Plan)
 		if f := q.Finding; f != nil {
 			f.Problem = clip(f.Problem, 1500)
 			if f.Problem == "" {

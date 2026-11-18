@@ -7,6 +7,7 @@ import (
 	"embed"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"io/fs"
@@ -14,7 +15,12 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 	"sync"
+	"time"
+
+	"github.com/wecii/sdkit/internal/proc"
+	"github.com/wecii/sdkit/internal/spec"
 )
 
 //go:embed web
@@ -99,6 +105,9 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/health", s.health)
 	mux.HandleFunc("/api/specs", s.specs)
 	mux.HandleFunc("/api/prespec", s.prespec)
+	mux.HandleFunc("/api/tasks/commits", s.taskCommits)
+	mux.HandleFunc("/api/tasks/parent", s.taskParent)
+	mux.HandleFunc("/api/tasks/result", s.taskResult)
 	return s.guard(mux)
 }
 
@@ -169,12 +178,18 @@ func (s *Server) run(w http.ResponseWriter, r *http.Request) {
 	var in struct {
 		Action string `json:"action"`
 		ID     string `json:"id"`
+		Parent string `json:"parent"`
+		SHA    string `json:"sha"`
 	}
 	if json.NewDecoder(io.LimitReader(r.Body, 1<<16)).Decode(&in) != nil {
 		http.Error(w, `expected {"action":"generate-specs","id":"..."}`, http.StatusBadRequest)
 		return
 	}
-	task, err := Task(in.Action, in.ID)
+	task, err := Task(s.cfg.Dir, in.Action, in.ID, TaskInput{Parent: in.Parent, SHA: in.SHA})
+	if err == nil && in.Action == "generate-tasks" {
+		// the page lists and checks these too, but a run is only started on what the server has verified itself
+		err = s.checkTaskInput(r.Context(), in.ID, in.Parent, in.SHA)
+	}
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -335,4 +350,54 @@ func (s *Server) prespec(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	json.NewEncoder(w).Encode(map[string]string{"id": in.ID})
+}
+
+// checkTaskInput is the server's own look at a tasks run: the SHA is one of the approved commits listed from main, and the
+// parent exists in Jira.
+func (s *Server) checkTaskInput(ctx context.Context, id, parent, sha string) error {
+	ok := false
+	for _, c := range spec.ApprovedCommits(s.cfg.Dir, id, 30) {
+		ok = ok || c.SHA == sha
+	}
+	if !ok {
+		return errors.New("Bu commit, main'de onaylanmış bir sürüm değil; listeden seçin")
+	}
+	if p := s.parentCheck(ctx, parent); !p.OK {
+		return errors.New(p.Message)
+	}
+	return nil
+}
+
+func (s *Server) parentCheck(ctx context.Context, key string) Parent {
+	c := ReadConnection(s.cfg.Dir)
+	jt, _ := SavedTokens(s.cfg.Dir)
+	hc := s.cfg.HTTP
+	if hc == nil {
+		hc = HTTPClient()
+	}
+	return CheckParent(ctx, hc, c.JiraBaseURL, c.JiraUser, jt, key)
+}
+
+func (s *Server) taskParent(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(s.parentCheck(r.Context(), strings.ToUpper(strings.TrimSpace(r.URL.Query().Get("key")))))
+}
+
+// taskCommits lists the approved versions of a spec on main, newest first: the person picks one, never types a SHA.
+func (s *Server) taskCommits(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	// a merge the Tech Lead made a minute ago must be on the list; best effort, never a prompt, never longer than a few seconds
+	fctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
+	proc.Run(fctx, s.cfg.Dir, []string{"GIT_TERMINAL_PROMPT=0"}, "git", "fetch", "-q", "origin")
+	cancel()
+	cs := spec.ApprovedCommits(s.cfg.Dir, r.URL.Query().Get("id"), 30)
+	if cs == nil {
+		cs = []spec.Commit{}
+	}
+	json.NewEncoder(w).Encode(cs)
+}
+
+func (s *Server) taskResult(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(ReadTaskResult(s.cfg.Dir, r.URL.Query().Get("id"), ReadConnection(s.cfg.Dir).JiraBaseURL))
 }

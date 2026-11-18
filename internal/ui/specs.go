@@ -20,6 +20,9 @@ type SpecItem struct {
 	Label    string `json:"label"`
 	Waiting  bool   `json:"waiting"`  // someone other than the agent must act (the analyst's answer, the Tech Lead's merge)
 	Continue bool   `json:"continue"` // the agent can take it from here
+	Update   bool   `json:"update"`   // published: the Tech Lead's comments (or the analyst's edits) can be worked in
+	Merge    bool   `json:"merge"`    // approved: sibling changes can be merged into the next revision
+	Tasks    bool   `json:"tasks"`    // approved: Jira tasks can be made
 }
 
 // stateText is the plain-words state; whether the agent can continue it follows from the state.
@@ -44,7 +47,8 @@ func ListSpecs(root string) []SpecItem {
 		if !ok {
 			t.label = e.State
 		}
-		out = append(out, SpecItem{ID: e.ID, State: e.State, Label: t.label, Continue: t.cont, Waiting: e.State == spec.StateAwaiting})
+		out = append(out, SpecItem{ID: e.ID, State: e.State, Label: t.label, Continue: t.cont, Waiting: e.State == spec.StateAwaiting,
+			Update: e.State == spec.StateAwaiting || e.State == spec.StateApproved, Merge: e.State == spec.StateApproved, Tasks: e.State == spec.StateApproved})
 	}
 	return out
 }
@@ -91,13 +95,20 @@ func WritePrespec(root, id, text string, overwrite bool) error {
 
 // Task is what a run is told to do. The browser names an action and an id; the wording is ours, so a page cannot hand the agent
 // arbitrary instructions.
-func Task(action, id string) (string, error) {
+func Task(root, action, id string, in TaskInput) (string, error) {
 	if !ValidID(id) && !reKitID.MatchString(id) {
 		return "", errors.New("geçersiz ad")
 	}
 	switch action {
 	case "generate-specs":
 		return fmt.Sprintf("Use the generate-specs skill for the spec id %q (the pre-spec has the same name). If work on it already exists, continue from where `sdkit spec next %s` says it stands.", id, id), nil
+	case "update-specs":
+		return fmt.Sprintf("Use the update-specs skill for the spec id %q. Read the Tech Lead's change requests from its pull request, and the analyst's own edits, as the skill says.", id), nil
+	case "merge-specs":
+		return fmt.Sprintf("Use the merge-specs skill for the spec id %q. If `sdkit spec drift` and `sdkit spec check` find nothing to merge, say so in one sentence and stop.", id), nil
+	case "generate-tasks":
+		_, pj, _ := project.Load(root)
+		return generateTasksTask(id, in, pj.KitDir)
 	}
 	return "", errors.New("bilinmeyen işlem")
 }

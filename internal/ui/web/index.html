@@ -9,14 +9,23 @@
   * { box-sizing: border-box; }
   [hidden] { display: none !important; }
   body { font: 15px/1.5 system-ui, sans-serif; margin: 0; color: var(--ink); background: var(--bg); }
-  header { background: #fff; border-bottom: 1px solid var(--line); }
-  .bar { max-width: 780px; margin: 0 auto; padding: 0 1rem; display: flex; align-items: center; gap: 1.5rem; }
-  .bar h1 { font-size: 1.1rem; margin: 0; padding: .9rem 0; }
-  nav { display: flex; gap: .25rem; }
-  nav button { font: inherit; border: 0; background: none; padding: .95rem .8rem; cursor: pointer; color: var(--mute); border-bottom: 3px solid transparent; }
-  nav button[aria-selected=true] { color: var(--ink); border-bottom-color: var(--blue); font-weight: 600; }
-  nav .dot { display: inline-block; width: .5rem; height: .5rem; border-radius: 50%; background: var(--bad); margin-left: .35rem; vertical-align: middle; }
-  main { max-width: 780px; margin: 1.5rem auto; padding: 0 1rem; }
+  .app { display: grid; grid-template-columns: 232px minmax(0, 1fr); min-height: 100vh; }
+  aside { background: #fff; border-right: 1px solid var(--line); padding: 1.2rem .8rem; position: sticky; top: 0; height: 100vh; display: flex; flex-direction: column; gap: .2rem; }
+  aside h1 { font-size: 1.15rem; margin: 0 .6rem 1.2rem; letter-spacing: .01em; }
+  aside .sub { color: var(--mute); font-size: .78rem; margin: auto .6rem 0; }
+  nav { display: flex; flex-direction: column; gap: .15rem; }
+  nav button { font: inherit; text-align: left; border: 0; background: none; padding: .6rem .8rem; cursor: pointer; color: var(--mute); border-radius: .45rem; border-left: 3px solid transparent; display: flex; align-items: center; gap: .55rem; }
+  nav button:hover { background: #f1f3f6; }
+  nav button[aria-selected=true] { color: var(--ink); background: #eef3ff; border-left-color: var(--blue); font-weight: 600; }
+  nav .ico { width: 1.1rem; text-align: center; }
+  nav .dot { display: inline-block; width: .5rem; height: .5rem; border-radius: 50%; background: var(--bad); margin-left: auto; }
+  main { padding: 1.8rem 2.2rem 3rem; min-width: 0; max-width: 1280px; width: 100%; }
+  .pagehead { margin: 0 0 1.2rem; } .pagehead h2 { font-size: 1.35rem; margin: 0; } .pagehead p { margin: .2rem 0 0; color: var(--mute); }
+  .cols { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 1.2rem; align-items: start; }
+  .cols2 { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 1.2rem; align-items: start; }
+  .jobgrid { display: grid; grid-template-columns: 230px minmax(0, 1fr); gap: 1.4rem; align-items: start; }
+  @media (max-width: 1000px) { .cols, .cols2, .jobgrid { grid-template-columns: 1fr; } }
+  @media (max-width: 700px) { .app { grid-template-columns: 1fr; } aside { position: static; height: auto; flex-direction: row; flex-wrap: wrap; padding: .6rem; } aside h1 { margin: .3rem .6rem; } aside .sub { display: none; } nav { flex-direction: row; } main { padding: 1rem; } }
   section[hidden] { display: none; }
   .card { background: #fff; border: 1px solid var(--line); border-radius: .6rem; padding: 1.1rem 1.2rem; margin-bottom: 1rem; }
   .card h2 { font-size: 1rem; margin: 0 0 .6rem; }
@@ -37,8 +46,8 @@
   .res { margin-top: .8rem; padding: .6rem .8rem; border-radius: .4rem; font-size: .92rem; }
   .res.ok { background: #e7f6ec; color: var(--ok); } .res.bad { background: #fdecea; color: var(--bad); }
   .banner { background: #fff7e6; border: 1px solid #f3d38a; color: var(--warn); padding: .7rem 1rem; border-radius: .5rem; margin-bottom: 1rem; }
-  #steps { display: flex; gap: .3rem; flex-wrap: wrap; margin: 1rem 0; }
-  .step { padding: .2rem .65rem; border-radius: 1rem; background: #e6e8eb; font-size: .85rem; }
+  #steps { display: flex; flex-direction: column; gap: .35rem; margin: 0; }
+  .step { padding: .35rem .75rem; border-radius: .45rem; background: #e6e8eb; font-size: .85rem; }
   .step.started { background: #fff3c4; } .step.done { background: #c9f0d1; }
   .msg { white-space: pre-wrap; margin: .6rem 0; }
   .q { border: 2px solid var(--blue); border-radius: .6rem; padding: .9rem 1rem; margin: 1rem 0; background: #fff; }
@@ -63,52 +72,94 @@
   .diff div { padding: 0 .6rem; white-space: pre-wrap; }
   .diff .add { background: #e6f6ea; color: #14532d; } .diff .del { background: #fdecea; color: #7f1d1d; } .diff .hunk { color: var(--mute); background: #f3f4f6; }
   .note { margin-top: .4rem; }
+  .tbl { width: 100%; border-collapse: collapse; font-size: .88rem; margin-top: .4rem; }
+  .tbl th { text-align: left; color: var(--mute); font-size: .76rem; text-transform: uppercase; letter-spacing: .03em; padding: .3rem .5rem; border-bottom: 1px solid var(--line); }
+  .tbl td { padding: .45rem .5rem; border-top: 1px solid var(--line); vertical-align: top; }
+  .tbl .ref { font-weight: 700; white-space: nowrap; } .tbl .acs { font-family: ui-monospace, monospace; font-size: .8rem; color: var(--mute); }
+  .risk { font-size: .75rem; padding: .05rem .5rem; border-radius: 1rem; background: #e6e8eb; } .risk.high { background: #fdecea; color: var(--bad); } .risk.medium { background: #fff3c4; color: var(--warn); } .risk.low { background: #e7f6ec; color: var(--ok); }
+  .plan { border: 1px solid var(--line); border-left: 5px solid var(--blue); border-radius: .5rem; padding: .8rem 1rem; margin: .5rem 0 .8rem; background: #fcfcfd; overflow-x: auto; }
+  .plan .sum { margin: 0 0 .4rem; }
+  .kv { display: grid; grid-template-columns: auto 1fr; gap: .15rem .8rem; font-size: .9rem; margin-top: .5rem; } .kv dt { color: var(--mute); } .kv dd { margin: 0; }
+  select { font: inherit; padding: .5rem .6rem; border: 1px solid var(--line); border-radius: .4rem; background: #fff; width: 100%; }
+  .links a { display: inline-block; margin: .15rem .6rem .15rem 0; font-weight: 600; }
+  .btns { display: flex; gap: .4rem; flex-wrap: wrap; justify-content: flex-end; }
   details { margin-top: 1rem; color: var(--mute); font-size: .85rem; }
   pre { white-space: pre-wrap; margin: .4rem 0 0; }
 </style>
 </head>
 <body>
-<header>
-  <div class="bar">
-    <h1>sdkit</h1>
-    <nav role="tablist">
-      <button role="tab" id="t-run" aria-selected="true" data-tab="run">Başla</button>
-      <button role="tab" id="t-connect" aria-selected="false" data-tab="connect">Bağlantı</button>
-      <button role="tab" id="t-health" aria-selected="false" data-tab="health">Sağlık<span class="dot" id="dot" hidden></span></button>
-    </nav>
-  </div>
-</header>
+<div class="app">
+<aside>
+  <h1>sdkit</h1>
+  <nav role="tablist" aria-orientation="vertical">
+    <button role="tab" id="t-run" aria-selected="true" data-tab="run"><span class="ico">&#9776;</span>Başla</button>
+    <button role="tab" id="t-connect" aria-selected="false" data-tab="connect"><span class="ico">&#128279;</span>Bağlantı</button>
+    <button role="tab" id="t-health" aria-selected="false" data-tab="health"><span class="ico">&#10003;</span>Sağlık<span class="dot" id="dot" hidden></span></button>
+  </nav>
+  <p class="sub">Yerel panel. Bilgileriniz bu bilgisayardan çıkmaz.</p>
+</aside>
 <main>
   <section id="run">
     <div class="banner" id="notready" hidden>Kurulumda eksikler var. Başlamadan önce <a href="#" data-go="health">Sağlık</a> sayfasına bakın.</div>
     <div id="home">
-      <div class="card">
-        <h2>Yeni spec</h2>
-        <p class="hint">Elinizdeki ön-spec metnini yapıştırın. Eksik noktaları size soracağım.</p>
-        <label for="prespecId">Spec adı</label>
-        <p class="hint">Harf, rakam ve tire kullanın. Örneğin: odeme-akisi</p>
-        <input type="text" id="prespecId" maxlength="60" autocomplete="off">
-        <label for="prespecText">Ön-spec</label>
-        <textarea id="prespecText" aria-label="Ön-spec"></textarea>
-        <div class="row"><button class="btn primary" id="create">Spec üret</button><span class="fail" id="createerr"></span></div>
-      </div>
-      <div class="card">
-        <h2>Spec'lerim</h2>
-        <div id="specs"><p class="hint">Yükleniyor...</p></div>
+      <div class="pagehead"><h2>Başla</h2><p>Yeni bir spec başlatın ya da var olanlarla devam edin.</p></div>
+      <div class="cols">
+        <div class="card">
+          <h2>Yeni spec</h2>
+          <p class="hint">Elinizdeki ön-spec metnini yapıştırın. Eksik noktaları size soracağım.</p>
+          <label for="prespecId">Spec adı</label>
+          <p class="hint">Harf, rakam ve tire kullanın. Örneğin: odeme-akisi</p>
+          <input type="text" id="prespecId" maxlength="60" autocomplete="off">
+          <label for="prespecText">Ön-spec</label>
+          <textarea id="prespecText" aria-label="Ön-spec" style="min-height:14rem"></textarea>
+          <div class="row"><button class="btn primary" id="create">Spec üret</button><span class="fail" id="createerr"></span></div>
+        </div>
+        <div class="card">
+          <h2>Spec'lerim</h2>
+          <div id="specs"><p class="hint">Yükleniyor...</p></div>
+        </div>
       </div>
     </div>
+    <div id="tasksetup" hidden>
+      <div class="pagehead"><h2>Task üret: <span id="tsid"></span></h2><p>Onaylanmış spec, Jira'daki bir işin altında atomik task'lara bölünür. Önce planı göreceksiniz; siz onaylamadan Jira'ya hiçbir şey yazılmaz.</p></div>
+      <div class="cols2">
+        <div class="card">
+          <h2>1. Jira üst işi</h2>
+          <p class="hint">Task'ların altına açılacağı mevcut iş (epic veya story). Burada yeni iş açılmaz.</p>
+          <label for="tsParent">Jira anahtarı</label>
+          <input type="text" id="tsParent" placeholder="TFF-123" autocomplete="off" maxlength="30">
+          <div id="tsParentRes"></div>
+        </div>
+        <div class="card">
+          <h2>2. Spec sürümü</h2>
+          <p class="hint">main'de onaylanmış sürümler. Tech Lead'in birleştirdiği son sürüm en üsttedir.</p>
+          <label for="tsSha">Sürüm</label>
+          <select id="tsSha" disabled></select>
+          <div id="tsShaRes"></div>
+        </div>
+      </div>
+      <div class="row"><button class="btn primary" id="tsStart" disabled>Planı hazırla</button><button class="btn" id="tsCancel">Vazgeç</button><span class="fail" id="tsErr"></span></div>
+    </div>
     <div id="job" hidden>
-      <h2 id="jobtitle" style="font-size:1.05rem"></h2>
-      <div id="steps"></div>
-      <div id="log"></div>
-      <div id="questions"></div>
-      <div class="row"><button class="btn" id="stop" hidden>Durdur</button><button class="btn primary" id="back" hidden>Listeye dön</button></div>
-      <details><summary>Ayrıntılar</summary><pre id="tools"></pre></details>
+      <div class="pagehead"><h2 id="jobtitle"></h2><p id="jobsub"></p></div>
+      <div class="jobgrid">
+        <div class="card"><h2>Adımlar</h2><div id="steps"></div></div>
+        <div>
+          <div id="log"></div>
+          <div id="questions"></div>
+          <div id="taskresult"></div>
+          <div class="row"><button class="btn" id="stop" hidden>Durdur</button><button class="btn primary" id="back" hidden>Listeye dön</button></div>
+          <details><summary>Ayrıntılar</summary><pre id="tools"></pre></details>
+        </div>
+      </div>
     </div>
   </section>
 
   <section id="connect" hidden>
-    <form class="card" id="form" autocomplete="off">
+    <div class="pagehead"><h2>Bağlantı</h2><p>Jira ve Bitbucket bilgileriniz. Kaydedince hemen denenir.</p></div>
+    <form id="form" autocomplete="off">
+      <div class="cols2">
+      <div class="card">
       <h2>Jira</h2>
       <label for="jiraBaseUrl">Jira adresi</label>
       <p class="hint">Tarayıcıda Jira'yı açtığınızda adres çubuğunda gördüğünüz kısım.</p>
@@ -121,12 +172,16 @@
       <label for="jiraToken">Jira token'ı</label>
       <p class="hint">id.atlassian.com &rsaquo; Güvenlik &rsaquo; API token'ları bölümünden oluşturun.</p>
       <input type="password" id="jiraToken" autocomplete="new-password">
-      <h2 style="margin-top:1.6rem">Bitbucket</h2>
+      </div>
+      <div class="card">
+      <h2>Bitbucket</h2>
       <label for="bitbucketEmail">Bitbucket e-posta adresiniz</label>
       <input type="email" id="bitbucketEmail">
       <label for="bitbucketToken">Bitbucket token'ı</label>
       <p class="hint">Bitbucket &rsaquo; Kişisel ayarlar &rsaquo; API token'ları. Depoyu okuma ve pull request yazma izni olmalı.</p>
       <input type="password" id="bitbucketToken" autocomplete="new-password">
+      </div>
+      </div>
       <div class="row"><button class="btn primary" id="save" type="submit">Kaydet ve dene</button></div>
       <div id="saveres"></div>
     </form>
@@ -134,11 +189,13 @@
   </section>
 
   <section id="health" hidden>
+    <div class="pagehead"><h2>Sağlık</h2><p>Kurulumun hazır olup olmadığı.</p></div>
     <div class="card"><h2 id="healthtitle">Kontrol ediliyor...</h2><div id="items"></div>
       <div class="row"><button class="btn" id="recheck">Tekrar kontrol et</button></div></div>
     <details><summary>Teknik ayrıntılar</summary><pre id="raw"></pre></details>
   </section>
 </main>
+</div>
 <script>
 const key = new URLSearchParams(location.search).get('k');
 const H = { 'X-Sdkit-Key': key, 'Content-Type': 'application/json' };
@@ -236,31 +293,41 @@ function findingCard(f) {
 }
 
 // ---- Run
-let jobId = '';
-function showJob(id) { jobId = id || jobId; $('home').hidden = true; $('job').hidden = false; $('jobtitle').textContent = jobId; }
-function showHome() { $('job').hidden = true; $('home').hidden = false; loadSpecs(); }
-function resetJob() { for (const k in steps) delete steps[k]; $('steps').textContent = ''; $('log').textContent = ''; $('tools').textContent = ''; $('questions').textContent = ''; $('back').hidden = true; }
+const ACTIONS = {
+  'generate-specs': ['Spec üretimi', 'Eksik noktaları soracağım, taslağı hazırlayıp gözden geçireceğim.'],
+  'update-specs': ['Spec güncelleme', 'Tech Lead yorumlarını ve sizin düzenlemelerinizi işliyorum.'],
+  'merge-specs': ['Değişiklikleri birleştirme', 'Aynı onaylı sürüm üzerinde yazılmış değişiklikler tek revizyonda birleştirilir.'],
+  'generate-tasks': ['Task üretimi', 'Önce plan hazırlanır; siz onaylamadan Jira\'ya yazılmaz.'],
+};
+let jobId = '', jobAction = 'generate-specs';
+function view(v) { for (const x of ['home', 'tasksetup', 'job']) $(x).hidden = x !== v; }
+function showJob(id, action) { jobId = id || jobId; jobAction = action || jobAction; view('job'); const t = ACTIONS[jobAction]; $('jobtitle').textContent = t[0] + ': ' + jobId; $('jobsub').textContent = t[1]; }
+function showHome() { view('home'); loadSpecs(); }
+function resetJob() { for (const k in steps) delete steps[k]; $('steps').textContent = ''; $('log').textContent = ''; $('tools').textContent = ''; $('questions').textContent = ''; $('taskresult').textContent = ''; $('back').hidden = true; }
 
 async function loadSpecs() {
   const list = await (await fetch('/api/specs', { headers: H })).json();
   const box = $('specs'); box.textContent = '';
-  if (!list.length) { box.innerHTML = '<p class="hint">Henüz spec yok. Yukarıdan yeni bir tane başlatın.</p>'; return; }
+  if (!list.length) { box.innerHTML = '<p class="hint">Henüz spec yok. Soldan yeni bir tane başlatın.</p>'; return; }
   for (const sp of list) {
     const d = document.createElement('div'); d.className = 'spec';
     const g = document.createElement('div'); g.className = 'grow';
     const n = document.createElement('div'); n.className = 'n'; n.textContent = sp.id;
     const l = document.createElement('div'); l.className = 'l'; l.textContent = sp.label;
     g.append(n, l); d.appendChild(g);
-    if (sp.continue) {
-      const b = document.createElement('button'); b.className = 'btn'; b.textContent = 'Devam et';
-      b.onclick = () => start(sp.id); d.appendChild(b);
-    }
+    const btns = document.createElement('div'); btns.className = 'btns';
+    const add = (text, fn, primary) => { const b = document.createElement('button'); b.className = 'btn' + (primary ? ' primary' : ''); b.textContent = text; b.onclick = fn; btns.appendChild(b); };
+    if (sp.continue) add('Devam et', () => start('generate-specs', sp.id));
+    if (sp.tasks) add('Task üret', () => taskSetup(sp.id), true);
+    if (sp.update) add(sp.merge ? 'Değişiklik yap' : 'Yorumları işle', () => start('update-specs', sp.id));
+    if (sp.merge) add('Birleştir', () => start('merge-specs', sp.id));
+    d.appendChild(btns);
     box.appendChild(d);
   }
 }
-async function start(id) {
-  resetJob(); showJob(id);
-  const r = await fetch('/api/run', { method: 'POST', headers: H, body: JSON.stringify({ action: 'generate-specs', id }) });
+async function start(action, id, extra) {
+  resetJob(); showJob(id, action);
+  const r = await fetch('/api/run', { method: 'POST', headers: H, body: JSON.stringify(Object.assign({ action, id }, extra || {})) });
   if (!r.ok) { addMsg(await r.text(), 'fail'); $('back').hidden = false; }
 }
 $('create').onclick = async () => {
@@ -270,9 +337,72 @@ $('create').onclick = async () => {
   const j = await r.json().catch(() => ({}));
   if (!r.ok) { $('createerr').textContent = j.error || 'Kaydedilemedi'; return; }
   $('prespecId').value = $('prespecText').value = '';
-  start(j.id);
+  start('generate-specs', j.id);
 };
 $('back').onclick = showHome;
+
+// ---- Tasks: parent and version are chosen and checked here, never typed as free text into the agent
+let tsId = '', tsParentOK = false;
+function tsReady() { $('tsStart').disabled = !(tsParentOK && !$('tsSha').disabled && $('tsSha').value); }
+function note(el, ok, text) { el.textContent = ''; const d = document.createElement('div'); d.className = 'res ' + (ok ? 'ok' : 'bad'); d.textContent = text; el.appendChild(d); }
+async function taskSetup(id) {
+  tsId = id; tsParentOK = false; view('tasksetup'); $('tsid').textContent = id; $('tsErr').textContent = '';
+  $('tsParent').value = ''; $('tsParentRes').textContent = ''; $('tsShaRes').textContent = ''; tsReady();
+  const sel = $('tsSha'); sel.textContent = ''; sel.disabled = true;
+  const cs = await (await fetch('/api/tasks/commits?id=' + encodeURIComponent(id), { headers: H })).json();
+  if (!cs.length) { note($('tsShaRes'), false, 'main\'de bu spec için onaylanmış bir sürüm bulunamadı. Tech Lead\'in PR\'ı birleştirdiğinden emin olun.'); return; }
+  for (const c of cs) { const o = document.createElement('option'); o.value = c.sha; o.textContent = 'v' + c.version + '  ·  ' + c.date + '  ·  ' + c.short + '  ·  ' + c.subject; sel.appendChild(o); }
+  sel.disabled = false; tsReady();
+}
+let tsTimer;
+$('tsParent').oninput = () => {
+  tsParentOK = false; tsReady(); clearTimeout(tsTimer);
+  const k = $('tsParent').value.trim().toUpperCase();
+  if (!k) { $('tsParentRes').textContent = ''; return; }
+  tsTimer = setTimeout(async () => {
+    const p = await (await fetch('/api/tasks/parent?key=' + encodeURIComponent(k), { headers: H })).json();
+    if ($('tsParent').value.trim().toUpperCase() !== k) return;
+    tsParentOK = p.ok; tsReady();
+    note($('tsParentRes'), p.ok, p.ok ? k + ': ' + p.summary + (p.type ? ' (' + p.type + (p.status ? ', ' + p.status : '') + ')' : '') : p.message);
+  }, 450);
+};
+$('tsSha').onchange = tsReady;
+$('tsCancel').onclick = showHome;
+$('tsStart').onclick = () => start('generate-tasks', tsId, { parent: $('tsParent').value.trim().toUpperCase(), sha: $('tsSha').value });
+
+// ---- Plan gate card: the AC-to-task table the person confirms
+function planCard(p) {
+  const c = document.createElement('div'); c.className = 'plan';
+  if (p.summary) { const s = document.createElement('p'); s.className = 'sum'; s.textContent = p.summary; c.appendChild(s); }
+  const t = document.createElement('table'); t.className = 'tbl';
+  const hr = t.createTHead().insertRow();
+  for (const h of ['Task', 'Ne yapılacak', 'Risk', 'Kabul kriterleri', 'Bağımlı', 'Roller']) { const th = document.createElement('th'); th.textContent = h; hr.appendChild(th); }
+  const tb = t.createTBody();
+  for (const x of p.tasks) {
+    const r = tb.insertRow();
+    const cell = (text, cls) => { const d = r.insertCell(); if (cls) d.className = cls; d.textContent = text; return d; };
+    cell(x.ref, 'ref'); cell(x.title);
+    const rk = r.insertCell(); if (x.risk) { const s = document.createElement('span'); s.className = 'risk ' + x.risk.toLowerCase(); s.textContent = x.risk; rk.appendChild(s); }
+    cell((x.acs || []).join(', '), 'acs'); cell((x.dependsOn || []).join(', ') || '-'); cell((x.roles || []).join(', ') || '-');
+  }
+  c.appendChild(t); return c;
+}
+
+async function showTaskResult() {
+  const r = await (await fetch('/api/tasks/result?id=' + encodeURIComponent(jobId), { headers: H })).json();
+  const box = $('taskresult'); box.textContent = '';
+  if (!r.tasks.length && !r.report) return;
+  const c = document.createElement('div'); c.className = 'card';
+  const h = document.createElement('h2'); h.textContent = r.done ? 'Jira\'da oluşturulan task\'lar' : 'Tamamlanmadı: bazı task\'lar oluşturulamadı'; c.appendChild(h);
+  const ln = document.createElement('div'); ln.className = 'links';
+  for (const t of r.tasks) {
+    const a = document.createElement(t.url ? 'a' : 'span'); a.textContent = t.key + (t.action ? ' (' + (t.action === 'created' ? 'yeni' : t.action === 'updated' ? 'güncellendi' : t.action) + ')' : '');
+    if (t.url) { a.href = t.url; a.target = '_blank'; a.rel = 'noopener'; } ln.appendChild(a);
+  }
+  c.appendChild(ln);
+  if (r.report) { const d = document.createElement('details'); const sm = document.createElement('summary'); sm.textContent = 'Rapor'; const pr = document.createElement('pre'); pr.textContent = r.report; d.append(sm, pr); c.appendChild(d); }
+  box.appendChild(c);
+}
 
 function renderStep(e) {
   let el = steps[e.step];
@@ -290,6 +420,7 @@ function on(e) {
   else if (e.kind === 'result') {
     addMsg(e.failed ? (e.text || 'Durdu.') : 'Bitti.', e.failed ? 'fail' : '');
     $('stop').hidden = true; $('back').hidden = false;
+    if (jobAction === 'generate-tasks') showTaskResult();
   } else if (e.kind === 'status') {
     if (e.name === 'question') loadQuestions();
     if (e.text === 'started') { resetJob(); showJob(); $('stop').hidden = false; }
@@ -305,6 +436,22 @@ function renderQuestion(q) {
   for (const [i, item] of q.questions.questions.entries()) {
     const p = document.createElement('p'); const b = document.createElement('b'); b.textContent = item.question; p.appendChild(b); box.appendChild(p);
     if (item.finding) p.after(findingCard(item.finding));
+    if (item.plan) {
+      p.after(planCard(item.plan));
+      // one confirm button (the plan gate): the first answer confirms, the second declines; a typed note travels with a decline
+      const note = document.createElement('input'); note.type = 'text'; note.placeholder = 'Değişmesini istediğiniz bir şey varsa yazın (isteğe bağlı)...'; note.style.marginTop = '.4rem';
+      const row = document.createElement('div'); row.className = 'row';
+      const opts = item.options || [];
+      const send = async label => {
+        const ans = {}; const n = note.value.trim(); ans[item.question] = n ? label + ': ' + n : label;
+        const r = await fetch('/api/answer', { method: 'POST', headers: H, body: JSON.stringify({ id: q.id, answers: ans }) });
+        if (r.ok) box.remove(); else alert(await r.text());
+      };
+      const ok = document.createElement('button'); ok.className = 'btn primary'; ok.textContent = 'Planı onayla ve Jira\'da oluştur'; ok.onclick = () => send(opts[0] ? opts[0].label : 'Onaylıyorum');
+      const no = document.createElement('button'); no.className = 'btn'; no.textContent = 'Henüz değil'; no.onclick = () => send(opts[1] ? opts[1].label : 'Henüz değil');
+      row.append(ok, no); box.append(note, row);
+      continue;
+    }
     for (const o of item.options || []) {
       const l = document.createElement('label'); const inp = document.createElement('input');
       inp.type = item.multiSelect ? 'checkbox' : 'radio'; inp.name = 'q' + q.id + '_' + i; inp.value = o.label;
@@ -315,6 +462,7 @@ function renderQuestion(q) {
     const other = document.createElement('input'); other.type = 'text'; other.placeholder = item.finding ? 'Kendi cevabınız veya gerekçeniz (isteğe bağlı)...' : 'Başka bir cevap...'; other.style.marginTop = '.4rem';
     box.appendChild(other); inputs.push([item.question, other]);
   }
+  if (!inputs.length) { $('questions').appendChild(box); return; }
   const btn = document.createElement('button'); btn.className = 'btn primary'; btn.style.marginTop = '.8rem'; btn.textContent = 'Gönder';
   btn.onclick = async () => {
     const answers = {};

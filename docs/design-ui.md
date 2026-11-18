@@ -1,6 +1,6 @@
 # Design: `sdkit ui`, a local panel for analysts
 
-Status: phases 0 (spike), 1 (Connect and Health) and the Home, New spec and Run screens of phase 2 are implemented in `internal/ui` and `sdkit ui`; the review-finding cards are too; tasks and the rest are not. Issue: [#39](https://github.com/wecii/sdkit/issues/39) (basic web UI for non-technical roles: analyst, PM, QA).
+Status: phases 0 (spike), 1 (Connect and Health) and the Home, New spec and Run screens of phase 2 are implemented in `internal/ui` and `sdkit ui`; the review-finding cards, the tasks screen (plan gate) and the update-specs / merge-specs entries are too; the QA role is not. Issue: [#39](https://github.com/wecii/sdkit/issues/39) (basic web UI for non-technical roles: analyst, PM, QA).
 
 ## Problem
 
@@ -108,6 +108,15 @@ The skill asks about a finding as a question (`triage.md`, "walk the open findin
 Seen in the browser with a stand-in agent (`sdkit ui ask` with a finding question), not with a real review at the round cap; the agent following the rule at that moment is the part still to see.
 
 One finding of this pass: Jira being unreachable (offline, service down) was counted as something to fix on the Connect page. It is now a note that does not block, since spec writing does not need Jira; refused credentials still block.
+
+## Tasks, update and merge, and the sidebar layout
+
+- **Tasks.** An approved spec (state from its `spec.meta.json`) gets "Task üret". The setup page takes the Jira parent key, which the server asks Jira for (`/rest/api/2/issue/<key>`; unknown, forbidden and unreachable are worded apart), and the version, which is a list of the commits of `origin/<base>` that left the spec approved (`spec.ApprovedCommits`, after a best-effort `git fetch`, never a prompt). Nobody types a SHA. `POST /api/run` re-checks both on the server (the SHA must be in that list, the parent must exist) before a session starts; the page sends `action`, `id`, `parent`, `sha` and nothing else, and the wording of the task is ours (`Task`).
+- **Plan gate.** The run rules tell the agent to put a `plan` object on the one confirmation question: `{summary, tasks:[{ref,title,risk,acs,dependsOn,roles}]}`. `NormalizeQuestions` bounds it (60 tasks, 30 ACs each, clipped text; an empty plan is dropped) and the page draws the AC-to-task table with one "Planı onayla ve Jira'da oluştur" button and "Henüz değil" (a typed note travels with the answer). The skill text is unchanged; its step 5 is what the card carries out.
+- **Result.** The task text keeps `results.jsonl` and `report.md` under `<project-dir>/work/tasks/<id>/`; the panel reads the outcome from those files (Jira links from `JIRA_BASE_URL`), not from what the agent says. A report that lists a task `NOT CREATED` is shown as not done.
+- **update-specs, merge-specs.** Buttons on the home list, by state: "Yorumları işle" for a spec awaiting the Tech Lead, "Değişiklik yap" and "Birleştir" for an approved one. They send only the action and the id. Whether there is anything to merge is the skill's own `sdkit spec drift` check (siblings live on other branches, so the panel cannot count them from the working tree); the task tells the agent to say so and stop when there is not.
+- **Layout.** A sidebar replaces the top tabs and the content uses the full width: two columns on Home, Connect and the tasks setup, and a steps column next to the conversation on a run. It folds to one column under 1000 px.
+- Seen in the browser against a scratch repo with a Jira stand-in and a stand-in agent (the plan question through `sdkit ui ask`): setup, parent check, version list, plan card, confirm answer, result card. Not seen: a real `generate-tasks` run writing to a real Jira.
 
 ## Open questions
 
