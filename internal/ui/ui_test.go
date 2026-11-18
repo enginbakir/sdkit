@@ -55,7 +55,7 @@ func TestBrokerAskWaitsForTheAnswer(t *testing.T) {
 	b := NewBroker(func(q Question) { asked <- q })
 	got := make(chan string, 1)
 	go func() {
-		a, err := b.Ask(context.Background(), json.RawMessage(`{"questions":[{"question":"Kapsam?"}]}`))
+		a, err := b.Ask(context.Background(), json.RawMessage(`{"questions":[{"question":"Kapsam?"}]}`), "")
 		if err != nil {
 			got <- "err: " + err.Error()
 			return
@@ -80,7 +80,7 @@ func TestBrokerAskWaitsForTheAnswer(t *testing.T) {
 func TestBrokerRefusesWhatCannotBeShown(t *testing.T) {
 	b := NewBroker(nil)
 	for _, in := range []string{`{}`, `{"questions":[]}`, `nope`} {
-		if _, err := b.Ask(context.Background(), json.RawMessage(in)); err == nil {
+		if _, err := b.Ask(context.Background(), json.RawMessage(in), ""); err == nil {
 			t.Errorf("Ask(%s) must fail at once", in)
 		}
 	}
@@ -90,7 +90,7 @@ func TestBrokerAskEndsWithItsContext(t *testing.T) {
 	b := NewBroker(nil)
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
 	defer cancel()
-	if _, err := b.Ask(ctx, json.RawMessage(`{"questions":[{"question":"q"}]}`)); err == nil {
+	if _, err := b.Ask(ctx, json.RawMessage(`{"questions":[{"question":"q"}]}`), ""); err == nil {
 		t.Fatal("want the context error")
 	}
 	if len(b.Pending()) != 0 {
@@ -152,7 +152,7 @@ func TestAskRoundTrip(t *testing.T) {
 
 	out := make(chan string, 1)
 	go func() {
-		a, err := Ask(ctx, base, "sekret", []byte(`{"questions":[{"question":"Hangisi?","options":[{"label":"A"}]}]}`))
+		a, err := Ask(ctx, base, "sekret", "", []byte(`{"questions":[{"question":"Hangisi?","options":[{"label":"A"}]}]}`))
 		if err != nil {
 			out <- "err: " + err.Error()
 			return
@@ -172,7 +172,7 @@ func TestAskRoundTrip(t *testing.T) {
 	if got := <-out; !strings.Contains(got, `"A"`) {
 		t.Errorf("answer = %s", got)
 	}
-	if _, err := Ask(ctx, "", "", nil); err == nil {
+	if _, err := Ask(ctx, "", "", "", nil); err == nil {
 		t.Error("outside a panel session Ask must say so")
 	}
 }
@@ -194,6 +194,7 @@ func TestRunResumesTheEarlierSession(t *testing.T) {
 	}
 	root := scratchRepo(t, "/prespec/\n/.sdkit/work/\n")
 	WritePrespec(root, "odeme", "metin", false)
+	os.MkdirAll(filepath.Join(root, ".sdkit", "work", "spec-draft", "odeme"), 0o755) // the spec lives in the main tree, where the session ran
 	host := filepath.Join(t.TempDir(), "host.sh")
 	// the stand-in says which session it was told to resume as a message, then ends the way the real host does
 	script := "#!/bin/sh\nR=none\nwhile [ $# -gt 0 ]; do [ \"$1\" = --resume ] && R=\"$2\"; shift; done\n" +
@@ -215,7 +216,7 @@ func TestRunResumesTheEarlierSession(t *testing.T) {
 			t.Fatalf("run: %v %v", err, resp)
 		}
 		for i := 0; i < 100; i++ {
-			past, _, cancel := srv.log.Since(0)
+			past, _, cancel := srv.logFor("odeme").Since(0)
 			cancel()
 			said := ""
 			for _, e := range past {

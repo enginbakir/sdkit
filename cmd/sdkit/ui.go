@@ -125,7 +125,7 @@ func runUIAsk(args []string) int {
 		fmt.Fprintln(os.Stderr, uiUsage)
 		return cli.ExitUsage
 	}
-	ans, err := ui.Ask(context.Background(), os.Getenv("SDKIT_UI_URL"), os.Getenv("SDKIT_UI_KEY"), q)
+	ans, err := ui.Ask(context.Background(), os.Getenv("SDKIT_UI_URL"), os.Getenv("SDKIT_UI_KEY"), os.Getenv("SDKIT_UI_SPEC"), q)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "sdkit ui ask:", err)
 		return cli.ExitFail

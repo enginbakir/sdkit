@@ -125,7 +125,8 @@ type Detail struct {
 	WantBranch string                `json:"wantBranch,omitempty"` // the branch the editable files live on, when it is not the current one
 	Files      []FileItem            `json:"files"`
 	Running    bool                  `json:"running"`
-	Resume     map[string]ResumeInfo `json:"resume"` // per action: the earlier session "Devam et" would continue
+	Worktree   bool                  `json:"worktree"` // the spec works in a worktree of its own
+	Resume     map[string]ResumeInfo `json:"resume"`   // per action: the earlier session "Devam et" would continue
 	Info       spec.Info             `json:"info"`
 	Changes    []spec.ChangeInfo     `json:"changes"`
 }
@@ -141,13 +142,14 @@ type ResumeInfo struct {
 var resumable = []string{"generate-specs", "update-specs", "update-manual", "merge-specs"}
 
 // ResumeFor finds, for each resumable action, the latest panel session of this spec that the host still has.
-func ResumeFor(root, id string, exists func(string) bool) map[string]ResumeInfo {
+func ResumeFor(root, id, dir string, exists func(string) bool) map[string]ResumeInfo {
 	out := map[string]ResumeInfo{}
 	if exists == nil {
 		return out
 	}
 	for _, r := range ReadRuns(root) {
-		if r.Spec != id || !exists(r.Session) {
+		// a session belongs to the tree it ran in: the host files it per working directory
+		if r.Spec != id || !exists(r.Session) || (r.Dir != "" && r.Dir != dir) || (r.Dir == "" && dir != root) {
 			continue
 		}
 		for _, a := range resumable {
@@ -171,7 +173,7 @@ func GetDetail(root, id string) (Detail, error) {
 		return Detail{}, errors.New("geçersiz ad")
 	}
 	var it *SpecItem
-	for _, s := range ListSpecs(root) {
+	for _, s := range listLocal(root) {
 		if s.ID == id {
 			s := s
 			it = &s
@@ -392,7 +394,7 @@ func ChangeSlug(user string, now time.Time) string {
 // StartChange opens a change on an approved spec, named by ChangeSlug, through the kit's own `sdkit spec change new`. That
 // switches the repo to the change's branch; git refuses when there are unsaved edits, and the person is told so.
 func StartChange(root, id, user string, now time.Time) (string, error) {
-	for _, s := range ListSpecs(root) {
+	for _, s := range listLocal(root) {
 		if s.ID == id && s.State == spec.StateApproved {
 			slug := ChangeSlug(user, now)
 			var out, errb bytes.Buffer

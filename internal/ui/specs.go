@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 
 	"github.com/wecii/sdkit/internal/gitx"
@@ -40,18 +41,34 @@ var stateText = map[string]struct {
 	spec.StateApproved:    {"Onaylandı", false},
 }
 
-// ListSpecs is every spec of the project with where it stands, from the same facts `sdkit spec next` reads.
-func ListSpecs(root string) []SpecItem {
+// specItem is the row of one spec entry.
+func specItem(e spec.Entry) SpecItem {
+	t, ok := stateText[e.State]
+	if !ok {
+		t.label = e.State
+	}
+	return SpecItem{ID: e.ID, State: e.State, Label: t.label, Continue: t.cont, Waiting: e.State == spec.StateAwaiting,
+		Update: e.State == spec.StateAwaiting || e.State == spec.StateApproved, Merge: e.State == spec.StateApproved, Tasks: e.State == spec.StateApproved, Flow: Flow(e.State, false)}
+}
+
+// listLocal is every spec of one tree with where it stands, from the same facts `sdkit spec next` reads.
+func listLocal(root string) []SpecItem {
 	var out []SpecItem
 	for _, e := range spec.List(root) {
-		t, ok := stateText[e.State]
-		if !ok {
-			t.label = e.State
-		}
-		out = append(out, SpecItem{ID: e.ID, State: e.State, Label: t.label, Continue: t.cont, Waiting: e.State == spec.StateAwaiting,
-			Update: e.State == spec.StateAwaiting || e.State == spec.StateApproved, Merge: e.State == spec.StateApproved, Tasks: e.State == spec.StateApproved, Flow: Flow(e.State, false)})
+		out = append(out, specItem(e))
 	}
 	return out
+}
+
+// sortItems puts what the analyst can still move first, then what waits for others, then what is done; by id inside each group.
+func sortItems(items []SpecItem) {
+	rank := map[string]int{spec.StateAwaiting: 1, spec.StateApproved: 2}
+	sort.Slice(items, func(i, j int) bool {
+		if ri, rj := rank[items[i].State], rank[items[j].State]; ri != rj {
+			return ri < rj
+		}
+		return items[i].ID < items[j].ID
+	})
 }
 
 // reID is stricter than the kit's own name rule: it becomes a file name, a branch name and part of a Jira link, and a person typed it.

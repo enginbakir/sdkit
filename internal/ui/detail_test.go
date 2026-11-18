@@ -261,15 +261,15 @@ func TestResumeFor(t *testing.T) {
 		RecordRun(root, r)
 	}
 	has := func(id string) bool { return id != b }
-	got := ResumeFor(root, "odeme", has)
+	got := ResumeFor(root, "odeme", root, has)
 	if got["generate-specs"].Session != a || len(got) != 1 {
 		t.Errorf("the latest session the host still has, of this spec and this action: %+v", got)
 	}
-	if len(ResumeFor(root, "odeme", nil)) != 0 {
+	if len(ResumeFor(root, "odeme", root, nil)) != 0 {
 		t.Error("without a way to ask the host nothing is resumed")
 	}
 	RecordRun(root, RunRecord{Session: a, Spec: "odeme", Action: "generate-tasks", Start: "2026-11-20T08:00:00Z"})
-	if _, ok := ResumeFor(root, "odeme", has)["generate-tasks"]; ok {
+	if _, ok := ResumeFor(root, "odeme", root, has)["generate-tasks"]; ok {
 		t.Error("a tasks run is never resumed: its parent and version are chosen again")
 	}
 }

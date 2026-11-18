@@ -25,6 +25,7 @@ type RunRecord struct {
 	Session string `json:"session"`
 	Spec    string `json:"spec"`
 	Action  string `json:"action"`
+	Dir     string `json:"dir,omitempty"` // the tree the run worked in (the main tree or the spec's worktree)
 	Start   string `json:"start"`
 	End     string `json:"end,omitempty"`
 	Outcome string `json:"outcome,omitempty"` // done | failed | stopped; empty while it runs or when the panel died first
@@ -141,6 +142,16 @@ func parseReport(b []byte) (Report, bool) {
 	return r, true
 }
 
+// reportRoots are the trees whose reports belong to the project: the main tree and every spec worktree (a spec worked in its worktree
+// files its sessions' reports there).
+func reportRoots(root string) []string {
+	out := []string{root}
+	for _, p := range Worktrees(root) {
+		out = append(out, p)
+	}
+	return out
+}
+
 func kitReports(root string) string {
 	_, pj, _ := project.Load(root)
 	return filepath.Join(pj.Dir(), "reports")
@@ -152,18 +163,24 @@ func sessionReport(root, id string) (Report, bool) {
 	if !reSession.MatchString(id) {
 		return Report{}, false
 	}
-	if b, err := os.ReadFile(filepath.Join(kitReports(root), id+".json")); err == nil {
-		if r, ok := parseReport(b); ok {
-			return r, true
+	for _, rr := range reportRoots(root) {
+		if b, err := os.ReadFile(filepath.Join(kitReports(rr), id+".json")); err == nil {
+			if r, ok := parseReport(b); ok {
+				return r, true
+			}
 		}
 	}
-	var out, errb bytes.Buffer
-	e := report.New(root)
-	e.Out, e.Err = &out, &errb
-	if e.Run([]string{"session", id, "--json"}) != 0 {
-		return Report{}, false
+	for _, rr := range reportRoots(root) {
+		var out, errb bytes.Buffer
+		e := report.New(rr)
+		e.Out, e.Err = &out, &errb
+		if e.Run([]string{"session", id, "--json"}) == 0 {
+			if r, ok := parseReport(out.Bytes()); ok {
+				return r, true
+			}
+		}
 	}
-	return parseReport(out.Bytes())
+	return Report{}, false
 }
 
 // lowerBound is the kit's own reading of a state: only "partial" (some runs unmeasured or unpriced) and "unavailable" make a figure
@@ -199,7 +216,11 @@ func ListReports(root string) Reports {
 		runs[r.Session] = r
 	}
 	byID := map[string]Report{}
-	files, _ := filepath.Glob(filepath.Join(kitReports(root), "*.json"))
+	var files []string
+	for _, rr := range reportRoots(root) {
+		fs, _ := filepath.Glob(filepath.Join(kitReports(rr), "*.json"))
+		files = append(files, fs...)
+	}
 	for _, f := range files {
 		if b, err := os.ReadFile(f); err == nil {
 			if r, ok := parseReport(b); ok {
@@ -249,9 +270,9 @@ func ListReports(root string) Reports {
 // kit's own record, so it also links sessions started in a terminal with SDKIT_TASK set. Only slugs that are spec ids count: a
 // development task is not a spec.
 func taskLinks(root string) map[string]string {
-	_, pj, _ := project.Load(root)
 	out := map[string]string{}
 	for _, sp := range ListSpecs(root) {
+		_, pj, _ := project.Load(RootFor(root, sp.ID)) // a spec with a worktree keeps its own ledger
 		b, err := os.ReadFile(filepath.Join(pj.Dir(), "work", sp.ID, "usage.jsonl"))
 		if err != nil {
 			continue
@@ -271,6 +292,7 @@ func taskLinks(root string) map[string]string {
 // taskRoles is who spent what on a spec, across all its sessions, from the kit's own task report (`sdkit report task <id>`).
 // Empty when nothing was filed under the spec's id.
 func taskRoles(root, id string) []RoleLine {
+	root = RootFor(root, id) // the spec's ledger is in its own tree
 	_, pj, _ := project.Load(root)
 	if _, err := os.Stat(filepath.Join(pj.Dir(), "work", id, "usage.jsonl")); err != nil || !state.ValidSlug(id) {
 		return []RoleLine{}
@@ -326,16 +348,20 @@ func ReportMarkdown(root, id string) (string, error) {
 	if !reSession.MatchString(id) {
 		return "", errors.New("geçersiz oturum")
 	}
-	if b, err := os.ReadFile(filepath.Join(kitReports(root), id+".md")); err == nil {
-		return string(b), nil
+	for _, rr := range reportRoots(root) {
+		if b, err := os.ReadFile(filepath.Join(kitReports(rr), id+".md")); err == nil {
+			return string(b), nil
+		}
 	}
-	var out, errb bytes.Buffer
-	e := report.New(root)
-	e.Out, e.Err = &out, &errb
-	if e.Run([]string{"session", id, "--markdown"}) != 0 {
-		return "", errors.New("bu oturum için rapor yok")
+	for _, rr := range reportRoots(root) {
+		var out, errb bytes.Buffer
+		e := report.New(rr)
+		e.Out, e.Err = &out, &errb
+		if e.Run([]string{"session", id, "--markdown"}) == 0 {
+			return strings.TrimSpace(out.String()), nil
+		}
 	}
-	return strings.TrimSpace(out.String()), nil
+	return "", errors.New("bu oturum için rapor yok")
 }
 
 func nowStamp() string { return time.Now().UTC().Format("2006-01-02T15:04:05Z") }

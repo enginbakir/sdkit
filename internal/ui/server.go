@@ -8,7 +8,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"io/fs"
 	"net"
@@ -21,7 +20,6 @@ import (
 
 	"github.com/wecii/sdkit/internal/proc"
 	"github.com/wecii/sdkit/internal/spec"
-	"github.com/wecii/sdkit/internal/state"
 )
 
 //go:embed web
@@ -36,24 +34,25 @@ type Config struct {
 	Prompt  func(task string, askEnv []string) string
 	Getenv  func(string) string // the process environment, handed in by cmd (this package reads none of it)
 	HTTP    *http.Client        // for the credential checks; default has a timeout
+	// MaxRuns is how many runs may go at once; 0 means 3. Each is a host session of its own, and they share one account's rate limits.
+	MaxRuns int
 	// SessionExists says whether the host still has this session (it can be resumed); cmd answers from the host's own store.
 	SessionExists func(id string) bool
 	// BitbucketAPI is the REST base of the Bitbucket checks; default https://api.bitbucket.org/2.0. Tests point it elsewhere.
 	BitbucketAPI string
 }
 
-// Server is the panel: one repo, one run at a time, one secret.
+// Server is the panel: one repo, several runs at once (one per spec, each in its own worktree), one secret.
 type Server struct {
 	cfg    Config
 	secret string
 	addr   string
 	broker *Broker
-	log    *Log
 
-	mu     sync.Mutex
-	cancel context.CancelFunc
-	// the last run, kept after it ends: a page that is reloaded must know what the replayed events were a run of
-	lastAction, lastID string
+	mu   sync.Mutex
+	runs map[string]*runState // the runs going now, by spec id
+	logs map[string]*Log      // the latest run's log of each spec, kept after it ends so a page can replay it
+	last map[string]string    // the action of that run
 }
 
 // NewSecret is the per-start secret that every request must carry.
@@ -65,9 +64,9 @@ func NewSecret() string {
 
 // New builds a server for cfg; Listen sets its address.
 func New(cfg Config, secret string) *Server {
-	s := &Server{cfg: cfg, secret: secret, log: NewLog()}
+	s := &Server{cfg: cfg, secret: secret, runs: map[string]*runState{}, logs: map[string]*Log{}, last: map[string]string{}}
 	s.broker = NewBroker(func(q Question) {
-		s.log.Add(Event{Kind: KindStatus, Name: "question", Text: strconv.Itoa(q.ID)})
+		s.logFor(q.Spec).Add(Event{Kind: KindStatus, Name: "question", Text: strconv.Itoa(q.ID)})
 	})
 	return s
 }
@@ -102,6 +101,8 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("/", http.FileServer(http.FS(web)))
 	mux.HandleFunc("/api/events", s.events)
 	mux.HandleFunc("/api/run", s.run)
+	mux.HandleFunc("/api/runs", s.runsList)
+	mux.HandleFunc("/api/spec/cleanup", s.specCleanup)
 	mux.HandleFunc("/api/stop", s.stop)
 	mux.HandleFunc("/api/questions", s.questions)
 	mux.HandleFunc("/api/answer", s.answer)
@@ -147,148 +148,6 @@ func (s *Server) guard(next http.Handler) http.Handler {
 	})
 }
 
-// events streams the run log as server-sent events; ?from=<seq> resumes after a reconnect.
-func (s *Server) events(w http.ResponseWriter, r *http.Request) {
-	fl, ok := w.(http.Flusher)
-	if !ok {
-		http.Error(w, "streaming unsupported", http.StatusInternalServerError)
-		return
-	}
-	from, _ := strconv.Atoi(r.URL.Query().Get("from"))
-	past, live, cancel := s.log.Since(from)
-	defer cancel()
-	w.Header().Set("Content-Type", "text/event-stream")
-	w.Header().Set("Cache-Control", "no-cache")
-	send := func(e Event) {
-		b, _ := json.Marshal(e)
-		fmt.Fprintf(w, "id: %d\ndata: %s\n\n", e.Seq, b)
-		fl.Flush()
-	}
-	for _, e := range past {
-		send(e)
-	}
-	last := from + len(past)
-	for {
-		select {
-		case e := <-live:
-			if e.Seq > last {
-				last = e.Seq
-				send(e)
-			}
-		case <-r.Context().Done():
-			return
-		}
-	}
-}
-
-// run starts a session for {"task": "..."}; one at a time.
-func (s *Server) run(w http.ResponseWriter, r *http.Request) {
-	if r.Method == http.MethodGet {
-		s.mu.Lock()
-		st := struct {
-			Running bool   `json:"running"`
-			Action  string `json:"action"`
-			ID      string `json:"id"`
-		}{s.cancel != nil, s.lastAction, s.lastID}
-		s.mu.Unlock()
-		writeJSON(w, http.StatusOK, st)
-		return
-	}
-	if r.Method != http.MethodPost {
-		http.Error(w, "POST only", http.StatusMethodNotAllowed)
-		return
-	}
-	var in struct {
-		Action string `json:"action"`
-		ID     string `json:"id"`
-		Parent string `json:"parent"`
-		SHA    string `json:"sha"`
-		Fresh  bool   `json:"fresh"` // start a new session even when an earlier one could be continued
-	}
-	if json.NewDecoder(io.LimitReader(r.Body, 1<<16)).Decode(&in) != nil {
-		http.Error(w, `expected {"action":"generate-specs","id":"..."}`, http.StatusBadRequest)
-		return
-	}
-	ti := TaskInput{Parent: in.Parent, SHA: in.SHA}
-	if b, ok := strings.CutPrefix(Branch(s.cfg.Dir), "spec/"+in.ID+"--"); ok {
-		ti.Slug = b // the change this branch carries; what the page says about it is never read
-	}
-	task, err := Task(s.cfg.Dir, in.Action, in.ID, ti)
-	if err == nil && in.Action == "generate-tasks" {
-		// the page lists and checks these too, but a run is only started on what the server has verified itself
-		err = s.checkTaskInput(r.Context(), in.ID, in.Parent, in.SHA)
-	}
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	s.mu.Lock()
-	if s.cancel != nil {
-		s.mu.Unlock()
-		http.Error(w, "a run is already going", http.StatusConflict)
-		return
-	}
-	ctx, cancel := context.WithCancel(context.Background())
-	s.cancel = cancel
-	s.lastAction, s.lastID = in.Action, in.ID
-	s.mu.Unlock()
-
-	// the session reaches the ask bridge through these two variables; `sdkit ui ask` reads them
-	askEnv := []string{"SDKIT_UI_URL=http://" + s.addr, "SDKIT_UI_KEY=" + s.secret}
-	if state.ValidSlug(in.ID) {
-		// every token the session and its subagents spend is filed under the spec's id, so `sdkit report task <id>` is the spec's report
-		askEnv = append(askEnv, "SDKIT_TASK="+in.ID)
-	}
-	prompt := task
-	if s.cfg.Prompt != nil {
-		prompt = s.cfg.Prompt(task, askEnv)
-	}
-	resume := ""
-	if !in.Fresh {
-		resume = ResumeFor(s.cfg.Dir, in.ID, s.cfg.SessionExists)[in.Action].Session
-	}
-	if resume != "" {
-		prompt += "\n\nThis is the earlier session, resumed: carry on from where it stopped (check `sdkit spec next " + in.ID + "` first) and do not start the steps over."
-	}
-	spec := RunSpec{Resume: resume, Dir: s.cfg.Dir, Prompt: prompt, Env: append(append(append([]string{}, s.cfg.Env...), askEnv...), GitAuthEnv(s.cfg.Dir)...), Command: s.cfg.Command, Tools: s.cfg.Tools}
-	// the run ledger is how a report finds its spec: the host's session id, written down with what the run was for
-	var session string
-	spec.OnSession = func(id string) {
-		session = id
-		RecordRun(s.cfg.Dir, RunRecord{Session: id, Spec: in.ID, Action: in.Action, Start: nowStamp()})
-	}
-	go func() {
-		err := Run(ctx, spec, s.log)
-		if session != "" {
-			out := "done"
-			if ctx.Err() != nil {
-				out = "stopped"
-			} else if err != nil {
-				out = "failed"
-			}
-			RecordRun(s.cfg.Dir, RunRecord{Session: session, Spec: in.ID, Action: in.Action, End: nowStamp(), Outcome: out})
-		}
-		s.mu.Lock()
-		s.cancel = nil
-		s.mu.Unlock()
-	}()
-	w.WriteHeader(http.StatusAccepted)
-}
-
-func (s *Server) stop(w http.ResponseWriter, r *http.Request) {
-	s.mu.Lock()
-	if s.cancel != nil {
-		s.cancel()
-	}
-	s.mu.Unlock()
-	w.WriteHeader(http.StatusNoContent)
-}
-
-func (s *Server) questions(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(s.broker.Pending())
-}
-
 // answer takes {"id": n, "answers": {...}} from the browser.
 func (s *Server) answer(w http.ResponseWriter, r *http.Request) {
 	var in struct {
@@ -304,22 +163,6 @@ func (s *Server) answer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
-}
-
-// ask is what `sdkit ui ask` calls from inside the session: it blocks until the person answers, then returns the answers.
-func (s *Server) ask(w http.ResponseWriter, r *http.Request) {
-	body, err := io.ReadAll(io.LimitReader(r.Body, 1<<20))
-	if r.Method != http.MethodPost || err != nil {
-		http.Error(w, "POST only", http.StatusMethodNotAllowed)
-		return
-	}
-	a, err := s.broker.Ask(r.Context(), body)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.Write(a)
 }
 
 // health is the Health screen: doctor's checks in plain words.
@@ -454,14 +297,17 @@ func (s *Server) taskCommits(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) taskResult(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(ReadTaskResult(s.cfg.Dir, r.URL.Query().Get("id"), ReadConnection(s.cfg.Dir).JiraBaseURL))
+	json.NewEncoder(w).Encode(ReadTaskResult(s.rootFor(r.URL.Query().Get("id")), r.URL.Query().Get("id"), ReadConnection(s.cfg.Dir).JiraBaseURL))
 }
 
-func (s *Server) running() bool {
+func (s *Server) specRunning(id string) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.cancel != nil
+	return s.runs[id] != nil
 }
+
+// rootFor is the tree a spec's files are read from and written to: its worktree when it has one.
+func (s *Server) rootFor(id string) string { return RootFor(s.cfg.Dir, id) }
 
 func writeJSON(w http.ResponseWriter, code int, v any) {
 	w.Header().Set("Content-Type", "application/json")
@@ -471,13 +317,15 @@ func writeJSON(w http.ResponseWriter, code int, v any) {
 
 // specDetail is the page of one spec: the flow bar, what was done, what can be done now, and its files.
 func (s *Server) specDetail(w http.ResponseWriter, r *http.Request) {
-	d, err := GetDetail(s.cfg.Dir, r.URL.Query().Get("id"))
+	id := r.URL.Query().Get("id")
+	d, err := GetDetail(s.rootFor(id), id)
 	if err != nil {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": err.Error()})
 		return
 	}
-	d.Running = s.running()
-	d.Resume = ResumeFor(s.cfg.Dir, d.ID, s.cfg.SessionExists)
+	d.Running = s.specRunning(d.ID)
+	d.Worktree = s.rootFor(id) != s.cfg.Dir
+	d.Resume = ResumeFor(s.cfg.Dir, d.ID, s.rootFor(id), s.cfg.SessionExists)
 	for i := range d.Files {
 		if d.Running && d.Files[i].Editable {
 			d.Files[i].Editable, d.Files[i].Why = false, "Çalışma sürerken dosyalar salt okunur."
@@ -489,7 +337,8 @@ func (s *Server) specDetail(w http.ResponseWriter, r *http.Request) {
 // specFile reads (GET ?id&path) or replaces (PUT {id,path,text}) a file the detail lists as editable.
 func (s *Server) specFile(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodGet {
-		text, f, err := ReadFile(s.cfg.Dir, r.URL.Query().Get("id"), r.URL.Query().Get("path"))
+		id := r.URL.Query().Get("id")
+		text, f, err := ReadFile(s.rootFor(id), id, r.URL.Query().Get("path"))
 		if err != nil {
 			writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"error": err.Error()})
 			return
@@ -502,7 +351,7 @@ func (s *Server) specFile(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "bad request", http.StatusBadRequest)
 		return
 	}
-	if err := WriteFile(s.cfg.Dir, in.ID, in.Path, in.Text, s.running()); err != nil {
+	if err := WriteFile(s.rootFor(in.ID), in.ID, in.Path, in.Text, s.specRunning(in.ID)); err != nil {
 		writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"error": err.Error()})
 		return
 	}
@@ -516,11 +365,11 @@ func (s *Server) specBranch(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "bad request", http.StatusBadRequest)
 		return
 	}
-	if s.running() {
-		writeJSON(w, http.StatusConflict, map[string]string{"error": "Bir çalışma sürerken dal değiştirilemez"})
+	if s.specRunning(in.ID) {
+		writeJSON(w, http.StatusConflict, map[string]string{"error": "Bu spec için bir çalışma sürerken dal değiştirilemez"})
 		return
 	}
-	if err := SwitchBranch(s.cfg.Dir, in.ID); err != nil {
+	if err := SwitchBranch(s.rootFor(in.ID), in.ID); err != nil {
 		writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"error": err.Error()})
 		return
 	}
@@ -534,11 +383,11 @@ func (s *Server) specChange(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "bad request", http.StatusBadRequest)
 		return
 	}
-	if s.running() {
-		writeJSON(w, http.StatusConflict, map[string]string{"error": "Bir çalışma sürerken değişiklik açılamaz"})
+	if s.specRunning(in.ID) {
+		writeJSON(w, http.StatusConflict, map[string]string{"error": "Bu spec için bir çalışma sürerken değişiklik açılamaz"})
 		return
 	}
-	slug, err := StartChange(s.cfg.Dir, in.ID, ReadConnection(s.cfg.Dir).JiraUser, time.Now())
+	slug, err := StartChange(s.rootFor(in.ID), in.ID, ReadConnection(s.cfg.Dir).JiraUser, time.Now())
 	if err != nil {
 		writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"error": err.Error()})
 		return
