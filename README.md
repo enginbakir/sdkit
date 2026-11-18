@@ -473,11 +473,12 @@ Configured in `.sdkit/sdkit.local.env`. Cost, budget, routing and telemetry feat
 | `sdkit sdd`, `state`, `workflow`, `verify`, `verdict`, `dod`, `plan`, `pr`, `worktree` | The phase machine and what the skills call: phase gate, task state, verification, verdict parsing, plan checks, PRs, parallel worktrees |
 | `sdkit spec`, `review`, `jira`, `tasks`, `prespec` | Specs, spec review, Jira, task lists (analyst and developer environments) |
 | `sdkit run-role`, `route`, `dispatch`, `contract`, `adapter`, `recover` | Run a role as its own process, routing, parallel dispatch, handoff contracts, host adapters, crash recovery |
+| `sdkit scan secrets` | Find credential-shaped strings in the tree, the staged change or the git history; accepted findings live in `secret-baseline.json` |
 | `sdkit usage`, `pricing`, `telemetry`, `report`, `audit`, `redact`, `memory`, `knowledge`, `lookup`, `digest`, `capped`, `base` | Tokens and cost, the Value Report, the audit chain, memory and caches, bounded output, the base branch |
 | `sdkit hook`, `guard` | Called by the hosts and git hooks, not by hand |
 | `sdkit dev adapters`, `sdkit dev scan` | Maintainers: regenerate the role files, check the tree is safe to publish |
 
-43 subcommands in all (`sdkit help`); the one-line usage of each is `sdkit <command>` with no arguments, the full list is in [docs/guide.md](docs/guide.md) §9.
+44 subcommands in all (`sdkit help`); the one-line usage of each is `sdkit <command>` with no arguments, the full list is in [docs/guide.md](docs/guide.md) §9.
 
 ---
 

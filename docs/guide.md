@@ -48,7 +48,7 @@ Two extra principles: **tokens are neither wasted nor starved** (section 18), an
 | **Hook** | 20 | 20 guards and info hooks inside the one `sdkit hook` entry (`internal/hook`, one file each), run automatically during tool steps and session boundaries: `session-context`, `session-memory`, `check-tools`, `guard-secrets`, `guard-protected`, `frozen-tests`, `guard-prod`, `guard-git`, `guard-readonly`, `guard-phase`, `guard-pr`, `post-edit-fmt`, `stop-verify`, `record-verdict`, `value-report`, `usage-log`, `guard-budget`, `guard-noisy`, `result-size`, `check-contract`. Claude Code wires them in `hooks/hooks.json`; Gemini and Cursor call the same entry with `sdkit hook --host`, OpenCode through a plugin. Where there are no hooks, git hooks (`sdkit guard`) enforce most of the same rules |
 | **Verification engine** | 1 core + steps per stack | `internal/verify` (diff base, changed files, `verify.d`, green-result cache) + `internal/stack/<stack>.go` (the stack's own checks) |
 | **Stack** | 7 | `go`, `spring-boot` and `jvm` (Maven/Gradle), `python`, `nextjs`, `react-native` (the last two share `internal/stack/node.go`) and `generic` if detection fails. Data in `stacks/<stack>/`, contract: `stacks/README.md` |
-| **Command** | 43 | The subcommands of the one `sdkit` binary (`sdkit help`): `adapter` `audit` `base` `capped` `contract` `dev` `digest` `dispatch` `doctor` `dod` `guard` `hook` `init` `jira` `knowledge` `lookup` `memory` `plan` `pr` `preflight` `prespec` `pricing` `recover` `redact` `report` `review` `route` `run-role` `sdd` `spec` `state` `sync` `tasks` `telemetry` `ui` `upgrade` `usage` `verdict` `verify` `version` `where` `workflow` `worktree` (the engine, `internal/verify`, is reached through `sdkit verify`) |
+| **Command** | 44 | The subcommands of the one `sdkit` binary (`sdkit help`): `adapter` `audit` `base` `capped` `contract` `dev` `digest` `dispatch` `doctor` `dod` `guard` `hook` `init` `jira` `knowledge` `lookup` `memory` `plan` `pr` `preflight` `prespec` `pricing` `recover` `redact` `report` `review` `route` `run-role` `scan` `sdd` `spec` `state` `sync` `tasks` `telemetry` `ui` `upgrade` `usage` `verdict` `verify` `version` `where` `workflow` `worktree` (the engine, `internal/verify`, is reached through `sdkit verify`) |
 | **Rules** | 4+ | `core/rules/`: `general`, `git`, `test-first`, `token-economy` (+ stack rules) |
 | **Templates** | | Project-side files to fill in for a new repo (`templates/`, `stacks/go/`, `core/rules/`) |
 | **Host** | 5 | `claude`, `codex`, `opencode`, `cursor`, `gemini`; role/guard format in `internal/emit` + `core/hosts.env` (section 16) |
@@ -599,6 +599,11 @@ With `ROUTING=off` (default) `sdkit run-role` works as before. `sdkit route expl
 ### `sdkit verify [--fast] [--since-head] [--no-cache]`
 The verification engine (section 8). `verify.d` policies get a helper file through `VERIFY_LIB` that the engine writes for them.
 
+### `sdkit scan secrets [--history [--since <ref>]] [--staged] [--json]`
+Finds credential-shaped strings with the rule table in `internal/secretscan/rules.go` (RE2, deterministic: cloud and SaaS tokens, private keys, connection-string passwords, `user:password@host` URLs, quoted credential assignments; no entropy guesses, no network). Default: the working tree (tracked files and untracked files that are not git-ignored; binary and files over 2 MiB are skipped). `--staged` scans the staged change, `--history` every line added in any ref (streamed, not held in memory; `--since <ref>` limits it to commits not reachable from `<ref>`).
+
+A finding never holds the secret: it has the rule id, severity, path, line, commit (history), a masked excerpt and a 24-character fingerprint of rule, path and secret (not the line, so moving code does not change it). **Baseline:** `<project-dir>/secret-baseline.json` (committed, yours, `init` never writes it) lists accepted findings as `{"fingerprint", "rule", "path", "reason"}`; an entry without a reason or a file that does not parse is an error, not an empty baseline. Accepted findings are reported apart (`baselined`), never hidden. Each run writes `<project-dir>/work/scan/findings.json` (git-ignored). Exit 0 = no open finding, 1 = at least one, 2 = usage or a failed scan. The kit never rotates a credential and never rewrites history: removing a leaked secret from the code does not revoke it.
+
 ### `sdkit dev adapters [--check]`
 Generates `agents/*.md` (Claude) and `adapters/{codex,opencode,cursor,gemini}/` from `core/roles/*.md`; the per-host format is in `internal/emit`, host tool/permission names in `core/hosts.env`, the tier mapping in `core/tiers.env`. `--check` checks whether the generated files are up to date (before a release).
 
@@ -700,7 +705,7 @@ Tracker · Branches and PRs (including commit scopes) · Release flow (optional)
 `scaffold-doctor` fails if a `TODO` is left or the rubric is missing.
 
 ### Other project files
-`rules/` (project rules; `init` copies the general and Go rules, the project edits them) · `golangci.yml` · `adr/` · `CLAUDE.md` (map) ·
+`secret-baseline.json` (accepted `sdkit scan secrets` findings, committed) · `rules/` (project rules; `init` copies the general and Go rules, the project edits them) · `golangci.yml` · `adr/` · `CLAUDE.md` (map) ·
 `.gitignore` (personal files: `settings.local.json`, `.frozen`, `.cc-writes/`, `scheduled_tasks.lock`, `memory/`, `work/`, `.verify-cache/`). Non-Claude hosts also write `AGENTS.md`, `.agents/skills/`, `.githooks/` and their own directories to the repo root (section 16).
 
 ---
@@ -849,7 +854,7 @@ spec-driven-kit/
 │   ├── cursor/ gemini/    GENERATED role files + hooks.json / settings.json
 │   └── git/               pre-commit, pre-push (call sdkit guard)
 ├── hooks/                 hooks.json (Claude event wiring; every command is `sdkit hook <Event>`)
-├── cmd/sdkit/             the binary's entry: one file per subcommand (43)
+├── cmd/sdkit/             the binary's entry: one file per subcommand (44)
 ├── internal/              the logic, one package per command family: hook (20 hooks, one file each), sdd, state, verify, stack, setup (init/doctor/sync/upgrade), emit, ...
 ├── kit.go                 embeds core skills agents adapters stacks templates, so the binary is the whole kit
 ├── attic/bench/           the 1.x benchmark harness; kept as is, unmaintained, not built
