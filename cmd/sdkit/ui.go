@@ -69,6 +69,7 @@ func runUI(args []string) int {
 		Tools:   []string{"Bash", "Read", "Write", "Edit", "Glob", "Grep", "Task", "Skill"},
 		Env:     env,
 		Prompt:  func(task string, _ []string) string { return uiRules + task },
+		Getenv:  os.Getenv,
 	}
 	srv := ui.New(cfg, ui.NewSecret())
 	l, err := srv.Listen()

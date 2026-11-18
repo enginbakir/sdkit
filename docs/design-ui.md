@@ -1,6 +1,6 @@
 # Design: `sdkit ui`, a local panel for analysts
 
-Status: spike (phase 0) implemented in `internal/ui` and `sdkit ui`; the screens of phases 1-4 are not. Issue: [#39](https://github.com/wecii/sdkit/issues/39) (basic web UI for non-technical roles: analyst, PM, QA).
+Status: phase 0 (spike) and phase 1 (Connect and Health screens) are implemented in `internal/ui` and `sdkit ui`; phases 2-4 are not. Issue: [#39](https://github.com/wecii/sdkit/issues/39) (basic web UI for non-technical roles: analyst, PM, QA).
 
 ## Problem
 
@@ -83,6 +83,14 @@ Checked against Claude Code 2.1 with a real session, not a mock:
 - Models write the step banner loosely (`Step 1/8 done`), so the parser accepts a missing name or colon.
 - The agent's narration came out in English although `ANALYST_LANGUAGE=tr`; the run prompt now says to speak the skill's language in every message.
 - Not done yet: publishing from the panel (git credentials, see Risks), session resume after a restart, the screens of phases 1-4, a look at the page in a browser.
+
+## Phase 1 results (Connect and Health)
+
+- **Connect** writes only to `sdkit.local.env` (personal, git-ignored), never to the shared `sdkit.env`: `TRACKER`, `JIRA_BASE_URL`, `JIRA_PROJECT`, `JIRA_USER`, `JIRA_EGRESS=allow`, `JIRA_API_TOKEN`, `BITBUCKET_EMAIL`, `BITBUCKET_TOKEN`. It refuses when git would not ignore that file. The form is pre-filled from the team's settings, so the person usually only adds the tokens. An empty token field keeps the saved token; tokens are never sent back to the page.
+- Saving runs the checks at once: Jira `myself`, and Bitbucket on the repository of `origin` (not `/user`, which a repository access token cannot read; `ATCTT` tokens go as Bearer, as in `sdkit pr`). Failures are worded for the person ("token'ın süresinin dolmadığını kontrol edin"), not as HTTP codes.
+- **Health** runs `sdkit doctor` in-process, groups its lines by plain title (five missing Jira settings are one item), puts what needs doing first, and shows only the news a person acts on; developer topics (CI gate, upgrade hints) and the dozens of passing lines stay under "Teknik ayrıntılar". Claude Code installed and logged in (`claude auth status`) is checked first.
+- Looked at in Orca's built-in browser on a real clone: layout, Turkish copy and the error state read well. A real mouse click through the browser tool did not reach the page in that session (tabs and buttons), while the same handlers fired from script; treat clicking as unverified until it is tried in a normal browser.
+- The panel's ready state is advisory: Start is not blocked, because `generate-specs` ran with a `project.md` that still had TODO sections.
 
 ## Open questions
 

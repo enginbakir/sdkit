@@ -5,123 +5,230 @@
 <title>sdkit</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
-  body { font: 15px/1.5 system-ui, sans-serif; max-width: 760px; margin: 2rem auto; padding: 0 1rem; color: #1b1f24; }
-  h1 { font-size: 1.3rem; }
-  textarea { width: 100%; min-height: 6rem; font: inherit; padding: .5rem; box-sizing: border-box; }
-  button { font: inherit; padding: .4rem 1rem; margin-right: .5rem; cursor: pointer; }
+  :root { --ink:#1b1f24; --mute:#5b6470; --line:#d8dce1; --blue:#2563eb; --ok:#15803d; --bad:#b42318; --warn:#b45309; --bg:#f6f7f9; }
+  * { box-sizing: border-box; }
+  body { font: 15px/1.5 system-ui, sans-serif; margin: 0; color: var(--ink); background: var(--bg); }
+  header { background: #fff; border-bottom: 1px solid var(--line); }
+  .bar { max-width: 780px; margin: 0 auto; padding: 0 1rem; display: flex; align-items: center; gap: 1.5rem; }
+  .bar h1 { font-size: 1.1rem; margin: 0; padding: .9rem 0; }
+  nav { display: flex; gap: .25rem; }
+  nav button { font: inherit; border: 0; background: none; padding: .95rem .8rem; cursor: pointer; color: var(--mute); border-bottom: 3px solid transparent; }
+  nav button[aria-selected=true] { color: var(--ink); border-bottom-color: var(--blue); font-weight: 600; }
+  nav .dot { display: inline-block; width: .5rem; height: .5rem; border-radius: 50%; background: var(--bad); margin-left: .35rem; vertical-align: middle; }
+  main { max-width: 780px; margin: 1.5rem auto; padding: 0 1rem; }
+  section[hidden] { display: none; }
+  .card { background: #fff; border: 1px solid var(--line); border-radius: .6rem; padding: 1.1rem 1.2rem; margin-bottom: 1rem; }
+  .card h2 { font-size: 1rem; margin: 0 0 .6rem; }
+  label { display: block; font-weight: 600; margin: .9rem 0 .2rem; }
+  .hint { color: var(--mute); font-size: .85rem; font-weight: 400; margin: 0 0 .3rem; }
+  input[type=text], input[type=password], input[type=email], textarea { width: 100%; font: inherit; padding: .5rem .6rem; border: 1px solid var(--line); border-radius: .4rem; background: #fff; }
+  input:focus, textarea:focus, button:focus-visible { outline: 2px solid var(--blue); outline-offset: 1px; }
+  textarea { min-height: 7rem; }
+  .btn { font: inherit; padding: .5rem 1.1rem; border-radius: .4rem; border: 1px solid var(--line); background: #fff; cursor: pointer; }
+  .btn.primary { background: var(--blue); color: #fff; border-color: var(--blue); }
+  .btn:disabled { opacity: .5; cursor: default; }
+  .row { display: flex; gap: .6rem; align-items: center; margin-top: 1rem; }
+  .item { display: flex; gap: .7rem; padding: .6rem 0; border-top: 1px solid var(--line); }
+  .item:first-child { border-top: 0; }
+  .icon { width: 1.4rem; height: 1.4rem; border-radius: 50%; flex: none; display: grid; place-items: center; color: #fff; font-size: .8rem; margin-top: .1rem; }
+  .icon.ok { background: var(--ok); } .icon.problem, .icon.todo { background: var(--bad); }
+  .item .t { font-weight: 600; } .item .h { color: var(--mute); font-size: .9rem; }
+  .res { margin-top: .8rem; padding: .6rem .8rem; border-radius: .4rem; font-size: .92rem; }
+  .res.ok { background: #e7f6ec; color: var(--ok); } .res.bad { background: #fdecea; color: var(--bad); }
+  .banner { background: #fff7e6; border: 1px solid #f3d38a; color: var(--warn); padding: .7rem 1rem; border-radius: .5rem; margin-bottom: 1rem; }
   #steps { display: flex; gap: .3rem; flex-wrap: wrap; margin: 1rem 0; }
-  .step { padding: .2rem .6rem; border-radius: 1rem; background: #e6e8eb; font-size: .85rem; }
-  .step.started { background: #fff3c4; }
-  .step.done { background: #c9f0d1; }
+  .step { padding: .2rem .65rem; border-radius: 1rem; background: #e6e8eb; font-size: .85rem; }
+  .step.started { background: #fff3c4; } .step.done { background: #c9f0d1; }
   .msg { white-space: pre-wrap; margin: .6rem 0; }
-  .q { border: 2px solid #3b82f6; border-radius: .5rem; padding: .8rem; margin: 1rem 0; }
-  .q label { display: block; margin: .25rem 0; }
-  .q small { color: #5b6470; }
-  .fail { color: #b42318; }
-  details { margin-top: 1.5rem; color: #5b6470; font-size: .85rem; }
+  .q { border: 2px solid var(--blue); border-radius: .6rem; padding: .9rem 1rem; margin: 1rem 0; background: #fff; }
+  .q label { font-weight: 400; margin: .25rem 0; display: block; }
+  .q small { color: var(--mute); }
+  .fail { color: var(--bad); }
+  details { margin-top: 1rem; color: var(--mute); font-size: .85rem; }
+  pre { white-space: pre-wrap; margin: .4rem 0 0; }
 </style>
 </head>
 <body>
-<h1>sdkit</h1>
-<div id="start">
-  <p>Ne yapmak istiyorsun?</p>
-  <textarea id="task" placeholder="Örn: odeme-akisi ön-spec'inden spec üret"></textarea>
-  <p><button id="go">Başlat</button></p>
-</div>
-<div id="steps"></div>
-<div id="log"></div>
-<div id="questions"></div>
-<p><button id="stop" hidden>Durdur</button></p>
-<details><summary>Ayrıntılar</summary><pre id="tools"></pre></details>
+<header>
+  <div class="bar">
+    <h1>sdkit</h1>
+    <nav role="tablist">
+      <button role="tab" id="t-run" aria-selected="true" data-tab="run">Başla</button>
+      <button role="tab" id="t-connect" aria-selected="false" data-tab="connect">Bağlantı</button>
+      <button role="tab" id="t-health" aria-selected="false" data-tab="health">Sağlık<span class="dot" id="dot" hidden></span></button>
+    </nav>
+  </div>
+</header>
+<main>
+  <section id="run">
+    <div class="banner" id="notready" hidden>Kurulumda eksikler var. Başlamadan önce <a href="#" data-go="health">Sağlık</a> sayfasına bakın.</div>
+    <div class="card" id="start">
+      <h2>Ne yapmak istiyorsun?</h2>
+      <p class="hint">Örneğin: <i>odeme-akisi ön-spec'inden spec üret</i></p>
+      <textarea id="task" aria-label="Görev"></textarea>
+      <div class="row"><button class="btn primary" id="go">Başlat</button></div>
+    </div>
+    <div id="steps"></div>
+    <div id="log"></div>
+    <div id="questions"></div>
+    <p><button class="btn" id="stop" hidden>Durdur</button></p>
+    <details><summary>Ayrıntılar</summary><pre id="tools"></pre></details>
+  </section>
+
+  <section id="connect" hidden>
+    <form class="card" id="form" autocomplete="off">
+      <h2>Jira</h2>
+      <label for="jiraBaseUrl">Jira adresi</label>
+      <p class="hint">Tarayıcıda Jira'yı açtığınızda adres çubuğunda gördüğünüz kısım.</p>
+      <input type="text" id="jiraBaseUrl" placeholder="https://sirketiniz.atlassian.net" required>
+      <label for="jiraProject">Proje anahtarı</label>
+      <p class="hint">Jira'daki iş numaralarının başındaki harfler (TFF-123 için TFF).</p>
+      <input type="text" id="jiraProject" placeholder="TFF" required>
+      <label for="jiraUser">Atlassian e-posta adresiniz</label>
+      <input type="email" id="jiraUser" required>
+      <label for="jiraToken">Jira token'ı</label>
+      <p class="hint">id.atlassian.com &rsaquo; Güvenlik &rsaquo; API token'ları bölümünden oluşturun.</p>
+      <input type="password" id="jiraToken" autocomplete="new-password">
+      <h2 style="margin-top:1.6rem">Bitbucket</h2>
+      <label for="bitbucketEmail">Bitbucket e-posta adresiniz</label>
+      <input type="email" id="bitbucketEmail">
+      <label for="bitbucketToken">Bitbucket token'ı</label>
+      <p class="hint">Bitbucket &rsaquo; Kişisel ayarlar &rsaquo; API token'ları. Depoyu okuma ve pull request yazma izni olmalı.</p>
+      <input type="password" id="bitbucketToken" autocomplete="new-password">
+      <div class="row"><button class="btn primary" id="save" type="submit">Kaydet ve dene</button></div>
+      <div id="saveres"></div>
+    </form>
+    <p class="hint">Token'lar yalnızca bu bilgisayarda, git'e girmeyen kişisel bir dosyada saklanır. Sayfada bir daha gösterilmez.</p>
+  </section>
+
+  <section id="health" hidden>
+    <div class="card"><h2 id="healthtitle">Kontrol ediliyor...</h2><div id="items"></div>
+      <div class="row"><button class="btn" id="recheck">Tekrar kontrol et</button></div></div>
+    <details><summary>Teknik ayrıntılar</summary><pre id="raw"></pre></details>
+  </section>
+</main>
 <script>
 const key = new URLSearchParams(location.search).get('k');
 const H = { 'X-Sdkit-Key': key, 'Content-Type': 'application/json' };
 const $ = id => document.getElementById(id);
-const steps = {};
-const seen = new Set();
+const steps = {}, seen = new Set();
 
+function show(tab) {
+  for (const s of ['run', 'connect', 'health']) {
+    $(s).hidden = s !== tab;
+    $('t-' + s).setAttribute('aria-selected', s === tab);
+  }
+  if (tab === 'health') loadHealth();
+  if (tab === 'connect') loadConnection();
+}
+document.querySelectorAll('[data-tab]').forEach(b => b.onclick = () => show(b.dataset.tab));
+document.querySelectorAll('[data-go]').forEach(a => a.onclick = e => { e.preventDefault(); show(a.dataset.go); });
+
+// ---- Health
+async function loadHealth() {
+  $('healthtitle').textContent = 'Kontrol ediliyor...';
+  const h = await (await fetch('/api/health', { headers: H })).json();
+  $('dot').hidden = h.ready; $('notready').hidden = h.ready;
+  $('healthtitle').textContent = h.ready ? 'Her şey hazır' : 'Tamamlanması gerekenler var';
+  const box = $('items'); box.textContent = '';
+  for (const it of h.items.filter(i => i.main)) {
+    const d = document.createElement('div'); d.className = 'item';
+    const ic = document.createElement('div'); ic.className = 'icon ' + it.level; ic.textContent = it.level === 'ok' ? '✓' : '!';
+    const tx = document.createElement('div');
+    const t = document.createElement('div'); t.className = 't'; t.textContent = it.title; tx.appendChild(t);
+    if (it.help) { const p = document.createElement('div'); p.className = 'h'; p.textContent = it.help; tx.appendChild(p); }
+    if (it.fix) {
+      const b = document.createElement('button'); b.className = 'btn'; b.style.marginTop = '.4rem'; b.textContent = 'Düzelt';
+      b.onclick = () => show(it.fix); tx.appendChild(b);
+    }
+    d.append(ic, tx); box.appendChild(d);
+  }
+  $('raw').textContent = h.items.map(i => i.raw || i.title).join('\n');
+}
+$('recheck').onclick = loadHealth;
+
+// ---- Connect
+async function loadConnection() {
+  const c = await (await fetch('/api/connection', { headers: H })).json();
+  for (const f of ['jiraBaseUrl', 'jiraProject', 'jiraUser', 'bitbucketEmail']) $(f).value = c[f] || '';
+  $('jiraToken').placeholder = c.jiraTokenSet ? 'Kayıtlı. Değiştirmek için yeni token yazın' : '';
+  $('bitbucketToken').placeholder = c.bitbucketTokenSet ? 'Kayıtlı. Değiştirmek için yeni token yazın' : '';
+}
+function result(ok, text) {
+  const d = document.createElement('div'); d.className = 'res ' + (ok ? 'ok' : 'bad'); d.textContent = text; $('saveres').appendChild(d);
+}
+$('form').onsubmit = async e => {
+  e.preventDefault();
+  $('save').disabled = true; $('saveres').textContent = '';
+  const body = {}; for (const f of ['jiraBaseUrl', 'jiraProject', 'jiraUser', 'jiraToken', 'bitbucketEmail', 'bitbucketToken']) body[f] = $(f).value.trim();
+  try {
+    const r = await fetch('/api/connection', { method: 'POST', headers: H, body: JSON.stringify(body) });
+    const j = await r.json();
+    if (!r.ok) result(false, j.error || 'Kaydedilemedi');
+    else {
+      result(j.jira.ok, j.jira.ok ? 'Jira bağlandı: ' + j.jira.who : j.jira.message);
+      if (j.bitbucket) result(j.bitbucket.ok, j.bitbucket.ok ? 'Bitbucket bağlandı: ' + j.bitbucket.who : j.bitbucket.message);
+      $('jiraToken').value = $('bitbucketToken').value = '';
+      loadConnection(); loadHealth();
+    }
+  } finally { $('save').disabled = false; }
+};
+
+// ---- Run
 function renderStep(e) {
   let el = steps[e.step];
-  if (!el) {
-    el = steps[e.step] = document.createElement('span');
-    $('steps').appendChild(el);
-  }
+  if (!el) { el = steps[e.step] = document.createElement('span'); $('steps').appendChild(el); }
   el.className = 'step ' + e.state;
-  el.textContent = e.step + '/' + e.total + ' ' + e.name;
+  el.textContent = e.step + '/' + e.total + (e.name ? ' ' + e.name : '');
 }
-
 function addMsg(text, cls) {
-  const d = document.createElement('div');
-  d.className = 'msg ' + (cls || '');
-  d.textContent = text;
-  $('log').appendChild(d);
+  const d = document.createElement('div'); d.className = 'msg ' + (cls || ''); d.textContent = text; $('log').appendChild(d);
 }
-
 function on(e) {
   if (e.kind === 'step') renderStep(e);
   else if (e.kind === 'text') addMsg(e.text);
   else if (e.kind === 'tool') $('tools').textContent += e.name + ': ' + e.text + '\n';
   else if (e.kind === 'result') {
-    addMsg(e.text || (e.failed ? 'Durdu.' : 'Bitti.'), e.failed ? 'fail' : '');
+    addMsg(e.failed ? (e.text || 'Durdu.') : 'Bitti.', e.failed ? 'fail' : '');
     $('stop').hidden = true; $('start').hidden = false;
   } else if (e.kind === 'status') {
     if (e.name === 'question') loadQuestions();
     if (e.text === 'started') { $('start').hidden = true; $('stop').hidden = false; }
   }
 }
-
 async function loadQuestions() {
   const qs = await (await fetch('/api/questions', { headers: H })).json();
-  for (const q of qs) {
-    if (seen.has(q.id)) continue;
-    seen.add(q.id);
-    renderQuestion(q);
-  }
+  for (const q of qs) { if (!seen.has(q.id)) { seen.add(q.id); renderQuestion(q); } }
 }
-
 function renderQuestion(q) {
-  const box = document.createElement('div');
-  box.className = 'q';
+  const box = document.createElement('div'); box.className = 'q';
   const inputs = [];
   for (const [i, item] of q.questions.questions.entries()) {
-    const p = document.createElement('p');
-    p.innerHTML = '<b></b>';
-    p.firstChild.textContent = item.question;
-    box.appendChild(p);
+    const p = document.createElement('p'); const b = document.createElement('b'); b.textContent = item.question; p.appendChild(b); box.appendChild(p);
     for (const o of item.options || []) {
-      const l = document.createElement('label');
-      const inp = document.createElement('input');
-      inp.type = item.multiSelect ? 'checkbox' : 'radio';
-      inp.name = 'q' + q.id + '_' + i;
-      inp.value = o.label;
+      const l = document.createElement('label'); const inp = document.createElement('input');
+      inp.type = item.multiSelect ? 'checkbox' : 'radio'; inp.name = 'q' + q.id + '_' + i; inp.value = o.label;
       l.append(inp, ' ' + o.label);
       if (o.description) { const s = document.createElement('small'); s.textContent = ' - ' + o.description; l.append(s); }
-      box.appendChild(l);
-      inputs.push([item.question, inp]);
+      box.appendChild(l); inputs.push([item.question, inp]);
     }
-    const other = document.createElement('input');
-    other.type = 'text'; other.placeholder = 'Başka bir cevap...';
-    box.appendChild(other);
-    inputs.push([item.question, other]);
+    const other = document.createElement('input'); other.type = 'text'; other.placeholder = 'Başka bir cevap...'; other.style.marginTop = '.4rem';
+    box.appendChild(other); inputs.push([item.question, other]);
   }
-  const btn = document.createElement('button');
-  btn.textContent = 'Gönder';
+  const btn = document.createElement('button'); btn.className = 'btn primary'; btn.style.marginTop = '.8rem'; btn.textContent = 'Gönder';
   btn.onclick = async () => {
     const answers = {};
     for (const [question, inp] of inputs) {
-      const v = (inp.type === 'text') ? inp.value.trim() : (inp.checked ? inp.value : '');
+      const v = inp.type === 'text' ? inp.value.trim() : (inp.checked ? inp.value : '');
       if (v) answers[question] = answers[question] ? answers[question] + ', ' + v : v;
     }
     const r = await fetch('/api/answer', { method: 'POST', headers: H, body: JSON.stringify({ id: q.id, answers }) });
     if (r.ok) box.remove(); else alert(await r.text());
   };
-  box.appendChild(btn);
-  $('questions').appendChild(box);
+  box.appendChild(btn); $('questions').appendChild(box);
 }
-
 $('go').onclick = async () => {
-  const task = $('task').value.trim();
-  if (!task) return;
+  const task = $('task').value.trim(); if (!task) return;
   const r = await fetch('/api/run', { method: 'POST', headers: H, body: JSON.stringify({ task }) });
   if (!r.ok) alert(await r.text());
 };
@@ -130,6 +237,7 @@ $('stop').onclick = () => fetch('/api/stop', { method: 'POST', headers: H });
 const es = new EventSource('/api/events?k=' + encodeURIComponent(key));
 es.onmessage = m => on(JSON.parse(m.data));
 loadQuestions();
+fetch('/api/health', { headers: H }).then(r => r.json()).then(h => { $('dot').hidden = h.ready; $('notready').hidden = h.ready; if (!h.ready) show('health'); });
 </script>
 </body>
 </html>

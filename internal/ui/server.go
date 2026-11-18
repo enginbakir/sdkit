@@ -27,6 +27,10 @@ type Config struct {
 	Tools   []string // tools a session may use unasked
 	Env     []string // passed to every session (tokens)
 	Prompt  func(task string, askEnv []string) string
+	Getenv  func(string) string // the process environment, handed in by cmd (this package reads none of it)
+	HTTP    *http.Client        // for the credential checks; default has a timeout
+	// BitbucketAPI is the REST base of the Bitbucket checks; default https://api.bitbucket.org/2.0. Tests point it elsewhere.
+	BitbucketAPI string
 }
 
 // Server is the panel: one repo, one run at a time, one secret.
@@ -91,6 +95,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/questions", s.questions)
 	mux.HandleFunc("/api/answer", s.answer)
 	mux.HandleFunc("/api/ask", s.ask)
+	mux.HandleFunc("/api/connection", s.connection)
+	mux.HandleFunc("/api/health", s.health)
 	return s.guard(mux)
 }
 
@@ -236,4 +242,59 @@ func (s *Server) ask(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.Write(a)
+}
+
+// health is the Health screen: doctor's checks in plain words.
+func (s *Server) health(w http.ResponseWriter, r *http.Request) {
+	getenv := s.cfg.Getenv
+	if getenv == nil {
+		getenv = func(string) string { return "" }
+	}
+	items := Health(r.Context(), s.cfg.Dir, getenv, s.cfg.Command)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(struct {
+		Ready bool   `json:"ready"`
+		Items []Item `json:"items"`
+	}{Ready(items), items})
+}
+
+// connection reads (GET) or saves and then checks (POST) the Jira and Bitbucket settings. A token is never sent back.
+func (s *Server) connection(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	if r.Method == http.MethodGet {
+		json.NewEncoder(w).Encode(ReadConnection(s.cfg.Dir))
+		return
+	}
+	var in ConnectionInput
+	if r.Method != http.MethodPost || json.NewDecoder(io.LimitReader(r.Body, 1<<16)).Decode(&in) != nil {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	if err := SaveConnection(s.cfg.Dir, in); err != nil {
+		w.WriteHeader(http.StatusUnprocessableEntity)
+		json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+		return
+	}
+	jt, bt := SavedTokens(s.cfg.Dir)
+	hc, api := s.cfg.HTTP, s.cfg.BitbucketAPI
+	if hc == nil {
+		hc = HTTPClient()
+	}
+	if api == "" {
+		api = "https://api.bitbucket.org/2.0"
+	}
+	out := struct {
+		Saved     bool   `json:"saved"`
+		Jira      Check  `json:"jira"`
+		Bitbucket *Check `json:"bitbucket,omitempty"`
+	}{Saved: true}
+	out.Jira = Check{Message: "Jira token'ı henüz girilmedi"}
+	if jt != "" {
+		out.Jira = CheckJira(r.Context(), hc, in.JiraBaseURL, in.JiraUser, jt)
+	}
+	if bt != "" {
+		c := CheckBitbucket(r.Context(), hc, api, Origin(s.cfg.Dir), ReadConnection(s.cfg.Dir).BitbucketEmail, bt)
+		out.Bitbucket = &c
+	}
+	json.NewEncoder(w).Encode(out)
 }
