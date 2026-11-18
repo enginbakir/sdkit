@@ -1,0 +1,161 @@
+// Package ui is the local panel behind `sdkit ui` (docs/design-ui.md): it drives one headless agent session per run, turns
+// the session's output into events a browser can show, and relays the agent's questions to the person.
+package ui
+
+import (
+	"encoding/json"
+	"regexp"
+	"strconv"
+	"strings"
+)
+
+// Event kinds the browser knows.
+const (
+	KindStep   = "step"   // a skill step banner: Skill, Step, Total, Name, State
+	KindText   = "text"   // what the agent says to the person
+	KindTool   = "tool"   // what the agent is doing (shown under "details")
+	KindResult = "result" // the session ended: Text is the final message, Failed says how
+	KindStatus = "status" // the panel's own notes (started, stopped, errors)
+)
+
+// Event is one line of a run, in the order it happened.
+type Event struct {
+	Seq    int    `json:"seq"`
+	Kind   string `json:"kind"`
+	Text   string `json:"text,omitempty"`
+	Skill  string `json:"skill,omitempty"`
+	Step   int    `json:"step,omitempty"`
+	Total  int    `json:"total,omitempty"`
+	Name   string `json:"name,omitempty"`
+	State  string `json:"state,omitempty"`
+	Failed bool   `json:"failed,omitempty"`
+}
+
+// banner is the line every skill prints per step: "[sdkit] generate-specs - Step 3/8: Draft - started".
+var banner = regexp.MustCompile(`\[sdkit\]\s+(\S+)\s+-\s+Step\s+(\d+)/(\d+):\s+(.+?)\s+-\s+(started|done)\b`)
+
+// ParseLine turns one stream-json line of a Claude Code session into the events it carries. An unknown or malformed line
+// gives none: the panel must never fail because the host added a field.
+func ParseLine(line []byte) []Event {
+	var m struct {
+		Type    string `json:"type"`
+		Subtype string `json:"subtype"`
+		IsError bool   `json:"is_error"`
+		Result  string `json:"result"`
+		Message struct {
+			Content json.RawMessage `json:"content"`
+		} `json:"message"`
+	}
+	if json.Unmarshal(line, &m) != nil {
+		return nil
+	}
+	switch m.Type {
+	case "assistant":
+		var blocks []struct {
+			Type  string          `json:"type"`
+			Text  string          `json:"text"`
+			Name  string          `json:"name"`
+			Input json.RawMessage `json:"input"`
+		}
+		if json.Unmarshal(m.Message.Content, &blocks) != nil {
+			return nil
+		}
+		var out []Event
+		for _, b := range blocks {
+			switch b.Type {
+			case "text":
+				out = append(out, textEvents(b.Text)...)
+			case "tool_use":
+				out = append(out, Event{Kind: KindTool, Name: b.Name, Text: toolSummary(b.Name, b.Input)})
+			}
+		}
+		return out
+	case "user":
+		// a skill may print its banner with `echo`, so it arrives as the output of a tool, not as the agent's own text
+		var blocks []struct {
+			Type    string          `json:"type"`
+			Content json.RawMessage `json:"content"`
+		}
+		if json.Unmarshal(m.Message.Content, &blocks) != nil {
+			return nil
+		}
+		var out []Event
+		for _, b := range blocks {
+			if b.Type == "tool_result" {
+				for _, e := range textEvents(resultText(b.Content)) {
+					if e.Kind == KindStep {
+						out = append(out, e)
+					}
+				}
+			}
+		}
+		return out
+	case "result":
+		// the closing message was already shown as text; only a failure needs its own words
+		failed := m.IsError || strings.HasPrefix(m.Subtype, "error")
+		e := Event{Kind: KindResult, Failed: failed}
+		if failed {
+			e.Text = m.Result
+		}
+		return []Event{e}
+	}
+	return nil
+}
+
+// resultText is the text of a tool result, which the host sends as a string or as a list of text blocks.
+func resultText(raw json.RawMessage) string {
+	var s string
+	if json.Unmarshal(raw, &s) == nil {
+		return s
+	}
+	var parts []struct {
+		Text string `json:"text"`
+	}
+	if json.Unmarshal(raw, &parts) != nil {
+		return ""
+	}
+	var b strings.Builder
+	for _, p := range parts {
+		b.WriteString(p.Text + "\n")
+	}
+	return b.String()
+}
+
+// textEvents splits agent text into banner events and plain text: the banners drive the stepper, the rest is read by the person.
+func textEvents(s string) []Event {
+	var out []Event
+	var rest []string
+	for _, l := range strings.Split(s, "\n") {
+		if m := banner.FindStringSubmatch(l); m != nil {
+			step, _ := strconv.Atoi(m[2])
+			total, _ := strconv.Atoi(m[3])
+			out = append(out, Event{Kind: KindStep, Skill: m[1], Step: step, Total: total, Name: m[4], State: m[5]})
+			continue
+		}
+		rest = append(rest, l)
+	}
+	if t := strings.TrimSpace(strings.Join(rest, "\n")); t != "" {
+		out = append([]Event{{Kind: KindText, Text: t}}, out...)
+	}
+	return out
+}
+
+// toolSummary is the one-line form of a tool call: the command for Bash, the path for file tools.
+func toolSummary(name string, input json.RawMessage) string {
+	var in struct {
+		Command  string `json:"command"`
+		FilePath string `json:"file_path"`
+		Path     string `json:"path"`
+		Pattern  string `json:"pattern"`
+	}
+	json.Unmarshal(input, &in)
+	for _, v := range []string{in.Command, in.FilePath, in.Path, in.Pattern} {
+		if v != "" {
+			if len(v) > 200 {
+				v = v[:200] + "..."
+			}
+			return v
+		}
+	}
+	return ""
+}

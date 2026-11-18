@@ -1,6 +1,6 @@
 # Design: `sdkit ui`, a local panel for analysts
 
-Status: draft. Not implemented. Issue: [#39](https://github.com/wecii/sdkit/issues/39) (basic web UI for non-technical roles: analyst, PM, QA).
+Status: spike (phase 0) implemented in `internal/ui` and `sdkit ui`; the screens of phases 1-4 are not. Issue: [#39](https://github.com/wecii/sdkit/issues/39) (basic web UI for non-technical roles: analyst, PM, QA).
 
 ## Problem
 
@@ -69,6 +69,16 @@ State is derived from the repo on every request (`sdkit spec next`, review state
 2. **Home + New spec + Run:** the full `generate-specs` screens.
 3. **Tasks:** `generate-tasks` with the plan gate.
 4. **`update-specs`, `merge-specs`**, then a read-only view for the Tech Lead (PR and review state).
+
+## Spike results (phase 0)
+
+Checked against Claude Code 2.1 with a real session, not a mock:
+
+- A headless `claude -p --output-format stream-json` session waits on a blocking Bash command and gets its stdout back. That is the whole ask bridge: `sdkit ui ask` posts the questions to the panel, blocks, and prints the answers; the session continues with them. No MCP server, no host hook.
+- `AskUserQuestion` is disallowed in panel sessions and the run prompt tells the model to use `sdkit ui ask` with the same JSON shape, so skill text stays unchanged.
+- Step banners reach the stepper from the agent's text and from tool output (the model sometimes prints them with `echo`).
+- The session must find this binary as `sdkit`; the panel prepends its own directory to `PATH` for the session.
+- Not done yet: running a real skill (`generate-specs`) through the panel, session resume after a restart, the screens of phases 1-4.
 
 ## Open questions
 

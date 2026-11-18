@@ -48,7 +48,7 @@ Two extra principles: **tokens are neither wasted nor starved** (section 18), an
 | **Hook** | 20 | 20 guards and info hooks inside the one `sdkit hook` entry (`internal/hook`, one file each), run automatically during tool steps and session boundaries: `session-context`, `session-memory`, `check-tools`, `guard-secrets`, `guard-protected`, `frozen-tests`, `guard-prod`, `guard-git`, `guard-readonly`, `guard-phase`, `guard-pr`, `post-edit-fmt`, `stop-verify`, `record-verdict`, `value-report`, `usage-log`, `guard-budget`, `guard-noisy`, `result-size`, `check-contract`. Claude Code wires them in `hooks/hooks.json`; Gemini and Cursor call the same entry with `sdkit hook --host`, OpenCode through a plugin. Where there are no hooks, git hooks (`sdkit guard`) enforce most of the same rules |
 | **Verification engine** | 1 core + steps per stack | `internal/verify` (diff base, changed files, `verify.d`, green-result cache) + `internal/stack/<stack>.go` (the stack's own checks) |
 | **Stack** | 7 | `go`, `spring-boot` and `jvm` (Maven/Gradle), `python`, `nextjs`, `react-native` (the last two share `internal/stack/node.go`) and `generic` if detection fails. Data in `stacks/<stack>/`, contract: `stacks/README.md` |
-| **Command** | 42 | The subcommands of the one `sdkit` binary (`sdkit help`): `adapter` `audit` `base` `capped` `contract` `dev` `digest` `dispatch` `doctor` `dod` `guard` `hook` `init` `jira` `knowledge` `lookup` `memory` `plan` `pr` `preflight` `prespec` `pricing` `recover` `redact` `report` `review` `route` `run-role` `sdd` `spec` `state` `sync` `tasks` `telemetry` `upgrade` `usage` `verdict` `verify` `version` `where` `workflow` `worktree` (the engine, `internal/verify`, is reached through `sdkit verify`) |
+| **Command** | 43 | The subcommands of the one `sdkit` binary (`sdkit help`): `adapter` `audit` `base` `capped` `contract` `dev` `digest` `dispatch` `doctor` `dod` `guard` `hook` `init` `jira` `knowledge` `lookup` `memory` `plan` `pr` `preflight` `prespec` `pricing` `recover` `redact` `report` `review` `route` `run-role` `sdd` `spec` `state` `sync` `tasks` `telemetry` `ui` `upgrade` `usage` `verdict` `verify` `version` `where` `workflow` `worktree` (the engine, `internal/verify`, is reached through `sdkit verify`) |
 | **Rules** | 4+ | `core/rules/`: `general`, `git`, `test-first`, `token-economy` (+ stack rules) |
 | **Templates** | | Project-side files to fill in for a new repo (`templates/`, `stacks/go/`, `core/rules/`) |
 | **Host** | 5 | `claude`, `codex`, `opencode`, `cursor`, `gemini`; role/guard format in `internal/emit` + `core/hosts.env` (section 16) |
@@ -849,7 +849,7 @@ spec-driven-kit/
 │   ├── cursor/ gemini/    GENERATED role files + hooks.json / settings.json
 │   └── git/               pre-commit, pre-push (call sdkit guard)
 ├── hooks/                 hooks.json (Claude event wiring; every command is `sdkit hook <Event>`)
-├── cmd/sdkit/             the binary's entry: one file per subcommand (42)
+├── cmd/sdkit/             the binary's entry: one file per subcommand (43)
 ├── internal/              the logic, one package per command family: hook (20 hooks, one file each), sdd, state, verify, stack, setup (init/doctor/sync/upgrade), emit, ...
 ├── kit.go                 embeds core skills agents adapters stacks templates, so the binary is the whole kit
 ├── attic/bench/           the 1.x benchmark harness; kept as is, unmaintained, not built
