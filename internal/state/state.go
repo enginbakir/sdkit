@@ -269,8 +269,12 @@ func ReadOpen(p project.Project) Open {
 	return o
 }
 
-// ActiveSlug is the task whose budget and ledger count: the open task when it has a work state, else the most recently updated one; "" if none.
+// ActiveSlug is the task whose budget and ledger count: the one the process names ($SDKIT_TASK), else the open task when it has a
+// work state, else the most recently updated one; "" if none. The named task needs no state of its own: it is a label for usage.
 func ActiveSlug(p project.Project) string {
+	if ValidSlug(p.Task) {
+		return p.Task
+	}
 	if t := ReadOpen(p).Task; ValidSlug(t) {
 		if _, err := os.Stat(Path(p, t)); err == nil {
 			return t

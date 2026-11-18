@@ -405,17 +405,22 @@ async function loadReports() {
   if (!d.sessions.length) { se.innerHTML = '<p class="hint">Bu projede henüz oturum raporu yok.</p>'; return; }
   se.appendChild(table(['Zaman', 'Spec ve işlem', 'Durum', 'Token', 'Tahmini maliyet', ''], d.sessions.map(x => ({ cells: [
     when(x.last),
-    x.spec ? { el: (() => { const a = document.createElement('a'); a.href = '#'; a.textContent = x.spec; a.onclick = e => { e.preventDefault(); openDetail(x.spec); }; const s = document.createElement('span'); s.textContent = ' · ' + (ACT_LABEL[x.action] || x.action); const f = document.createElement('span'); f.append(a, s); return f; })() } : 'Panel dışı oturum',
+    x.spec ? { el: (() => { const a = document.createElement('a'); a.href = '#'; a.textContent = x.spec; a.onclick = e => { e.preventDefault(); openDetail(x.spec); }; const s = document.createElement('span'); s.textContent = x.action ? ' · ' + (ACT_LABEL[x.action] || x.action) : ''; const f = document.createElement('span'); f.append(a, s); return f; })() } : 'Panel dışı oturum',
     outcomeText(x),
     { text: nf(x.tokens), num: 1 }, { text: money(x.costUsd, x.costState), num: 1 }, { el: openBtn(x.id) }] }))));
 }
 async function loadSpecReports(id) {
   const box = $('dreports'); box.textContent = '';
-  const list = await (await fetch('/api/spec/reports?id=' + encodeURIComponent(id), { headers: H })).json();
+  const view = await (await fetch('/api/spec/reports?id=' + encodeURIComponent(id), { headers: H })).json();
+  const list = view.sessions;
   if (!list.length) { box.innerHTML = '<p class="hint">Bu spec için panelden çalıştırılmış bir oturum raporu yok. Çalıştırdığınızda burada görünür.</p>'; return; }
   const tok = list.reduce((a, r) => a + r.tokens, 0), usd = list.reduce((a, r) => a + r.costUsd, 0), part = list.some(r => r.costState === 'partial' || r.costState === 'unavailable' || r.tokenState === 'partial');
   const sum = document.createElement('p'); sum.textContent = list.length + ' oturum · ' + nf(tok) + ' token · tahmini ' + money(usd, part ? 'partial' : 'complete'); box.appendChild(sum);
-  box.appendChild(table(['Zaman', 'İşlem', 'Sonuç', 'Token', 'Tahmini maliyet', ''], list.map(x => ({ cells: [when(x.last), ACT_LABEL[x.action] || x.action, outcomeText(x), { text: nf(x.tokens), num: 1 }, { text: money(x.costUsd, x.costState), num: 1 }, { el: openBtn(x.id) }] }))));
+  box.appendChild(table(['Zaman', 'İşlem', 'Sonuç', 'Token', 'Tahmini maliyet', ''], list.map(x => ({ cells: [when(x.last), ACT_LABEL[x.action] || x.action || '-', outcomeText(x), { text: nf(x.tokens), num: 1 }, { text: money(x.costUsd, x.costState), num: 1 }, { el: openBtn(x.id) }] }))));
+  if (view.roles.length) {
+    const h = document.createElement('p'); h.className = 'hint'; h.style.marginTop = '1rem'; h.textContent = 'Bu spec için kim ne harcadı (tüm oturumlar, alt ajanlar dahil):'; box.appendChild(h);
+    box.appendChild(table(['Rol', 'Çalışma', 'Token', 'Tahmini maliyet'], view.roles.map(r => ({ cells: [r.role + (r.kind === 'subagent' ? ' (alt ajan)' : ''), { text: r.runs, num: 1 }, { text: nf(r.tokens), num: 1 }, { text: money(r.cost_usd), num: 1 }] }))));
+  }
 }
 
 // ---- Spec page: where it is, what can be done now, what was done, and its files

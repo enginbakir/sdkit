@@ -12,6 +12,7 @@ import (
 
 	"github.com/wecii/sdkit/internal/project"
 	"github.com/wecii/sdkit/internal/report"
+	"github.com/wecii/sdkit/internal/state"
 )
 
 // A report is filed under the host's session id and says nothing about which spec the session worked on. The panel starts the
@@ -191,7 +192,10 @@ const maxLive = 40
 // ListReports joins the kit's reports with the panel's run ledger.
 func ListReports(root string) Reports {
 	runs := map[string]RunRecord{}
-	for _, r := range ReadRuns(root) {
+	for sid, spec := range taskLinks(root) { // the kit's own record first: a session that wrote to a spec's task ledger belongs to it
+		runs[sid] = RunRecord{Session: sid, Spec: spec}
+	}
+	for _, r := range ReadRuns(root) { // the panel's record adds what the run was for
 		runs[r.Session] = r
 	}
 	byID := map[string]Report{}
@@ -239,6 +243,70 @@ func ListReports(root string) Reports {
 	}
 	sort.Slice(out.Specs, func(i, j int) bool { return out.Specs[i].Last > out.Specs[j].Last })
 	return out
+}
+
+// taskLinks maps a session to the spec whose task ledger (<project-dir>/work/<spec-id>/usage.jsonl) it wrote usage lines to. That is the
+// kit's own record, so it also links sessions started in a terminal with SDKIT_TASK set. Only slugs that are spec ids count: a
+// development task is not a spec.
+func taskLinks(root string) map[string]string {
+	_, pj, _ := project.Load(root)
+	out := map[string]string{}
+	for _, sp := range ListSpecs(root) {
+		b, err := os.ReadFile(filepath.Join(pj.Dir(), "work", sp.ID, "usage.jsonl"))
+		if err != nil {
+			continue
+		}
+		for _, line := range bytes.Split(b, []byte{'\n'}) {
+			var l struct {
+				Session string `json:"session"`
+			}
+			if json.Unmarshal(line, &l) == nil && reSession.MatchString(l.Session) {
+				out[l.Session] = sp.ID
+			}
+		}
+	}
+	return out
+}
+
+// taskRoles is who spent what on a spec, across all its sessions, from the kit's own task report (`sdkit report task <id>`).
+// Empty when nothing was filed under the spec's id.
+func taskRoles(root, id string) []RoleLine {
+	_, pj, _ := project.Load(root)
+	if _, err := os.Stat(filepath.Join(pj.Dir(), "work", id, "usage.jsonl")); err != nil || !state.ValidSlug(id) {
+		return []RoleLine{}
+	}
+	var out, errb bytes.Buffer
+	e := report.New(root)
+	e.Out, e.Err = &out, &errb
+	if e.Run([]string{"task", id, "--json"}) != 0 {
+		return []RoleLine{}
+	}
+	var v struct {
+		Roles []struct {
+			RoleLine
+			Tokens int `json:"tokens"`
+		} `json:"roles"`
+	}
+	roles := []RoleLine{}
+	if json.Unmarshal(out.Bytes(), &v) == nil {
+		for _, x := range v.Roles {
+			l := x.RoleLine
+			l.Tokens = x.Tokens
+			roles = append(roles, l)
+		}
+	}
+	return roles
+}
+
+// SpecReportsView is the "Raporlar" card of a spec page.
+type SpecReportsView struct {
+	Sessions []Report   `json:"sessions"`
+	Roles    []RoleLine `json:"roles"`
+}
+
+// SpecReportsOf is the sessions linked to a spec and the role breakdown of its task report.
+func SpecReportsOf(root, id string) SpecReportsView {
+	return SpecReportsView{Sessions: SpecReports(root, id), Roles: taskRoles(root, id)}
 }
 
 // SpecReports are the reports of the runs the panel made for one spec, newest first, for the spec page.

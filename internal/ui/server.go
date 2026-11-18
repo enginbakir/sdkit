@@ -21,6 +21,7 @@ import (
 
 	"github.com/wecii/sdkit/internal/proc"
 	"github.com/wecii/sdkit/internal/spec"
+	"github.com/wecii/sdkit/internal/state"
 )
 
 //go:embed web
@@ -231,6 +232,10 @@ func (s *Server) run(w http.ResponseWriter, r *http.Request) {
 
 	// the session reaches the ask bridge through these two variables; `sdkit ui ask` reads them
 	askEnv := []string{"SDKIT_UI_URL=http://" + s.addr, "SDKIT_UI_KEY=" + s.secret}
+	if state.ValidSlug(in.ID) {
+		// every token the session and its subagents spend is filed under the spec's id, so `sdkit report task <id>` is the spec's report
+		askEnv = append(askEnv, "SDKIT_TASK="+in.ID)
+	}
 	prompt := task
 	if s.cfg.Prompt != nil {
 		prompt = s.cfg.Prompt(task, askEnv)
@@ -530,7 +535,7 @@ func (s *Server) reports(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) specReports(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, SpecReports(s.cfg.Dir, r.URL.Query().Get("id")))
+	writeJSON(w, http.StatusOK, SpecReportsOf(s.cfg.Dir, r.URL.Query().Get("id")))
 }
 
 func (s *Server) reportText(w http.ResponseWriter, r *http.Request) {

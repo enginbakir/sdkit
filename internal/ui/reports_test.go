@@ -84,3 +84,31 @@ func TestLowerBound(t *testing.T) {
 		}
 	}
 }
+
+func TestTaskLedgerLinksSessionsToTheirSpec(t *testing.T) {
+	root := scratchRepo(t, "/.sdkit/work/\n")
+	x, y := "dddddddd-4444-4444-8444-dddddddddddd", "eeeeeeee-5555-4555-8555-eeeeeeeeeeee"
+	storedReport(t, root, x, "2026-11-19T09:00:00Z", 100, 0.1, "complete")
+	storedReport(t, root, y, "2026-11-19T10:00:00Z", 100, 0.1, "complete")
+	os.MkdirAll(filepath.Join(root, "specs", "odeme"), 0o755) // a spec id; other-task is a development task, not a spec
+	line := func(session string) string {
+		return `{"v":2,"ts":"2026-11-19T09:00:00Z","role":"orchestrator","tier":"","host":"claude","model":"claude-sonnet-5-5","session":"` + session + `","id":"a","origin":"sdk","kind":"final","in":10,"out":20}` + "\n"
+	}
+	for slug, sid := range map[string]string{"odeme": x, "other-task": y} {
+		os.MkdirAll(filepath.Join(root, ".sdkit", "work", slug), 0o755)
+		os.WriteFile(filepath.Join(root, ".sdkit", "work", slug, "usage.jsonl"), []byte(line(sid)), 0o644)
+	}
+	bySpec := map[string]string{}
+	for _, r := range ListReports(root).Sessions {
+		bySpec[r.ID] = r.Spec
+	}
+	if bySpec[x] != "odeme" || bySpec[y] != "" {
+		t.Errorf("a session that wrote to a spec's task ledger belongs to that spec, one that wrote to a development task does not: %v", bySpec)
+	}
+	if v := SpecReportsOf(root, "odeme"); len(v.Sessions) != 1 || len(v.Roles) == 0 || v.Roles[0].Role != "orchestrator" {
+		t.Errorf("the spec page gets its session and the roles of its task report: %+v", v)
+	}
+	if v := SpecReportsOf(root, "yok"); len(v.Roles) != 0 || v.Sessions == nil {
+		t.Errorf("a spec with nothing filed under it: %+v", v)
+	}
+}
