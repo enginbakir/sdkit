@@ -3,7 +3,6 @@ package ui
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"sync"
 )
@@ -36,14 +35,10 @@ func NewBroker(onAsk func(Question)) *Broker {
 
 // Ask registers the questions and waits for the answer or for ctx to end. A question that is not a valid questions object is
 // refused at once, so the agent sees the mistake instead of waiting on a form nobody can fill in.
-func (b *Broker) Ask(ctx context.Context, questions json.RawMessage) (json.RawMessage, error) {
-	var shape struct {
-		Questions []struct {
-			Question string `json:"question"`
-		} `json:"questions"`
-	}
-	if json.Unmarshal(questions, &shape) != nil || len(shape.Questions) == 0 {
-		return nil, errors.New(`expected {"questions":[{"question":"...","options":[{"label":"..."}]}]}`)
+func (b *Broker) Ask(ctx context.Context, raw json.RawMessage) (json.RawMessage, error) {
+	questions, err := NormalizeQuestions(raw)
+	if err != nil {
+		return nil, err
 	}
 	b.mu.Lock()
 	b.next++

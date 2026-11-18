@@ -1,6 +1,6 @@
 # Design: `sdkit ui`, a local panel for analysts
 
-Status: phases 0 (spike), 1 (Connect and Health) and the Home, New spec and Run screens of phase 2 are implemented in `internal/ui` and `sdkit ui`; the review-finding cards, tasks and the rest are not. Issue: [#39](https://github.com/wecii/sdkit/issues/39) (basic web UI for non-technical roles: analyst, PM, QA).
+Status: phases 0 (spike), 1 (Connect and Health) and the Home, New spec and Run screens of phase 2 are implemented in `internal/ui` and `sdkit ui`; the review-finding cards are too; tasks and the rest are not. Issue: [#39](https://github.com/wecii/sdkit/issues/39) (basic web UI for non-technical roles: analyst, PM, QA).
 
 ## Problem
 
@@ -100,6 +100,14 @@ Checked against Claude Code 2.1 with a real session, not a mock:
 - **Run** takes an action and an id, never free text: the page cannot hand the agent instructions (`Task`). The stepper names the eight `generate-specs` steps in Turkish; the banners stay English for the tools that read them. Stop kills the whole process tree and the page offers "Listeye dön".
 - The agent echoed the raw gap list into the chat on the first step; the run rules now tell it to say in a sentence what it found, never to paste lists or tool output.
 - Found by looking at it: a CSS `display` rule overrode `hidden` (a red dot stayed on a ready page), the Bitbucket rule matched the CI warning's `--ci bitbucket|github|gitlab` hint, and a merged spec showed as "in review" in a fresh clone.
+
+## Review finding cards
+
+The skill asks about a finding as a question (`triage.md`, "walk the open findings one by one") with the finding written into the question text. The panel draws it as a card without a change to the skill: the run rules tell the agent to add a `finding` object to that question, `{id, severity, where, problem, class, diff}`, and to keep the four answers (apply, answer differently, accept the risk, reject) as the options. `NormalizeQuestions` checks and bounds it on the server (unknown severity or class dropped, a finding with no problem becomes a plain question, text clipped) so the page can trust the shape and draws every field with `textContent`. The card shows the severity in words (Engelleyici, Önemli, Küçük), the agent's own class, the file and line, the problem in one sentence and the proposed edit as a coloured diff. A chosen option and a typed note travel together as one answer string.
+
+Seen in the browser with a stand-in agent (`sdkit ui ask` with a finding question), not with a real review at the round cap; the agent following the rule at that moment is the part still to see.
+
+One finding of this pass: Jira being unreachable (offline, service down) was counted as something to fix on the Connect page. It is now a note that does not block, since spec writing does not need Jira; refused credentials still block.
 
 ## Open questions
 

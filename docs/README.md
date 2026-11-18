@@ -19,6 +19,7 @@ Pick where to start by your role.
 | Understanding workflow **profiles** (small/standard/high-assurance), phase transitions, the failure/retry policy | [design-workflow.md](design-workflow.md) | [../skills/spec-driven-dev/references/workflow.md](../skills/spec-driven-dev/references/workflow.md) |
 | Understanding reviewer/security-auditor enforcement at **high risk**, evidence validity and the host capability matrix | [design-evidence.md](design-evidence.md) | [design-workflow.md](design-workflow.md) |
 | Understanding which **agent/model** runs, the budget, retries and escalation (F06) | [design-routing.md](design-routing.md) | [design-evidence.md](design-evidence.md) |
+| Understanding or running the **local panel for non-technical roles** (`sdkit ui`) | [design-ui.md](design-ui.md) | [guide.md](guide.md) |
 | Understanding how **token usage and cost** are computed, the price table (`pricing.json`), `sdkit usage report/scan` output and missing-data warnings (F07) | [design-usage.md](design-usage.md) | [design-telemetry.md](design-telemetry.md) |
 | Understanding the correctness and cost comparison of the same task solved by **plain agentic development vs. SDKit** (benchmark infrastructure, F05-A) | [design-benchmark.md](design-benchmark.md) | [design-telemetry.md](design-telemetry.md) |
 | Working as an **analyst** (specs, review, Jira tasks) or a **developer** on Jira-driven tasks (`SDKIT_ENV`) | [role-aware.md](role-aware.md) | [design-role-aware.md](design-role-aware.md), [guide.md](guide.md) §10 |

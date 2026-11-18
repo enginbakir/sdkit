@@ -60,7 +60,9 @@ type rule struct {
 
 var rules = []rule{
 	{regexp.MustCompile(`server-side gate|scaffold-version|scaffold-shared|drift|upgrade`), "", "", "", LevelNote, false},
-	{regexp.MustCompile(`JIRA_|TRACKER is not jira|Jira refused|Jira (is )?not reachable|Jira answered`), "Jira bağlantısı eksik veya çalışmıyor", "Bağlantı sayfasında Jira bilgilerini girin.", FixConnect, LevelTodo, false},
+	// the network being down is not something the person can fix on the Connect page, and spec writing does not need Jira
+	{regexp.MustCompile(`Jira (is )?not reachable|Jira answered`), "Jira'ya şu an ulaşılamıyor", "İnternet bağlantınızı kontrol edin. Spec yazmayı etkilemez, görev üretmek için gerekir.", "", LevelProblem, true},
+	{regexp.MustCompile(`JIRA_|TRACKER is not jira|Jira refused`), "Jira bağlantısı eksik veya çalışmıyor", "Bağlantı sayfasında Jira bilgilerini girin.", FixConnect, LevelTodo, false},
 	{regexp.MustCompile(`(?i)bitbucket (api )?token|bitbucket account|BITBUCKET_|Bitbucket (rejected|not reachable)`), "Bitbucket bağlantısı eksik veya çalışmıyor", "Bağlantı sayfasında Bitbucket bilgilerini girin.", FixConnect, LevelTodo, false},
 	{regexp.MustCompile(`project\.md still has TODO`), "Proje profili (project.md) doldurulmamış", "Bunu Tech Lead'in doldurması gerekir.", "", LevelProblem, true},
 	{regexp.MustCompile(`openspec CLI`), "OpenSpec kurulu değil", "Spec üretimi için gerekli. Teknik ekipten kurmasını isteyin.", "", LevelProblem, false},

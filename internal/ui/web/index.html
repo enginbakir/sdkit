@@ -51,6 +51,18 @@
   .spec .grow { flex:1; }
   .chip { font-size:.78rem; padding:.1rem .55rem; border-radius:1rem; background:#fff3c4; color:var(--warn); }
   .icon.soft { background: var(--warn); }
+  .fc { border: 1px solid var(--line); border-left: 5px solid var(--mute); border-radius: .5rem; padding: .7rem .9rem; margin: .5rem 0 .8rem; background: #fcfcfd; }
+  .fc.BLOCKER { border-left-color: var(--bad); } .fc.MAJOR { border-left-color: var(--warn); } .fc.MINOR { border-left-color: #6b7280; }
+  .fc .top { display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; font-size: .82rem; }
+  .sev { font-weight: 700; padding: .05rem .5rem; border-radius: 1rem; color: #fff; background: #6b7280; }
+  .sev.BLOCKER { background: var(--bad); } .sev.MAJOR { background: var(--warn); }
+  .cls { color: var(--mute); } .where { color: var(--mute); font-family: ui-monospace, monospace; word-break: break-all; }
+  .fc .prob { margin: .5rem 0 0; font-size: .97rem; }
+  .fc .lbl { margin: .7rem 0 .2rem; font-size: .78rem; font-weight: 700; color: var(--mute); text-transform: uppercase; letter-spacing: .03em; }
+  .diff { margin: 0; border: 1px solid var(--line); border-radius: .35rem; overflow: auto; font: .82rem/1.45 ui-monospace, monospace; background: #fff; }
+  .diff div { padding: 0 .6rem; white-space: pre-wrap; }
+  .diff .add { background: #e6f6ea; color: #14532d; } .diff .del { background: #fdecea; color: #7f1d1d; } .diff .hunk { color: var(--mute); background: #f3f4f6; }
+  .note { margin-top: .4rem; }
   details { margin-top: 1rem; color: var(--mute); font-size: .85rem; }
   pre { white-space: pre-wrap; margin: .4rem 0 0; }
 </style>
@@ -198,6 +210,31 @@ $('form').onsubmit = async e => {
   } finally { $('save').disabled = false; }
 };
 
+// ---- Review finding cards
+const SEV = { BLOCKER: 'Engelleyici', MAJOR: 'Önemli', MINOR: 'Küçük' };
+const CLS = { FIX: 'Ben düzeltebilirim', ASK: 'Sizin kararınız gerekiyor', REJECT: 'Bence geçersiz bir bulgu' };
+function findingCard(f) {
+  const c = document.createElement('div'); c.className = 'fc ' + (f.severity || '');
+  const top = document.createElement('div'); top.className = 'top';
+  if (f.severity) { const s = document.createElement('span'); s.className = 'sev ' + f.severity; s.textContent = SEV[f.severity]; top.appendChild(s); }
+  if (f.id) { const s = document.createElement('b'); s.textContent = f.id; top.appendChild(s); }
+  if (f.class) { const s = document.createElement('span'); s.className = 'cls'; s.textContent = CLS[f.class]; top.appendChild(s); }
+  if (f.where) { const s = document.createElement('span'); s.className = 'where'; s.textContent = f.where; top.appendChild(s); }
+  const p = document.createElement('p'); p.className = 'prob'; p.textContent = f.problem;
+  c.append(top, p);
+  if (f.diff) {
+    const l = document.createElement('div'); l.className = 'lbl'; l.textContent = 'Önerilen düzeltme';
+    const d = document.createElement('div'); d.className = 'diff';
+    for (const line of f.diff.split('\n')) {
+      const r = document.createElement('div');
+      r.className = line.startsWith('@@') ? 'hunk' : line.startsWith('+') ? 'add' : line.startsWith('-') ? 'del' : '';
+      r.textContent = line || ' '; d.appendChild(r);
+    }
+    c.append(l, d);
+  }
+  return c;
+}
+
 // ---- Run
 let jobId = '';
 function showJob(id) { jobId = id || jobId; $('home').hidden = true; $('job').hidden = false; $('jobtitle').textContent = jobId; }
@@ -267,6 +304,7 @@ function renderQuestion(q) {
   const inputs = [];
   for (const [i, item] of q.questions.questions.entries()) {
     const p = document.createElement('p'); const b = document.createElement('b'); b.textContent = item.question; p.appendChild(b); box.appendChild(p);
+    if (item.finding) p.after(findingCard(item.finding));
     for (const o of item.options || []) {
       const l = document.createElement('label'); const inp = document.createElement('input');
       inp.type = item.multiSelect ? 'checkbox' : 'radio'; inp.name = 'q' + q.id + '_' + i; inp.value = o.label;
@@ -274,7 +312,7 @@ function renderQuestion(q) {
       if (o.description) { const s = document.createElement('small'); s.textContent = ' - ' + o.description; l.append(s); }
       box.appendChild(l); inputs.push([item.question, inp]);
     }
-    const other = document.createElement('input'); other.type = 'text'; other.placeholder = 'Başka bir cevap...'; other.style.marginTop = '.4rem';
+    const other = document.createElement('input'); other.type = 'text'; other.placeholder = item.finding ? 'Kendi cevabınız veya gerekçeniz (isteğe bağlı)...' : 'Başka bir cevap...'; other.style.marginTop = '.4rem';
     box.appendChild(other); inputs.push([item.question, other]);
   }
   const btn = document.createElement('button'); btn.className = 'btn primary'; btn.style.marginTop = '.8rem'; btn.textContent = 'Gönder';
