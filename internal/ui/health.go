@@ -32,6 +32,8 @@ type Item struct {
 	Help  string `json:"help,omitempty"` // what to do
 	Fix   string `json:"fix,omitempty"`
 	Raw   string `json:"raw,omitempty"` // the original `sdkit doctor` line, under "details"
+	// Soft marks a problem the person cannot fix and that does not stop the work (the Tech Lead's to do); Ready ignores it.
+	Soft bool `json:"soft,omitempty"`
 	// Main is true for what the person should see first: every problem and todo, and the few good news that matter to them.
 	Main bool `json:"main,omitempty"`
 }
@@ -53,16 +55,17 @@ type rule struct {
 	help  string
 	fix   string
 	level string // forces a level; empty keeps the one doctor gave
+	soft  bool
 }
 
 var rules = []rule{
-	{regexp.MustCompile(`JIRA_|TRACKER is not jira|Jira refused|Jira (is )?not reachable|Jira answered`), "Jira bağlantısı eksik veya çalışmıyor", "Bağlantı sayfasında Jira bilgilerini girin.", FixConnect, LevelTodo},
-	{regexp.MustCompile(`(?i)bitbucket`), "Bitbucket bağlantısı eksik veya çalışmıyor", "Bağlantı sayfasında Bitbucket bilgilerini girin.", FixConnect, LevelTodo},
-	{regexp.MustCompile(`project\.md still has TODO`), "Proje profili (project.md) doldurulmamış", "Bunu Tech Lead'in doldurması gerekir.", "", LevelProblem},
-	{regexp.MustCompile(`openspec CLI`), "OpenSpec kurulu değil", "Spec üretimi için gerekli. Teknik ekipten kurmasını isteyin.", "", LevelProblem},
-	{regexp.MustCompile(`not a git repository`), "Bu klasör bir git deposu değil", "sdkit'i deponun içinden başlatın.", "", LevelProblem},
-	{regexp.MustCompile(`settings\.local\.json .*missing`), "Bu bilgisayarda kurulum tamamlanmamış", "Teknik ekipten bu depoda `sdkit init` çalıştırmasını isteyin.", "", LevelProblem},
-	{regexp.MustCompile(`server-side gate|scaffold-version|scaffold-shared|drift|upgrade`), "", "", "", LevelNote},
+	{regexp.MustCompile(`server-side gate|scaffold-version|scaffold-shared|drift|upgrade`), "", "", "", LevelNote, false},
+	{regexp.MustCompile(`JIRA_|TRACKER is not jira|Jira refused|Jira (is )?not reachable|Jira answered`), "Jira bağlantısı eksik veya çalışmıyor", "Bağlantı sayfasında Jira bilgilerini girin.", FixConnect, LevelTodo, false},
+	{regexp.MustCompile(`(?i)bitbucket (api )?token|bitbucket account|BITBUCKET_|Bitbucket (rejected|not reachable)`), "Bitbucket bağlantısı eksik veya çalışmıyor", "Bağlantı sayfasında Bitbucket bilgilerini girin.", FixConnect, LevelTodo, false},
+	{regexp.MustCompile(`project\.md still has TODO`), "Proje profili (project.md) doldurulmamış", "Bunu Tech Lead'in doldurması gerekir.", "", LevelProblem, true},
+	{regexp.MustCompile(`openspec CLI`), "OpenSpec kurulu değil", "Spec üretimi için gerekli. Teknik ekipten kurmasını isteyin.", "", LevelProblem, false},
+	{regexp.MustCompile(`not a git repository`), "Bu klasör bir git deposu değil", "sdkit'i deponun içinden başlatın.", "", LevelProblem, false},
+	{regexp.MustCompile(`settings\.local\.json .*missing`), "Bu bilgisayarda kurulum tamamlanmamış", "Teknik ekipten bu depoda `sdkit init` çalıştırmasını isteyin.", "", LevelProblem, false},
 }
 
 var doctorLine = regexp.MustCompile(`^\s*(ok|warn|FAIL|TODO\s+\d+\.)\s+(.*)$`)
@@ -91,7 +94,7 @@ func ParseDoctor(out string) []Item {
 		}
 		for _, r := range rules {
 			if r.re.MatchString(text) && level != LevelOK {
-				it.Title, it.Help, it.Fix = r.title, r.help, r.fix
+				it.Title, it.Help, it.Fix, it.Soft = r.title, r.help, r.fix, r.soft
 				if r.level != "" {
 					it.Level = r.level
 				}
@@ -117,7 +120,7 @@ func ParseDoctor(out string) []Item {
 // Ready is true when nothing the person or the team must fix is left.
 func Ready(items []Item) bool {
 	for _, it := range items {
-		if it.Level == LevelProblem || it.Level == LevelTodo {
+		if (it.Level == LevelProblem || it.Level == LevelTodo) && !it.Soft {
 			return false
 		}
 	}

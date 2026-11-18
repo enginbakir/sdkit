@@ -15,11 +15,11 @@ func TestParseLine(t *testing.T) {
 		want       []Event
 	}{
 		{"banner becomes a step", `{"type":"assistant","message":{"content":[{"type":"text","text":"[sdkit] generate-specs - Step 3/8: Draft - started"}]}}`,
-			[]Event{{Kind: KindStep, Skill: "generate-specs", Step: 3, Total: 8, Name: "Draft", State: "started"}}},
+			[]Event{{Kind: KindStep, Skill: "generate-specs", Step: 3, Total: 8, Name: "Taslağı yaz", State: "started"}}},
 		{"banner without a name or colon", `{"type":"user","message":{"content":[{"type":"tool_result","content":"[sdkit] generate-specs - Step 1/8 done\n"}]}}`,
-			[]Event{{Kind: KindStep, Skill: "generate-specs", Step: 1, Total: 8, State: "done"}}},
+			[]Event{{Kind: KindStep, Skill: "generate-specs", Step: 1, Total: 8, Name: "Girdiyi kontrol et", State: "done"}}},
 		{"text and banner in one message keep both", `{"type":"assistant","message":{"content":[{"type":"text","text":"Merhaba\n[sdkit] generate-specs - Step 1/8: Validate the input - done"}]}}`,
-			[]Event{{Kind: KindText, Text: "Merhaba"}, {Kind: KindStep, Skill: "generate-specs", Step: 1, Total: 8, Name: "Validate the input", State: "done"}}},
+			[]Event{{Kind: KindText, Text: "Merhaba"}, {Kind: KindStep, Skill: "generate-specs", Step: 1, Total: 8, Name: "Girdiyi kontrol et", State: "done"}}},
 		{"tool call is a one-line summary", `{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Bash","input":{"command":"sdkit spec next x"}}]}}`,
 			[]Event{{Kind: KindTool, Name: "Bash", Text: "sdkit spec next x"}}},
 		{"error result is a failure", `{"type":"result","subtype":"error_max_turns","is_error":true,"result":""}`,

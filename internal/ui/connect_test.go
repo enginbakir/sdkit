@@ -20,6 +20,7 @@ func TestValidate(t *testing.T) {
 	}{
 		{"complete input", func(*ConnectionInput) {}, false},
 		{"http is refused: a token must not cross the network in clear", func(i *ConnectionInput) { i.JiraBaseURL = "http://x.atlassian.net" }, true},
+		{"http to this machine stays on this machine", func(i *ConnectionInput) { i.JiraBaseURL = "http://127.0.0.1:8099" }, false},
 		{"address without a host", func(i *ConnectionInput) { i.JiraBaseURL = "https://" }, true},
 		{"lowercase project key", func(i *ConnectionInput) { i.JiraProject = "tff" }, true},
 		{"user is not an e-mail", func(i *ConnectionInput) { i.JiraUser = "ahmet" }, true},
@@ -141,7 +142,7 @@ func TestParseDoctor(t *testing.T) {
 	out := `doctor: /r
   ok    git repository
   FAIL  project.md still has TODO placeholders
-  warn  no server-side gate in CI: local hooks can be skipped with --no-verify
+  warn  no server-side gate in CI: local hooks can be skipped with --no-verify (sdkit init --ci bitbucket|github|gitlab)
   ok    openspec CLI installed
 
 setup checklist (Jira and pull requests)

@@ -28,6 +28,7 @@ const uiRules = `You are running inside the sdkit panel, for a person who is not
 - Never use the AskUserQuestion tool. To ask the person anything, run: sdkit ui ask --json '<questions>' (same JSON shape as AskUserQuestion's input: {"questions":[{"question":"...","header":"...","multiSelect":false,"options":[{"label":"...","description":"..."}]}]}). It waits for the answer and prints it as JSON; read it and continue.
 - Speak to the person in the language the skill names (ANALYST_LANGUAGE in the project's sdkit.env, Turkish when unset), in every message, not only in the questions.
 - Write for a non-technical reader: short, plain, no command names or file paths in what you say to them. Keep printing the step banners the skill asks for.
+- Never paste raw lists, tables, file contents or tool output into what you say to them; say in a sentence or two what you found or did.
 - Do not stop to report between steps; stop only when the skill says a person must act.
 
 Task: `

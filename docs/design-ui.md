@@ -1,6 +1,6 @@
 # Design: `sdkit ui`, a local panel for analysts
 
-Status: phase 0 (spike) and phase 1 (Connect and Health screens) are implemented in `internal/ui` and `sdkit ui`; phases 2-4 are not. Issue: [#39](https://github.com/wecii/sdkit/issues/39) (basic web UI for non-technical roles: analyst, PM, QA).
+Status: phases 0 (spike), 1 (Connect and Health) and the Home, New spec and Run screens of phase 2 are implemented in `internal/ui` and `sdkit ui`; the review-finding cards, tasks and the rest are not. Issue: [#39](https://github.com/wecii/sdkit/issues/39) (basic web UI for non-technical roles: analyst, PM, QA).
 
 ## Problem
 
@@ -91,6 +91,15 @@ Checked against Claude Code 2.1 with a real session, not a mock:
 - **Health** runs `sdkit doctor` in-process, groups its lines by plain title (five missing Jira settings are one item), puts what needs doing first, and shows only the news a person acts on; developer topics (CI gate, upgrade hints) and the dozens of passing lines stay under "Teknik ayrıntılar". Claude Code installed and logged in (`claude auth status`) is checked first.
 - Looked at in Orca's built-in browser on a real clone: layout, Turkish copy and the error state read well. A real mouse click through the browser tool did not reach the page in that session (tabs and buttons), while the same handlers fired from script; treat clicking as unverified until it is tried in a normal browser.
 - The panel's ready state is advisory: Start is not blocked, because `generate-specs` ran with a `project.md` that still had TODO sections.
+
+## Phase 2 results (Home, New spec, Run)
+
+- **Landing.** The page asks Health first: everything in order opens Start, anything missing opens the checklist. Saving the Connect form with working credentials and a ready Health moves on to Start by itself. A problem only the Tech Lead can fix (`project.md` with TODO sections) is shown as a note and does not count (`Item.Soft`); a missing Jira token, OpenSpec or Claude Code does.
+- **Home** lists every spec from `spec.List`: pre-spec files, drafts and spec directories, each with a plain state from a new `Step.State` of `sdkit spec next`. A spec that has gone to a PR reads its state from its own `spec.meta.json` (awaiting the Tech Lead, or approved), not from review evidence in the local work directory, which a fresh clone does not have. Open work sorts first, approved last.
+- **New spec** writes the pasted text to the pre-spec directory under a name the panel validates (letters, digits, `-`, `_`; it becomes a file, a branch and a Jira link), refuses when git would not ignore that directory, and refuses to replace an existing pre-spec unless asked.
+- **Run** takes an action and an id, never free text: the page cannot hand the agent instructions (`Task`). The stepper names the eight `generate-specs` steps in Turkish; the banners stay English for the tools that read them. Stop kills the whole process tree and the page offers "Listeye dön".
+- The agent echoed the raw gap list into the chat on the first step; the run rules now tell it to say in a sentence what it found, never to paste lists or tool output.
+- Found by looking at it: a CSS `display` rule overrode `hidden` (a red dot stayed on a ready page), the Bitbucket rule matched the CI warning's `--ci bitbucket|github|gitlab` hint, and a merged spec showed as "in review" in a fresh clone.
 
 ## Open questions
 

@@ -82,11 +82,11 @@ func TestNext(t *testing.T) {
 	}
 	w(".sdkit/sdkit.env", "ANALYST_LANGUAGE=en\n")
 	step := func() Step { return Next(root, "x") }
-	if s := step(); !s.Human || !strings.Contains(s.Action, "no pre-spec") {
+	if s := step(); !s.Human || !strings.Contains(s.Action, "no pre-spec") || s.State != StateNoInput {
 		t.Fatalf("%+v", s)
 	}
 	w("prespec/x.md", "raw")
-	if s := step(); !s.Human || !strings.Contains(s.Action, "ONE batch") {
+	if s := step(); !s.Human || !strings.Contains(s.Action, "ONE batch") || s.State != StateNew {
 		t.Fatalf("questions are collected once, up front: %+v", s)
 	}
 	w(".sdkit/work/spec-draft/x/prd.md", "#### Scenario: AC-X-1\n#### Scenario: AC-X-1\n")
@@ -94,7 +94,27 @@ func TestNext(t *testing.T) {
 		t.Fatalf("mechanical errors are fixed before any reviewer runs: %+v", s)
 	}
 	w(".sdkit/work/spec-draft/x/prd.md", "#### Scenario: AC-X-1\n")
-	if s := step(); s.Human || !strings.Contains(s.Action, "review round") {
+	if s := step(); s.Human || !strings.Contains(s.Action, "review round") || s.State != StateDraft {
 		t.Fatalf("%+v", s)
+	}
+	// a draft and a pre-spec of the same id are one entry; a README and a stray directory name are not specs
+	w("prespec/README.md", "x")
+	w("specs/y/proposal.md", "p")
+	got := []string{}
+	for _, e := range List(root) {
+		got = append(got, e.ID+":"+e.State)
+	}
+	if strings.Join(got, " ") != "x:draft y:output" {
+		t.Fatalf("list = %v", got)
+	}
+	// published specs are read from their record, not from review evidence this machine may not have; open work sorts first
+	w("specs/done/spec.meta.json", `{"id":"done","status":"approved","history":[{"version":"1.0","sha":"a"}]}`)
+	w("specs/wait/spec.meta.json", `{"id":"wait","status":"draft","history":[{"version":"0.1","sha":"b"}]}`)
+	got = got[:0]
+	for _, e := range List(root) {
+		got = append(got, e.ID+":"+e.State)
+	}
+	if strings.Join(got, " ") != "x:draft y:output wait:awaiting done:approved" {
+		t.Fatalf("list = %v", got)
 	}
 }

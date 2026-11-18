@@ -97,6 +97,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/ask", s.ask)
 	mux.HandleFunc("/api/connection", s.connection)
 	mux.HandleFunc("/api/health", s.health)
+	mux.HandleFunc("/api/specs", s.specs)
+	mux.HandleFunc("/api/prespec", s.prespec)
 	return s.guard(mux)
 }
 
@@ -165,10 +167,16 @@ func (s *Server) run(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var in struct {
-		Task string `json:"task"`
+		Action string `json:"action"`
+		ID     string `json:"id"`
 	}
-	if json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&in) != nil || in.Task == "" {
-		http.Error(w, `expected {"task":"..."}`, http.StatusBadRequest)
+	if json.NewDecoder(io.LimitReader(r.Body, 1<<16)).Decode(&in) != nil {
+		http.Error(w, `expected {"action":"generate-specs","id":"..."}`, http.StatusBadRequest)
+		return
+	}
+	task, err := Task(in.Action, in.ID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	s.mu.Lock()
@@ -183,9 +191,9 @@ func (s *Server) run(w http.ResponseWriter, r *http.Request) {
 
 	// the session reaches the ask bridge through these two variables; `sdkit ui ask` reads them
 	askEnv := []string{"SDKIT_UI_URL=http://" + s.addr, "SDKIT_UI_KEY=" + s.secret}
-	prompt := in.Task
+	prompt := task
 	if s.cfg.Prompt != nil {
-		prompt = s.cfg.Prompt(in.Task, askEnv)
+		prompt = s.cfg.Prompt(task, askEnv)
 	}
 	spec := RunSpec{Dir: s.cfg.Dir, Prompt: prompt, Env: append(append([]string{}, s.cfg.Env...), askEnv...), Command: s.cfg.Command, Tools: s.cfg.Tools}
 	go func() {
@@ -297,4 +305,34 @@ func (s *Server) connection(w http.ResponseWriter, r *http.Request) {
 		out.Bitbucket = &c
 	}
 	json.NewEncoder(w).Encode(out)
+}
+
+// specs lists every spec with its state: the home screen.
+func (s *Server) specs(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	items := ListSpecs(s.cfg.Dir)
+	if items == nil {
+		items = []SpecItem{}
+	}
+	json.NewEncoder(w).Encode(items)
+}
+
+// prespec saves {"id","text","overwrite"} as a new pre-spec.
+func (s *Server) prespec(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		ID        string `json:"id"`
+		Text      string `json:"text"`
+		Overwrite bool   `json:"overwrite"`
+	}
+	if r.Method != http.MethodPost || json.NewDecoder(io.LimitReader(r.Body, maxPrespec+4096)).Decode(&in) != nil {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if err := WritePrespec(s.cfg.Dir, in.ID, in.Text, in.Overwrite); err != nil {
+		w.WriteHeader(http.StatusUnprocessableEntity)
+		json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+		return
+	}
+	json.NewEncoder(w).Encode(map[string]string{"id": in.ID})
 }

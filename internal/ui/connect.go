@@ -55,6 +55,9 @@ func ReadConnection(root string) Connection {
 	}
 }
 
+// isLoopback admits http for an address that never leaves this machine (a local Jira stand-in); everything else must be https.
+func isLoopback(host string) bool { return host == "localhost" || host == "127.0.0.1" || host == "::1" }
+
 var (
 	reToken   = regexp.MustCompile(`^[A-Za-z0-9_\-=+/.]{8,}$`) // no `$`, quote or space: the settings reader would expand or cut them
 	reProject = regexp.MustCompile(`^[A-Z][A-Z0-9_]{1,19}$`)
@@ -66,7 +69,7 @@ var (
 func (in ConnectionInput) Validate() error {
 	base, err := url.Parse(strings.TrimSpace(in.JiraBaseURL))
 	switch {
-	case err != nil || base.Scheme != "https" || base.Host == "":
+	case err != nil || base.Host == "" || (base.Scheme != "https" && !(base.Scheme == "http" && isLoopback(base.Hostname()))):
 		return errors.New("Jira adresi https:// ile başlamalı, örneğin https://sirketiniz.atlassian.net")
 	case !reProject.MatchString(in.JiraProject):
 		return errors.New("Jira proje anahtarı büyük harflerle yazılır, örneğin TFF")

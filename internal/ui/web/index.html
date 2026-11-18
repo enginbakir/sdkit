@@ -7,6 +7,7 @@
 <style>
   :root { --ink:#1b1f24; --mute:#5b6470; --line:#d8dce1; --blue:#2563eb; --ok:#15803d; --bad:#b42318; --warn:#b45309; --bg:#f6f7f9; }
   * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
   body { font: 15px/1.5 system-ui, sans-serif; margin: 0; color: var(--ink); background: var(--bg); }
   header { background: #fff; border-bottom: 1px solid var(--line); }
   .bar { max-width: 780px; margin: 0 auto; padding: 0 1rem; display: flex; align-items: center; gap: 1.5rem; }
@@ -44,6 +45,12 @@
   .q label { font-weight: 400; margin: .25rem 0; display: block; }
   .q small { color: var(--mute); }
   .fail { color: var(--bad); }
+  .spec { display:flex; align-items:center; gap:.8rem; padding:.65rem 0; border-top:1px solid var(--line); }
+  .spec:first-child { border-top:0; }
+  .spec .n { font-weight:600; } .spec .l { color:var(--mute); font-size:.88rem; }
+  .spec .grow { flex:1; }
+  .chip { font-size:.78rem; padding:.1rem .55rem; border-radius:1rem; background:#fff3c4; color:var(--warn); }
+  .icon.soft { background: var(--warn); }
   details { margin-top: 1rem; color: var(--mute); font-size: .85rem; }
   pre { white-space: pre-wrap; margin: .4rem 0 0; }
 </style>
@@ -62,17 +69,30 @@
 <main>
   <section id="run">
     <div class="banner" id="notready" hidden>Kurulumda eksikler var. Başlamadan önce <a href="#" data-go="health">Sağlık</a> sayfasına bakın.</div>
-    <div class="card" id="start">
-      <h2>Ne yapmak istiyorsun?</h2>
-      <p class="hint">Örneğin: <i>odeme-akisi ön-spec'inden spec üret</i></p>
-      <textarea id="task" aria-label="Görev"></textarea>
-      <div class="row"><button class="btn primary" id="go">Başlat</button></div>
+    <div id="home">
+      <div class="card">
+        <h2>Yeni spec</h2>
+        <p class="hint">Elinizdeki ön-spec metnini yapıştırın. Eksik noktaları size soracağım.</p>
+        <label for="prespecId">Spec adı</label>
+        <p class="hint">Harf, rakam ve tire kullanın. Örneğin: odeme-akisi</p>
+        <input type="text" id="prespecId" maxlength="60" autocomplete="off">
+        <label for="prespecText">Ön-spec</label>
+        <textarea id="prespecText" aria-label="Ön-spec"></textarea>
+        <div class="row"><button class="btn primary" id="create">Spec üret</button><span class="fail" id="createerr"></span></div>
+      </div>
+      <div class="card">
+        <h2>Spec'lerim</h2>
+        <div id="specs"><p class="hint">Yükleniyor...</p></div>
+      </div>
     </div>
-    <div id="steps"></div>
-    <div id="log"></div>
-    <div id="questions"></div>
-    <p><button class="btn" id="stop" hidden>Durdur</button></p>
-    <details><summary>Ayrıntılar</summary><pre id="tools"></pre></details>
+    <div id="job" hidden>
+      <h2 id="jobtitle" style="font-size:1.05rem"></h2>
+      <div id="steps"></div>
+      <div id="log"></div>
+      <div id="questions"></div>
+      <div class="row"><button class="btn" id="stop" hidden>Durdur</button><button class="btn primary" id="back" hidden>Listeye dön</button></div>
+      <details><summary>Ayrıntılar</summary><pre id="tools"></pre></details>
+    </div>
   </section>
 
   <section id="connect" hidden>
@@ -119,6 +139,7 @@ function show(tab) {
     $('t-' + s).setAttribute('aria-selected', s === tab);
   }
   if (tab === 'health') loadHealth();
+  if (tab === 'run') loadSpecs();
   if (tab === 'connect') loadConnection();
 }
 document.querySelectorAll('[data-tab]').forEach(b => b.onclick = () => show(b.dataset.tab));
@@ -133,7 +154,7 @@ async function loadHealth() {
   const box = $('items'); box.textContent = '';
   for (const it of h.items.filter(i => i.main)) {
     const d = document.createElement('div'); d.className = 'item';
-    const ic = document.createElement('div'); ic.className = 'icon ' + it.level; ic.textContent = it.level === 'ok' ? '✓' : '!';
+    const ic = document.createElement('div'); ic.className = 'icon ' + (it.soft ? 'soft' : it.level); ic.textContent = it.level === 'ok' ? '✓' : '!';
     const tx = document.createElement('div');
     const t = document.createElement('div'); t.className = 't'; t.textContent = it.title; tx.appendChild(t);
     if (it.help) { const p = document.createElement('div'); p.className = 'h'; p.textContent = it.help; tx.appendChild(p); }
@@ -169,12 +190,53 @@ $('form').onsubmit = async e => {
       result(j.jira.ok, j.jira.ok ? 'Jira bağlandı: ' + j.jira.who : j.jira.message);
       if (j.bitbucket) result(j.bitbucket.ok, j.bitbucket.ok ? 'Bitbucket bağlandı: ' + j.bitbucket.who : j.bitbucket.message);
       $('jiraToken').value = $('bitbucketToken').value = '';
-      loadConnection(); loadHealth();
+      loadConnection();
+      const h = await (await fetch('/api/health', { headers: H })).json();
+      $('dot').hidden = h.ready; $('notready').hidden = h.ready;
+      if (h.ready && j.jira.ok && (!j.bitbucket || j.bitbucket.ok)) setTimeout(() => show('run'), 1200); else loadHealth();
     }
   } finally { $('save').disabled = false; }
 };
 
 // ---- Run
+let jobId = '';
+function showJob(id) { jobId = id || jobId; $('home').hidden = true; $('job').hidden = false; $('jobtitle').textContent = jobId; }
+function showHome() { $('job').hidden = true; $('home').hidden = false; loadSpecs(); }
+function resetJob() { for (const k in steps) delete steps[k]; $('steps').textContent = ''; $('log').textContent = ''; $('tools').textContent = ''; $('questions').textContent = ''; $('back').hidden = true; }
+
+async function loadSpecs() {
+  const list = await (await fetch('/api/specs', { headers: H })).json();
+  const box = $('specs'); box.textContent = '';
+  if (!list.length) { box.innerHTML = '<p class="hint">Henüz spec yok. Yukarıdan yeni bir tane başlatın.</p>'; return; }
+  for (const sp of list) {
+    const d = document.createElement('div'); d.className = 'spec';
+    const g = document.createElement('div'); g.className = 'grow';
+    const n = document.createElement('div'); n.className = 'n'; n.textContent = sp.id;
+    const l = document.createElement('div'); l.className = 'l'; l.textContent = sp.label;
+    g.append(n, l); d.appendChild(g);
+    if (sp.continue) {
+      const b = document.createElement('button'); b.className = 'btn'; b.textContent = 'Devam et';
+      b.onclick = () => start(sp.id); d.appendChild(b);
+    }
+    box.appendChild(d);
+  }
+}
+async function start(id) {
+  resetJob(); showJob(id);
+  const r = await fetch('/api/run', { method: 'POST', headers: H, body: JSON.stringify({ action: 'generate-specs', id }) });
+  if (!r.ok) { addMsg(await r.text(), 'fail'); $('back').hidden = false; }
+}
+$('create').onclick = async () => {
+  $('createerr').textContent = '';
+  const id = $('prespecId').value.trim(), text = $('prespecText').value;
+  const r = await fetch('/api/prespec', { method: 'POST', headers: H, body: JSON.stringify({ id, text }) });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) { $('createerr').textContent = j.error || 'Kaydedilemedi'; return; }
+  $('prespecId').value = $('prespecText').value = '';
+  start(j.id);
+};
+$('back').onclick = showHome;
+
 function renderStep(e) {
   let el = steps[e.step];
   if (!el) { el = steps[e.step] = document.createElement('span'); $('steps').appendChild(el); }
@@ -190,10 +252,10 @@ function on(e) {
   else if (e.kind === 'tool') $('tools').textContent += e.name + ': ' + e.text + '\n';
   else if (e.kind === 'result') {
     addMsg(e.failed ? (e.text || 'Durdu.') : 'Bitti.', e.failed ? 'fail' : '');
-    $('stop').hidden = true; $('start').hidden = false;
+    $('stop').hidden = true; $('back').hidden = false;
   } else if (e.kind === 'status') {
     if (e.name === 'question') loadQuestions();
-    if (e.text === 'started') { $('start').hidden = true; $('stop').hidden = false; }
+    if (e.text === 'started') { resetJob(); showJob(); $('stop').hidden = false; }
   }
 }
 async function loadQuestions() {
@@ -227,16 +289,12 @@ function renderQuestion(q) {
   };
   box.appendChild(btn); $('questions').appendChild(box);
 }
-$('go').onclick = async () => {
-  const task = $('task').value.trim(); if (!task) return;
-  const r = await fetch('/api/run', { method: 'POST', headers: H, body: JSON.stringify({ task }) });
-  if (!r.ok) alert(await r.text());
-};
 $('stop').onclick = () => fetch('/api/stop', { method: 'POST', headers: H });
 
 const es = new EventSource('/api/events?k=' + encodeURIComponent(key));
 es.onmessage = m => on(JSON.parse(m.data));
-loadQuestions();
+loadQuestions(); loadSpecs();
+// onboarding decides where the person lands: everything in order means the start page, anything missing means the checklist
 fetch('/api/health', { headers: H }).then(r => r.json()).then(h => { $('dot').hidden = h.ready; $('notready').hidden = h.ready; if (!h.ready) show('health'); });
 </script>
 </body>

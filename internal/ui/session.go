@@ -87,7 +87,7 @@ func Run(ctx context.Context, s RunSpec, log *Log) error {
 		bin = "claude"
 	}
 	if _, err := proc.LookPath(bin); err != nil {
-		log.Add(Event{Kind: KindResult, Failed: true, Text: fmt.Sprintf("%s is not installed or not on PATH; install Claude Code and log in first", bin)})
+		log.Add(Event{Kind: KindResult, Failed: true, Text: fmt.Sprintf("%s kurulu değil; önce Claude Code kurulmalı ve giriş yapılmalı", bin)})
 		return err
 	}
 	cmd := exec.Command(bin, BuildArgs(s)...)
@@ -130,9 +130,9 @@ func Run(ctx context.Context, s RunSpec, log *Log) error {
 	close(done)
 	switch {
 	case ctx.Err() != nil:
-		log.Add(Event{Kind: KindResult, Failed: true, Text: "stopped"})
+		log.Add(Event{Kind: KindResult, Failed: true, Text: "Durduruldu."})
 	case last == nil:
-		log.Add(Event{Kind: KindResult, Failed: true, Text: "the session ended without a result"})
+		log.Add(Event{Kind: KindResult, Failed: true, Text: "Oturum sonuç vermeden kapandı."})
 	default:
 		log.Add(*last)
 	}
