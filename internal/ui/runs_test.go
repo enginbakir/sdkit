@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -140,5 +141,25 @@ func TestQuestionsBelongToTheSpecThatAsked(t *testing.T) {
 	}
 	if _, body := call("GET", "/api/questions", ""); strings.Count(body, `"spec"`) != 2 {
 		t.Errorf("without an id, all of them: %s", body)
+	}
+}
+
+// A question that never reaches the form must not look like one that was asked: the agent is told why, and so is the person.
+func TestRefusedQuestionIsShownToThePerson(t *testing.T) {
+	root := scratchRepo(t, "")
+	srv, _ := panel(t, root, 3)
+	l := srv.logFor("odeme")
+	h := srv.Handler()
+	req := httptest.NewRequest("POST", "/api/ask", strings.NewReader(`{"questions":[{"question":"   "}]}`))
+	req.Host, req.Header = srv.addr, http.Header{"X-Sdkit-Key": {"k"}, "X-Sdkit-Spec": {"odeme"}}
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("the agent is told: %d", rec.Code)
+	}
+	past, _, cancel := l.Since(0)
+	cancel()
+	if len(past) != 1 || past[0].Name != "ask-refused" || past[0].Text == "" {
+		t.Errorf("the person is told too: %+v", past)
 	}
 }

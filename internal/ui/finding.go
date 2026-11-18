@@ -49,6 +49,7 @@ func clip(s string, n int) string {
 // NormalizeQuestions parses what the agent sent, drops what the page cannot show, and bounds what it can. A malformed
 // severity or class is dropped, not refused: the question itself still has to reach the person.
 func NormalizeQuestions(raw []byte) ([]byte, error) {
+	raw = canonicalQuestions(raw)
 	var in struct {
 		Questions []QuestionItem `json:"questions"`
 	}
@@ -85,4 +86,47 @@ func NormalizeQuestions(raw []byte) ([]byte, error) {
 		}
 	}
 	return json.Marshal(in)
+}
+
+// canonicalQuestions accepts the shapes an agent actually sends and turns them into {"questions":[{...,"options":[{"label"}]}]}: a
+// single question object, a bare list of questions, options written as plain strings. A shape it does not know is returned as it is
+// and refused by the caller with the usual message. A question the person cannot see is worse than a lenient parser.
+func canonicalQuestions(raw []byte) []byte {
+	var v any
+	if json.Unmarshal(raw, &v) != nil {
+		return raw
+	}
+	var list []any
+	switch t := v.(type) {
+	case []any:
+		list = t
+	case map[string]any:
+		if q, ok := t["questions"].([]any); ok {
+			list = q
+		} else if _, ok := t["question"]; ok {
+			list = []any{t}
+		} else {
+			return raw
+		}
+	default:
+		return raw
+	}
+	for _, q := range list {
+		m, ok := q.(map[string]any)
+		if !ok {
+			continue
+		}
+		if opts, ok := m["options"].([]any); ok {
+			for i, o := range opts {
+				if str, ok := o.(string); ok {
+					opts[i] = map[string]any{"label": str}
+				}
+			}
+		}
+	}
+	b, err := json.Marshal(map[string]any{"questions": list})
+	if err != nil {
+		return raw
+	}
+	return b
 }

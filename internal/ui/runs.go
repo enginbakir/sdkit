@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -222,7 +223,7 @@ func (s *Server) run(w http.ResponseWriter, r *http.Request) {
 		resume = ResumeFor(s.cfg.Dir, in.ID, root, s.cfg.SessionExists)[in.Action].Session
 	}
 	if resume != "" {
-		prompt += "\n\nThis is the earlier session, resumed: carry on from where it stopped (check `sdkit spec next " + in.ID + "` first) and do not start the steps over."
+		prompt += "\n\nThis is the earlier session, resumed: carry on from where it stopped (check `sdkit spec next " + in.ID + "` first) and do not start the steps over. If your last message put a question to the person in plain text, ask it again now with sdkit ui ask: they only see the form."
 	}
 	spec := RunSpec{Resume: resume, Dir: root, Prompt: prompt, Env: append(append(append([]string{}, s.cfg.Env...), askEnv...), GitAuthEnv(s.cfg.Dir)...), Command: s.cfg.Command, Tools: s.cfg.Tools}
 	// the run ledger is how a report finds its spec: the host's session id, written down with what the run was for and where
@@ -284,6 +285,10 @@ func (s *Server) ask(w http.ResponseWriter, r *http.Request) {
 	}
 	a, err := s.broker.Ask(r.Context(), body, spec)
 	if err != nil {
+		// the agent is told, and so is the person: a question that never reached the form must not look like one that was asked
+		if r.Context().Err() == nil {
+			s.logFor(spec).Add(Event{Kind: KindStatus, Name: "ask-refused", Text: clip(err.Error(), 300)})
+		}
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -307,4 +312,13 @@ func (s *Server) specCleanup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// info is the footer of the sidebar: whose panel this is and which repo and branch it is on.
+func (s *Server) info(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, map[string]string{
+		"repo":   filepath.Base(s.cfg.Dir),
+		"branch": Branch(s.cfg.Dir),
+		"user":   ReadConnection(s.cfg.Dir).JiraUser,
+	})
 }
