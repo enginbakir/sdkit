@@ -19,6 +19,7 @@ const (
 	stuckAfter = 10 * time.Second
 	maxWait    = 30 * time.Second
 	poll       = 10 * time.Millisecond
+	deniedFor  = 2 * time.Second // how long "access denied" is taken for a lock being released before it is believed
 )
 
 // Lock takes <path>.lock (a directory made by os.Mkdir, which is atomic) and returns the function that releases it.
@@ -28,13 +29,23 @@ func Lock(path string) (func(), error) {
 		return nil, err
 	}
 	start := time.Now()
+	var deniedSince time.Time
 	for {
 		err := os.Mkdir(l, 0o755)
 		if err == nil {
 			break
 		}
-		if !errors.Is(err, os.ErrExist) {
+		if !lockBusy(err, runtime.GOOS) {
 			return nil, err
+		}
+		if errors.Is(err, os.ErrExist) {
+			deniedSince = time.Time{}
+		} else { // Windows: the lock directory is being deleted by the holder that just released it
+			if deniedSince.IsZero() {
+				deniedSince = time.Now()
+			} else if time.Since(deniedSince) > deniedFor {
+				return nil, err // it does not go away: a real permission problem
+			}
 		}
 		if st, e := os.Stat(l); e == nil {
 			age := time.Since(st.ModTime())
@@ -50,6 +61,12 @@ func Lock(path string) (func(), error) {
 	}
 	os.WriteFile(filepath.Join(l, "pid"), []byte(strconv.Itoa(os.Getpid())), 0o644)
 	return func() { os.RemoveAll(l) }, nil
+}
+
+// lockBusy says whether a failed Mkdir of the lock means "someone holds it, wait". On Windows a directory that is being deleted
+// answers Mkdir with "access denied", not "exists"; treating that as a failure lost updates when two writers met at a release.
+func lockBusy(err error, goos string) bool {
+	return errors.Is(err, os.ErrExist) || (goos == "windows" && errors.Is(err, os.ErrPermission))
 }
 
 func ownerGone(l string) bool {
