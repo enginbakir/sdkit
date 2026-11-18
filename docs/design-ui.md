@@ -1,6 +1,6 @@
 # Design: `sdkit ui`, a local panel for analysts
 
-Status: phases 0 (spike), 1 (Connect and Health) and the Home, New spec and Run screens of phase 2 are implemented in `internal/ui` and `sdkit ui`; the review-finding cards, the tasks screen (plan gate) and the update-specs / merge-specs entries are too; the QA role is not. Issue: [#39](https://github.com/wecii/sdkit/issues/39) (basic web UI for non-technical roles: analyst, PM, QA).
+Status: shipped in 2.3.1: Connect (Configuration), Health (Onboarding), Specs (list, spec page, hand edits, new spec, run, review-finding cards, tasks with the plan gate, update and merge entries), Reports, resume, several specs at once in worktrees. Open: QA in the panel, publishing from a worktree seen against a real Bitbucket, a read-only view for the Tech Lead. Issue: [#39](https://github.com/wecii/sdkit/issues/39) (basic web UI for non-technical roles: analyst, PM, QA).
 
 ## Problem
 
