@@ -97,6 +97,8 @@
   .flist button:hover { background: #f1f3f6; } .flist button.sel { background: #eef3ff; font-weight: 600; } .flist .lock::after { content: ' \1F512'; font-size: .75rem; }
   #ftext { width: 100%; min-height: 28rem; font: .86rem/1.5 ui-monospace, monospace; }
   @media (max-width: 1000px) { .editor { grid-template-columns: 1fr; } }
+  .num { text-align: right; white-space: nowrap; } .tbl tr.click { cursor: pointer; } .tbl tr.click:hover td { background: #f6f8ff; }
+  .tag { font-size: .75rem; padding: .05rem .5rem; border-radius: 1rem; background: #e6e8eb; } .tag.warn { background: #fff3c4; color: var(--warn); }
   .btns { display: flex; gap: .4rem; flex-wrap: wrap; justify-content: flex-end; }
   details { margin-top: 1rem; color: var(--mute); font-size: .85rem; }
   pre { white-space: pre-wrap; margin: .4rem 0 0; }
@@ -108,6 +110,7 @@
   <h1>sdkit</h1>
   <nav role="tablist" aria-orientation="vertical">
     <button role="tab" id="t-run" aria-selected="true" data-tab="run"><span class="ico">&#9776;</span>Specs<span class="dot run" id="rundot" hidden></span></button>
+    <button role="tab" id="t-reports" aria-selected="false" data-tab="reports"><span class="ico">&#9638;</span>Reports</button>
     <button role="tab" id="t-connect" aria-selected="false" data-tab="connect"><span class="ico">&#128279;</span>Configuration</button>
     <button role="tab" id="t-health" aria-selected="false" data-tab="health"><span class="ico">&#10003;</span>Onboarding<span class="dot" id="dot" hidden></span></button>
   </nav>
@@ -143,6 +146,7 @@
         <div class="card"><h2>Bu adımda yapabilecekleriniz</h2><div class="acts" id="dacts"></div><div id="dmsg"></div></div>
         <div class="card"><h2>Şu ana kadar yapılanlar</h2><ul class="done" id="ddone"></ul></div>
       </div>
+      <div class="card"><h2>Raporlar</h2><div id="dreports"><p class="hint">Yükleniyor...</p></div></div>
       <div class="card">
         <h2>Dosyalar</h2>
         <p class="hint" id="dfilehint">Bir dosya seçin. Düzenlediğinizde &ldquo;Elle düzelttim, devam et&rdquo; farkı esas alır.</p>
@@ -190,6 +194,14 @@
         </div>
       </div>
     </div>
+  </section>
+
+  <section id="reports" hidden>
+    <div class="pagehead"><h2>Reports</h2><p>Her çalışmanın oturum raporu: kaç token, tahmini maliyet, hangi rol ne yaptı. Panelden başlattığınız çalışmalar spec'iyle eşleşir.</p></div>
+    <div class="card"><h2>Spec bazında</h2><div id="repspecs"></div></div>
+    <div class="card"><h2>Oturumlar</h2><div id="repsessions"></div>
+      <p class="hint">Maliyet, API fiyatlarıyla hesaplanmış tahmini karşılıktır; faturanız değildir. &ldquo;kısmi&rdquo;: ölçülemeyen çalışmalar var, gerçek değer bundan yüksek olabilir. Panel dışında (terminalde) başlatılan oturumların hangi spec'e ait olduğu bilinmez, eşleştirilmez.</p></div>
+    <div class="card" id="repview" hidden><h2 id="repviewtitle">Rapor</h2><pre id="reptext"></pre></div>
   </section>
 
   <section id="connect" hidden>
@@ -240,12 +252,13 @@ const $ = id => document.getElementById(id);
 const steps = {}, seen = new Set();
 
 function show(tab) {
-  for (const s of ['run', 'connect', 'health']) {
+  for (const s of ['run', 'reports', 'connect', 'health']) {
     $(s).hidden = s !== tab;
     $('t-' + s).setAttribute('aria-selected', s === tab);
   }
   if (tab === 'health') loadHealth();
   if (tab === 'run') loadSpecs();
+  if (tab === 'reports') loadReports();
   if (tab === 'connect') loadConnection();
 }
 document.querySelectorAll('[data-tab]').forEach(b => b.onclick = () => show(b.dataset.tab));
@@ -333,6 +346,7 @@ function findingCard(f) {
 const ACTIONS = {
   'generate-specs': ['Spec üretimi', 'Eksik noktaları soracağım, taslağı hazırlayıp gözden geçireceğim.'],
   'update-specs': ['Spec güncelleme', 'Tech Lead yorumlarını ve sizin düzenlemelerinizi işliyorum.'],
+  'update-manual': ['Elle düzeltmeden sonra güncelleme', 'Düzenlemelerinizin farkını esas alıp review ediyorum, PR\'ı güncelliyorum.'],
   'merge-specs': ['Değişiklikleri birleştirme', 'Aynı onaylı sürüm üzerinde yazılmış değişiklikler tek revizyonda birleştirilir.'],
   'generate-tasks': ['Task üretimi', 'Önce plan hazırlanır; siz onaylamadan Jira\'ya yazılmaz.'],
 };
@@ -360,6 +374,50 @@ async function loadSpecs() {
     box.appendChild(d);
   }
 }
+// ---- Reports: what each run cost, and which spec it was for
+const ACT_LABEL = { 'generate-specs': 'Spec üretimi', 'update-specs': 'Güncelleme', 'update-manual': 'Elle düzeltme sonrası güncelleme', 'merge-specs': 'Birleştirme', 'generate-tasks': 'Task üretimi' };
+const OUTCOME = { done: 'bitti', failed: 'hata', stopped: 'durduruldu' };
+const outcomeText = x => x.outcome ? (OUTCOME[x.outcome] || x.outcome) : (x.state === 'interrupted' ? 'kesildi' : x.state);
+const nf = n => Number(n || 0).toLocaleString('tr-TR');
+const money = (v, state) => state === 'unavailable' ? 'N/A' : '$' + Number(v || 0).toFixed(2) + (state === 'partial' ? ' (kısmi)' : '');
+const when = iso => { const d = new Date(iso); return isNaN(d) ? (iso || '-') : d.toLocaleString('tr-TR', { dateStyle: 'short', timeStyle: 'short' }); };
+function table(heads, rows) {
+  const t = document.createElement('table'); t.className = 'tbl';
+  const hr = t.createTHead().insertRow(); for (const h of heads) { const th = document.createElement('th'); th.textContent = h; hr.appendChild(th); }
+  const tb = t.createTBody();
+  for (const r of rows) { const tr = tb.insertRow(); if (r.onclick) { tr.className = 'click'; tr.onclick = r.onclick; }
+    for (const c of r.cells) { const td = tr.insertCell(); if (c && c.num) td.className = 'num'; const v = c && c.el ? c.el : (c && c.text !== undefined ? c.text : c); if (v instanceof Node) td.appendChild(v); else td.textContent = v; } }
+  return t;
+}
+function openBtn(id) { const b = document.createElement('button'); b.className = 'btn'; b.textContent = 'Raporu aç'; b.onclick = e => { e.stopPropagation(); showReport(id); }; return b; }
+async function showReport(id) {
+  show('reports');
+  const r = await fetch('/api/report?id=' + encodeURIComponent(id), { headers: H }); const j = await r.json();
+  $('repview').hidden = false; $('repviewtitle').textContent = 'Rapor: ' + id; $('reptext').textContent = r.ok ? j.text : (j.error || 'Rapor okunamadı');
+  $('repview').scrollIntoView();
+}
+async function loadReports() {
+  const d = await (await fetch('/api/reports', { headers: H })).json();
+  const sp = $('repspecs'); sp.textContent = '';
+  if (!d.specs.length) { sp.innerHTML = '<p class="hint">Henüz panelden çalıştırılmış bir spec yok. Bir çalışma bitince raporu burada, spec adıyla eşleşmiş görünür.</p>'; }
+  else sp.appendChild(table(['Spec', 'Oturum', 'Token', 'Tahmini maliyet', 'Son çalışma'], d.specs.map(x => ({ onclick: () => openDetail(x.spec), cells: [x.spec, { text: x.sessions, num: 1 }, { text: nf(x.tokens), num: 1 }, { text: money(x.costUsd, x.partial ? 'partial' : 'complete'), num: 1 }, when(x.last)] }))));
+  const se = $('repsessions'); se.textContent = '';
+  if (!d.sessions.length) { se.innerHTML = '<p class="hint">Bu projede henüz oturum raporu yok.</p>'; return; }
+  se.appendChild(table(['Zaman', 'Spec ve işlem', 'Durum', 'Token', 'Tahmini maliyet', ''], d.sessions.map(x => ({ cells: [
+    when(x.last),
+    x.spec ? { el: (() => { const a = document.createElement('a'); a.href = '#'; a.textContent = x.spec; a.onclick = e => { e.preventDefault(); openDetail(x.spec); }; const s = document.createElement('span'); s.textContent = ' · ' + (ACT_LABEL[x.action] || x.action); const f = document.createElement('span'); f.append(a, s); return f; })() } : 'Panel dışı oturum',
+    outcomeText(x),
+    { text: nf(x.tokens), num: 1 }, { text: money(x.costUsd, x.costState), num: 1 }, { el: openBtn(x.id) }] }))));
+}
+async function loadSpecReports(id) {
+  const box = $('dreports'); box.textContent = '';
+  const list = await (await fetch('/api/spec/reports?id=' + encodeURIComponent(id), { headers: H })).json();
+  if (!list.length) { box.innerHTML = '<p class="hint">Bu spec için panelden çalıştırılmış bir oturum raporu yok. Çalıştırdığınızda burada görünür.</p>'; return; }
+  const tok = list.reduce((a, r) => a + r.tokens, 0), usd = list.reduce((a, r) => a + r.costUsd, 0), part = list.some(r => r.costState === 'partial' || r.costState === 'unavailable' || r.tokenState === 'partial');
+  const sum = document.createElement('p'); sum.textContent = list.length + ' oturum · ' + nf(tok) + ' token · tahmini ' + money(usd, part ? 'partial' : 'complete'); box.appendChild(sum);
+  box.appendChild(table(['Zaman', 'İşlem', 'Sonuç', 'Token', 'Tahmini maliyet', ''], list.map(x => ({ cells: [when(x.last), ACT_LABEL[x.action] || x.action, outcomeText(x), { text: nf(x.tokens), num: 1 }, { text: money(x.costUsd, x.costState), num: 1 }, { el: openBtn(x.id) }] }))));
+}
+
 // ---- Spec page: where it is, what can be done now, what was done, and its files
 let curFile = '';
 async function openDetail(id) {
@@ -379,6 +437,7 @@ async function openDetail(id) {
     const b = document.createElement('button'); b.className = 'btn' + (a.primary ? ' primary' : ''); b.textContent = a.label; b.onclick = () => doAction(a.key, d.id);
     row.append(t, b); ac.appendChild(row);
   }
+  loadSpecReports(d.id);
   const dn = $('ddone'); dn.textContent = '';
   for (const t of d.done) { const li = document.createElement('li'); li.textContent = t; dn.appendChild(li); }
   if (!d.done.length) { const li = document.createElement('li'); li.textContent = 'Henüz bir şey yapılmadı.'; dn.appendChild(li); }

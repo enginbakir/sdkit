@@ -129,6 +129,15 @@ One finding of this pass: Jira being unreachable (offline, service down) was cou
 
 The sidebar reads Specs (the list and the spec pages), Configuration (the Connect screen) and Onboarding (Health). A run is a process on the server, so it goes on whichever page or browser tab is open. Two things made that look like a stall and are fixed: a question waiting for the person was drawn on a page they had left, so Specs now shows a count badge and the tab title says "(1) Cevabınız bekleniyor", and a blue dot while a run is going; and a reloaded page did not know what the replayed events were a run of, so `GET /api/run` returns the running flag and the last action and id.
 
+## Reports, and how a report finds its spec
+
+The kit files a session report under the host's session id (`<project-dir>/reports/<session>.json`, schema `value-report/1`); it says nothing about which spec the session worked on, and the usage ledger is keyed by task slug, which the analyst flow does not set. So the link cannot be read from the kit's records. The panel starts every run for a spec, so it writes down `{session, spec, action, start, end, outcome}` in `<project-dir>/work/ui/runs.jsonl` (the session id is the `session_id` of the host's first stream-json line; a start line when it appears, an end line when the process ends, so a panel that dies mid-run still keeps the link). A report is linked to a spec only through that ledger; a session started in a terminal shows as "Panel dışı oturum" and is not matched by time or branch name.
+
+- **Reports** (sidebar): totals per spec (sessions, tokens, estimated cost, last run; clicking opens the spec) and every session with its spec and action, outcome, tokens and cost, and the kit's own markdown report on "Raporu aç". A run whose report is not stored yet is built from the records (`sdkit report session <id>`), which the kit never stores while a session may still run.
+- **Spec page**: a "Raporlar" card with that spec's runs and their sum.
+- **Honesty about numbers.** Cost is the API-priced equivalent, not the bill. Only the kit's `partial` (unmeasured or unpriced runs) and `unavailable` states make a figure a lower bound and say so; `estimated` and `recorded` do not.
+- Seen against the real `tff-specs` reports (18 sessions, all unlinked, as they should be) and a scratch repo whose ledger links two of them to a spec.
+
 ## Open questions
 
 - Who pays for the Claude Code access of each analyst (subscription or API key)?

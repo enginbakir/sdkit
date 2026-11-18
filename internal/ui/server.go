@@ -107,7 +107,10 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/health", s.health)
 	mux.HandleFunc("/api/specs", s.specs)
 	mux.HandleFunc("/api/prespec", s.prespec)
+	mux.HandleFunc("/api/reports", s.reports)
+	mux.HandleFunc("/api/report", s.reportText)
 	mux.HandleFunc("/api/spec", s.specDetail)
+	mux.HandleFunc("/api/spec/reports", s.specReports)
 	mux.HandleFunc("/api/spec/file", s.specFile)
 	mux.HandleFunc("/api/spec/branch", s.specBranch)
 	mux.HandleFunc("/api/spec/change", s.specChange)
@@ -233,8 +236,23 @@ func (s *Server) run(w http.ResponseWriter, r *http.Request) {
 		prompt = s.cfg.Prompt(task, askEnv)
 	}
 	spec := RunSpec{Dir: s.cfg.Dir, Prompt: prompt, Env: append(append(append([]string{}, s.cfg.Env...), askEnv...), GitAuthEnv(s.cfg.Dir)...), Command: s.cfg.Command, Tools: s.cfg.Tools}
+	// the run ledger is how a report finds its spec: the host's session id, written down with what the run was for
+	var session string
+	spec.OnSession = func(id string) {
+		session = id
+		RecordRun(s.cfg.Dir, RunRecord{Session: id, Spec: in.ID, Action: in.Action, Start: nowStamp()})
+	}
 	go func() {
-		Run(ctx, spec, s.log)
+		err := Run(ctx, spec, s.log)
+		if session != "" {
+			out := "done"
+			if ctx.Err() != nil {
+				out = "stopped"
+			} else if err != nil {
+				out = "failed"
+			}
+			RecordRun(s.cfg.Dir, RunRecord{Session: session, Spec: in.ID, Action: in.Action, End: nowStamp(), Outcome: out})
+		}
 		s.mu.Lock()
 		s.cancel = nil
 		s.mu.Unlock()
@@ -504,4 +522,22 @@ func (s *Server) specChange(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"slug": slug})
+}
+
+// reports lists the kit's session reports, each linked to the spec the panel ran it for (when it did), and the per-spec totals.
+func (s *Server) reports(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, ListReports(s.cfg.Dir))
+}
+
+func (s *Server) specReports(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, SpecReports(s.cfg.Dir, r.URL.Query().Get("id")))
+}
+
+func (s *Server) reportText(w http.ResponseWriter, r *http.Request) {
+	t, err := ReportMarkdown(s.cfg.Dir, r.URL.Query().Get("id"))
+	if err != nil {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"text": t})
 }
