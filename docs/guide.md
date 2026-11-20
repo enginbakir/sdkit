@@ -43,8 +43,8 @@ Two extra principles: **tokens are neither wasted nor starved** (section 18), an
 
 | Part | Count | What it does |
 |---|---|---|
-| **Skill** | 8 | Instruction sets that run the task: `spec-driven-dev` (main flow, loaded progressively via `references/`), `incident-to-rule`, `scaffold-init`, `scaffold-doctor`, and the role-aware set `generate-specs`, `update-specs`, `merge-specs`, `generate-tasks` ([role-aware.md](role-aware.md)) |
-| **Role** | 12 | Tool-independent definitions under `core/roles/`: `orchestrator`, `analyst`, `scout`, `engineer`, `developer`, `test-writer`, `devsecops`, `reviewer`, `security-auditor`, `spec-reviewer`, `prespec-gaps`, `verifier`. Eleven are generated as subagents; `verifier`'s strong-tier twin `verifier-deep` (via `deep: strong`) is generated too, so **12 role files** per host |
+| **Skill** | 9 | Instruction sets that run the task: `spec-driven-dev` (main flow, loaded progressively via `references/`), `incident-to-rule`, `scaffold-init`, `scaffold-doctor`, and the role-aware set `generate-specs`, `generate-design`, `update-specs`, `merge-specs`, `generate-tasks` ([role-aware.md](role-aware.md)) |
+| **Role** | 13 | Tool-independent definitions under `core/roles/`: `orchestrator`, `analyst`, `scout`, `engineer`, `developer`, `test-writer`, `devsecops`, `reviewer`, `security-auditor`, `spec-reviewer`, `prespec-gaps`, `designer`, `verifier`. Twelve are generated as subagents; `verifier`'s strong-tier twin `verifier-deep` (via `deep: strong`) is generated too, so **13 role files** per host |
 | **Hook** | 20 | 20 guards and info hooks inside the one `sdkit hook` entry (`internal/hook`, one file each), run automatically during tool steps and session boundaries: `session-context`, `session-memory`, `check-tools`, `guard-secrets`, `guard-protected`, `frozen-tests`, `guard-prod`, `guard-git`, `guard-readonly`, `guard-phase`, `guard-pr`, `post-edit-fmt`, `stop-verify`, `record-verdict`, `value-report`, `usage-log`, `guard-budget`, `guard-noisy`, `result-size`, `check-contract`. Claude Code wires them in `hooks/hooks.json`; Gemini and Cursor call the same entry with `sdkit hook --host`, OpenCode through a plugin. Where there are no hooks, git hooks (`sdkit guard`) enforce most of the same rules |
 | **Verification engine** | 1 core + steps per stack | `internal/verify` (diff base, changed files, `verify.d`, green-result cache) + `internal/stack/<stack>.go` (the stack's own checks) |
 | **Stack** | 7 | `go`, `spring-boot` and `jvm` (Maven/Gradle), `python`, `nextjs`, `react-native` (the last two share `internal/stack/node.go`) and `generic` if detection fails. Data in `stacks/<stack>/`, contract: `stacks/README.md` |
@@ -265,6 +265,7 @@ close off writing files via `Bash`). Non-Claude tools and a direct `git push` ar
 | `scaffold-init` | When setting up a new repo, **once** | Asks which hosts (Claude/Codex/OpenCode/Cursor/Gemini), runs `sdkit init --host ...`, helps fill in `project.md`, runs doctor at the end |
 | `scaffold-doctor` | After install, or if something seems not to work | Runs `sdkit doctor` and says what to change where for every `FAIL` |
 | `generate-specs` | Analyst environment (`SDKIT_ENV=analyst`) | Turns pre-specs into reviewed specs, output as an OpenSpec change (`proposal.md`, `design.md`, `tasks.md`, `specs/`) via `openspec-propose` in `specs/<id>/`, reviewed until `SPEC_REVIEW_MAX_ROUNDS`, then a PR; prose in `ANALYST_LANGUAGE` (default `tr`) ([role-aware.md](role-aware.md)) |
+| `generate-design` | Any environment (designer or analyst) | Alone, from a brief, or called by `generate-specs` when the analyst says the feature has a UI: the `designer` role writes `ui-design/` (screens with `SCR-` ids, states, flows, SVG mockups that open in Figma, `tokens.json`) before the draft; the ACs cite the screen ids and the design is reviewed (`review.d/design.env`) and published in the same spec PR |
 | `update-specs` | Analyst environment | Changes a published spec (including a spec-change request from a developer). Before approval it edits in place and bumps 0.N; after approval it writes a **change** under `specs/<id>/changes/<slug>/` (branch `spec/<id>--<slug>`, label base +0.1) |
 | `merge-specs` | Analyst environment | Merges sibling changes (same base) into the next revision: `sdkit spec apply` facts, a fresh-subagent judgement and sweep, at most 4 decisions per round, `apply`, EGM review, publish; design in [design-spec-merge.md](design-spec-merge.md) |
 | `generate-tasks` | Analyst environment | Splits an approved spec into Jira group tasks and, per picked role (`solution-architect`, `backend`, `frontend`, `devops`, `qa`, `mobil`, `ui`, `ux`), role subtasks that follow the task contract, or answers a change request |
@@ -300,6 +301,7 @@ Subagent roles run in a **separate context** from the main session; they do not 
 | `reviewer` | read-only | standard | yes | Reviews the diff against rules and pitfalls |
 | `security-auditor` | read-only | standard | yes | Attack-oriented review (authorization, injection, leaks, pipeline permissions) |
 | `prespec-gaps` | read-only | light | no | Scans the pre-spec before the draft; answers one line per open point, classed decision, fact or default (`sdkit prespec gaps <file>` checks and groups them) |
+| `designer` | design files only | standard | no | UI design before the spec draft: screens, states, flows, tokens, SVG for Figma (`generate-design`, alone or before a spec draft) |
 | `spec-reviewer` | read-only | standard | yes | Reviews a spec document against a `review.d/` checklist and answers `SPEC-REVIEW` (`sdkit review`); analyst environment |
 | `verifier` | read-only | standard | yes | Independent DoD gate (`medium`) |
 | `verifier-deep` | read-only | strong | yes | Same body as `verifier` (`deep: strong` in the source), used at `high` risk; generated as a separate file |
@@ -847,7 +849,7 @@ spec-driven-kit/
 │   ├── tiers.env          tier -> model mapping (Claude, Codex, OpenCode, Cursor, Gemini)
 │   ├── hosts.env          host tool/permission names (read-only shell allow-list, Gemini tools, OpenCode key)
 │   └── rules/             general, git, test-first, token-economy     (language-independent)
-├── skills/                spec-driven-dev (+ references/), incident-to-rule, scaffold-init, scaffold-doctor, generate-specs, update-specs, merge-specs, generate-tasks
+├── skills/                spec-driven-dev (+ references/), incident-to-rule, scaffold-init, scaffold-doctor, generate-specs, generate-design, update-specs, merge-specs, generate-tasks
 ├── agents/                GENERATED Claude agents (including verifier-deep; from core/roles; do not edit by hand)
 ├── adapters/
 │   ├── codex/ opencode/   GENERATED role files (+ config.toml.snippet; OpenCode guard plugin plugins/)

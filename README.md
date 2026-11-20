@@ -340,7 +340,7 @@ More in [docs/developer-workflow.md](docs/developer-workflow.md) §7 and the one
 
 Your session is the *orchestrator*. It hands narrow jobs to *roles*, each run as a fresh agent. Roles declare a cost tier, never a model name. The `orchestrator` is not an agent file: it is your own session, playing the role defined in `core/roles/orchestrator.md`.
 
-Eight skills and twelve roles ship in this version.
+Nine skills and thirteen roles ship in this version.
 
 ### Roles
 
@@ -353,6 +353,7 @@ Eight skills and twelve roles ship in this version.
 | `verifier` | Medium/high: checks the diff against the DoD. Read-only |
 | `reviewer`, `security-auditor` | Required at high (security-auditor also for pipeline/infra). Read-only |
 | `spec-reviewer` | Analyst environment: reviews a PRD, ADR or feature spec against a rubric. Read-only |
+| `designer` | UI design (screens, states, flows, tokens; SVG that opens in Figma), standalone or before a spec draft when the feature has a UI. Edits design files only |
 | `prespec-gaps` | Analyst environment: scans a pre-spec before any draft and lists every open point as decision, fact or default, so the analyst answers once. Read-only, light tier |
 
 ### Skills
@@ -361,6 +362,7 @@ Eight skills and twelve roles ship in this version.
 |---|---|
 | `spec-driven-dev` | Run a task through the whole workflow above (the driver; it writes no spec and uses no OpenSpec skill) |
 | `generate-specs` | Analyst: turn a pre-spec into reviewed specs, an OpenSpec change and one PR |
+| `generate-design` | Designer or analyst: turn a brief into a UI design (screens, flows, tokens; SVG that opens in Figma), on its own or before a spec draft (`generate-specs` calls it when the feature has a UI; the design ships in the spec PR) |
 | `update-specs` | Analyst: change a published spec after edits or Tech Lead change requests (after approval: write a change under `specs/<id>/changes/`) |
 | `merge-specs` | Analyst: merge sibling spec changes into the next revision (semantic merge, a person decides conflicts) |
 | `generate-tasks` | Analyst: split an approved spec into Jira subtasks |

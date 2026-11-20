@@ -27,6 +27,8 @@ README.md ->
 .sdkit/verify.d/20-migrations.sh.example
 .sdkit/verify.d/30-openapi.sh.example
 == [codex] 
+.agents/skills/generate-design/SKILL.md
+.agents/skills/generate-design/references/design.md
 .agents/skills/generate-specs/SKILL.md
 .agents/skills/generate-specs/references/generate.md
 .agents/skills/generate-specs/references/propose.md
@@ -57,6 +59,7 @@ README.md ->
 .agents/skills/update-specs/SKILL.md
 .agents/skills/update-specs/references/change.md
 .codex/agents/analyst.toml
+.codex/agents/designer.toml
 .codex/agents/developer.toml
 .codex/agents/devsecops.toml
 .codex/agents/engineer.toml
@@ -107,6 +110,7 @@ AGENTS.md
 .sdkit/pricing.json
 .sdkit/project.md
 .sdkit/review.d/adr.env
+.sdkit/review.d/design.env
 .sdkit/review.d/feature-spec.env
 .sdkit/review.d/prd.env
 .sdkit/rules/README.md

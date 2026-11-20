@@ -8,6 +8,10 @@ max_concurrent_threads_per_session = 3   # parallel subagents multiply token use
 description = "Reads a task prompt (ticket or free text) and decides whether it is complete enough to plan; lists gaps, ambiguities and assumptions with a question for each. Use at intake, before any planning."
 config_file = "agents/analyst.toml"
 
+[agents.designer]
+description = "UI/UX design role of the analyst environment. Turns a pre-spec and its answered gaps into screens, flows, states and design tokens that open in Figma, before the spec is drafted. Used by generate-design, alone or from generate-specs; never to implement."
+config_file = "agents/designer.toml"
+
 [agents.developer]
 description = "Implements a task against an agreed design and tests until they pass. Use for the implementation step; it does not decide it is verified and does not weaken tests."
 config_file = "agents/developer.toml"
