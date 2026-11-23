@@ -20,6 +20,10 @@ config_file = "agents/devsecops.toml"
 description = "Technical design role. Turns an agreed plan into a design with options and trade-offs, an ADR when a decision is made, a race/ordering scenario for high-risk work, and a test strategy. Use before implementation, never to implement."
 config_file = "agents/engineer.toml"
 
+[agents.flow-modeler]
+description = "Models the business process of a published spec as lanes, steps and flows (the input of sdkit design build, which makes the BPMN 2.0 file) so a designer gets a first picture of the work before the real UI design. Use only from generate-design, never to design screens or implement."
+config_file = "agents/flow-modeler.toml"
+
 [agents.prespec-gaps]
 description = "Read-only scan of a pre-spec before any draft exists; lists every open point as a decision, a fact or a default so the analyst answers once, up front. Analyst environment (generate-specs step 2)."
 config_file = "agents/prespec-gaps.toml"
