@@ -480,7 +480,7 @@ Configured in `.sdkit/sdkit.local.env`. Cost, budget, routing and telemetry feat
 | `sdkit hook`, `guard` | Called by the hosts and git hooks, not by hand |
 | `sdkit dev adapters`, `sdkit dev scan` | Maintainers: regenerate the role files, check the tree is safe to publish |
 
-44 subcommands in all (`sdkit help`); the one-line usage of each is `sdkit <command>` with no arguments, the full list is in [docs/guide.md](docs/guide.md) §9.
+45 subcommands in all (`sdkit help`); the one-line usage of each is `sdkit <command>` with no arguments, the full list is in [docs/guide.md](docs/guide.md) §9.
 
 ---
 
