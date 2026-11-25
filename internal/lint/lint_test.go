@@ -11,9 +11,10 @@ import (
 func TestRun(t *testing.T) {
 	cfg := Config{GatePrefix: "Q", MarkerWords: []string{"pending", "conditional"}, ClosedWords: []string{"closed"}, RefPrefixes: []string{"D", "R"}}
 	base := map[string]string{
-		"spec.md":  "#### Scenario: AC-X-1\n#### Scenario: AC-X-2 (pending Q1)\n#### Scenario: AC-X-3 (withdrawn)\n#### Scenario: AC-X-4\n",
-		"prd.md":   "| Q1 | what? | owner | AC-X-2, 4 |\n| Q2 | closed: done | - | - |\n- **R-1** rule. AC-X-1\n### D1 - decision\nSee D1 and R-1.\n",
-		"tasks.md": "- [ ] 1.1 AC-X-1, 2, 4\n",
+		"spec.md":                  "#### Scenario: AC-X-1\n#### Scenario: AC-X-2 (pending Q1)\n#### Scenario: AC-X-3 (withdrawn)\n#### Scenario: AC-X-4\n",
+		"prd.md":                   "| Q1 | what? | owner | AC-X-2, 4 |\n| Q2 | closed: done | - | - |\n- **R-1** rule. AC-X-1\n### D1 - decision\nSee D1 and R-1.\n",
+		"tasks.md":                 "- [ ] 1.1 AC-X-1, 2, 4\n",
+		"business-requirements.md": "<!-- sdkit: derived view of the spec -->\n| R1 | rule | AC-X-1, 2, 4 |\n",
 	}
 	cases := []struct{ name, file, from, to, want string }{
 		{"clean", "", "", "", ""},
@@ -26,6 +27,8 @@ func TestRun(t *testing.T) {
 		{"marker names an unknown question", "spec.md", "(pending Q1)", "(pending Q9)", "gate-undefined"},
 		{"row does not list the marked AC", "prd.md", "AC-X-2, 4", "AC-X-4", "gate-unlisted"},
 		{"undefined reference", "prd.md", "See D1 and R-1.", "See D7 and R-1.", "ref-undefined"},
+		{"business-requirements.md misses an AC", "business-requirements.md", "AC-X-1, 2, 4", "AC-X-1, 2", "br-coverage"},
+		{"business-requirements.md without the marker", "business-requirements.md", "sdkit: derived view", "a view", "br-marker"},
 		{"gap without withdrawn", "spec.md", "#### Scenario: AC-X-4", "#### Scenario: AC-X-6", "ac-gap"},
 	}
 	for _, c := range cases {

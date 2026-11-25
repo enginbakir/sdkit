@@ -3,6 +3,7 @@ package tasks
 import (
 	"bytes"
 	"encoding/json"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -18,6 +19,7 @@ type OutTask struct {
 	Area      string   `json:"area,omitempty"`
 	Title     string   `json:"title"`
 	Summary   string   `json:"summary"`
+	Steps     []string `json:"steps,omitempty"`
 	Change    string   `json:"change,omitempty"`
 	Risk      *string  `json:"risk,omitempty"`
 	ACs       []string `json:"acceptanceCriteria"`
@@ -27,7 +29,8 @@ type OutTask struct {
 // Outline derives the group tasks and role subtasks from the role structure of tasks.md: a feature is a group task, each of its
 // role sections one subtask of that role, and an `after:` becomes a dependency (between subtasks, and between the groups they sit
 // in). qa comes last in its group, after every other subtask of it. changes nil takes the base features, otherwise the features
-// of those `## Change:` sections. It is a draft for the analyst to refine, not a decision.
+// of those `## Change:` sections. A subtask names its tasks.md lines in steps (their text is quoted from the spec when the task is rendered) and, with one line,
+// takes it as its title. It is a draft for the analyst to refine, not a decision.
 func Outline(d *lint.TasksDoc, changes []string) []OutTask {
 	want := map[string]bool{}
 	for _, c := range changes {
@@ -57,9 +60,8 @@ func Outline(d *lint.TasksDoc, changes []string) []OutTask {
 		var groupACs, groupDeps []string
 		for _, s := range f.Sections {
 			sub := OutTask{Ref: g + "-" + s.Role, Of: g, Area: s.Role, Title: titleCase(s.Role) + ": " + f.Title, Change: f.Change}
-			var lines []string
 			for _, t := range s.Tasks {
-				lines = append(lines, "- "+t.ID+" "+t.Text)
+				sub.Steps = append(sub.Steps, t.ID)
 				sub.ACs = addAll(sub.ACs, t.ACs)
 				for _, a := range t.After {
 					if l, ok := where[key{f.Change, a}]; ok {
@@ -72,7 +74,9 @@ func Outline(d *lint.TasksDoc, changes []string) []OutTask {
 					}
 				}
 			}
-			sub.Summary = strings.Join(lines, "\n")
+			if len(s.Tasks) == 1 { // one step: the title is the action itself
+				sub.Title = actionTitle(s.Tasks[0].Text)
+			}
 			groupACs = addAll(groupACs, sub.ACs)
 			subs = append(subs, sub)
 		}
@@ -94,6 +98,11 @@ func Outline(d *lint.TasksDoc, changes []string) []OutTask {
 		}
 	}
 	return out
+}
+
+// actionTitle is the text of a tasks.md line without its AC ids: "Build the form (AC-login-1)" -> "Build the form".
+func actionTitle(text string) string {
+	return strings.TrimSpace(regexp.MustCompile(`[ \t]*\((?:[^()]*\bAC-[^()]*)\)[ \t]*$`).ReplaceAllString(text, ""))
 }
 
 func addAll(to, from []string) []string {

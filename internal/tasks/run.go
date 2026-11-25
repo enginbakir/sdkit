@@ -33,6 +33,7 @@ type Env struct {
 	Validate func(text string) (string, bool)
 	Plan     PlanCfg // size rules for plan-check
 	Project  string  // text of project.md (the risk rubric)
+	Lang     string  // ANALYST_LANGUAGE: the language of the labels in a Jira description (tr, en)
 	Stdin    io.Reader
 	Out, Err io.Writer
 }
@@ -215,6 +216,7 @@ func Run(env Env, args []string) int {
 		}
 	case "plan-check":
 		adv := d.PlanCheck(r.Plan, GateMarkers(r.text(false), r.Plan.MarkerWords), r.Project, r.roles())
+		adv = append(adv, d.DescribeAdvice(r.specText())...)
 		code := 0
 		for _, a := range adv {
 			tag := "warn"
@@ -437,10 +439,14 @@ func (r *runner) render(rest []string) int {
 		fmt.Fprintln(r.Err, err)
 		return exitFail
 	}
-	u, ok := r.doc.Render(ref, m)
+	u, ok, err := r.doc.RenderWith(ref, m, r.specText(), r.Lang)
 	if !ok {
 		fmt.Fprintf(r.Err, "tasks: no task with ref %s\n", ref)
 		return exitUsage
+	}
+	if err != nil {
+		fmt.Fprintf(r.Err, "tasks: %v\n", err)
+		return exitFail
 	}
 	text := strings.TrimRight(u.Text(), "\n") // the bash held it in $(...), which drops the trailing newline
 	if r.Validate != nil {
@@ -507,4 +513,14 @@ func hasRoleSection(d *lint.TasksDoc) bool {
 		}
 	}
 	return false
+}
+
+// specText is what a description quotes from the spec at the pinned SHA: the AC titles and THEN lines, the lines of tasks.md.
+func (r *runner) specText() *SpecText {
+	meta := struct {
+		Version string `json:"version"`
+	}{}
+	_ = json.Unmarshal([]byte(r.show(r.dir()+"/spec.meta.json")), &meta)
+	return &SpecText{Path: r.dir(), Version: meta.Version, Sha: r.doc.SpecSha,
+		ACs: ParseACTexts(r.text(false)), Steps: StepTexts(r.show(r.dir() + "/tasks.md"))}
 }
