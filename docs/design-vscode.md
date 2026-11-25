@@ -52,6 +52,15 @@ The ask bridge that the session's `sdkit ui ask` calls is a loopback listener in
 
 Clicking a spec offers what its state allows (`specActions`: start or continue `generate-specs`, work in the Tech Lead's comments or start a change, merge); a spec waiting on the Tech Lead offers nothing and says so. A run refreshes the list when it ends. **New spec** asks for a name (the kit's rule: letters, digits, `-`, `_`), opens an untitled Markdown tab with a template, and the title-bar button "Ön-speci kaydet" sends the text on stdin to `sdkit ext prespec <id>` (it refuses when git would not ignore the pre-spec directory; an existing name comes back as `exists` and is replaced only after the person agrees). Saving offers to start `generate-specs` at once.
 
+## Git is not the person's job
+
+A non-technical person never types `add`, `commit`, `push`, `fetch` or `pull`. Creating and updating a spec is already the agent's: `sdkit spec publish` stages, commits, pushes and opens the PR, and the kit moves between `spec/<id>` branches itself (worktrees keep the main folder on the base branch). What was left was staying current with the server, so `sdkit ext sync` does it:
+
+- `git fetch` with the saved Bitbucket credential and no prompt; then, **only** when the folder is on the base branch, has no unsaved edits and is simply behind, `merge --ff-only`. It never discards, merges or rewrites anything.
+- Everything else is left alone with a reason in plain words (JSON `state`: `current`, `updated`, `offline`, `dirty`, `other-branch`, `diverged`, `no-remote`). The extension says only what the person can act on: new changes taken in (status bar), unsaved edits or a diverged copy (warning). Offline and another branch are silent.
+- It runs when the extension starts, on "Yenile", and before a run; a run on a copy that is dirty or diverged asks first.
+- Not built yet: hand-editing a spec's files in the editor with a "send" button (it would start `update-manual`, which publishes); a "diverged" copy is only reported, never repaired.
+
 ## The welcome screen
 
 A VS Code **Walkthrough** (`contributes.walkthroughs`, `media/*.md`), the native page in the middle of the window, not a webview. Each check has two steps, "✓ ok" and "✗ missing", shown by the context keys `sdkit.ok.<check>` / `sdkit.fail.<check>` that the extension sets from `sdkit ext health` after every refresh (`Item.Check` names the check: setup, claude, claude-login, openspec, jira, bitbucket, project). A check fails when an item of that name is a problem or a todo. It opens by itself the first time the extension runs, and later when the Spec-Driven Kit view is chosen while something the person must do is open (once per window; the Tech Lead's share does not count). The title bar of the Readiness view and the command "Karşılama ekranını aç" open it at any time.

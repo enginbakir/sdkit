@@ -81,3 +81,21 @@ test('a run is blocked by setup, Claude Code and OpenSpec, not by Jira or the Te
   assert.equal(blockers(d)[2].title, "Ajana giriş yapılmamış");
   assert.deepEqual(blockers({ ready: true, items: [] }), []);
 });
+
+import { staleBeforeRun, syncNotice, SyncResult } from '../model';
+
+const sync = (state: SyncResult['state']): SyncResult => ({ state, base: 'main', branch: 'main', behind: 2, message: 'm' });
+
+test('only news and problems the person can act on are said after an update', () => {
+  assert.equal(syncNotice(sync('updated'))?.level, 'info');
+  assert.equal(syncNotice(sync('dirty'))?.level, 'warn');
+  assert.equal(syncNotice(sync('diverged'))?.level, 'warn');
+  for (const quiet of ['current', 'offline', 'other-branch', 'no-remote'] as const) assert.equal(syncNotice(sync(quiet)), undefined, quiet);
+});
+
+test('a run is questioned only when the copy is stale for a reason the person can see', () => {
+  assert.equal(staleBeforeRun(sync('dirty')), true);
+  assert.equal(staleBeforeRun(sync('diverged')), true);
+  assert.equal(staleBeforeRun(sync('offline')), false);
+  assert.equal(staleBeforeRun(undefined), false);
+});

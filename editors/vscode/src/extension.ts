@@ -8,7 +8,7 @@ import { sdkitJson, sdkitJsonWithInput, sdkitJsonWithText } from './cli';
 import { Agent, agentName, planFix } from './fixes';
 import { Connection, ConnectionInput, ConnectResult, describeResult, fields } from './connect';
 import { execFile } from 'child_process';
-import { blockers, PRESPEC_TEMPLATE, specActions, validSpecId, CHECKS, failingChecks, needsAttention, groupHealth, groupSpecs, healthSummary, HealthDoc, HealthItem, SpecItem, whereIs } from './model';
+import { staleBeforeRun, SyncResult, syncNotice, blockers, PRESPEC_TEMPLATE, specActions, validSpecId, CHECKS, failingChecks, needsAttention, groupHealth, groupSpecs, healthSummary, HealthDoc, HealthItem, SpecItem, whereIs } from './model';
 
 
 class StepsView implements vscode.TreeDataProvider<string> {
@@ -156,6 +156,23 @@ export function activate(ctx: vscode.ExtensionContext) {
     await vscode.workspace.getConfiguration('sdkit').update('agent', pick.id, vscode.ConfigurationTarget.Global);
     return true;
   }
+  let syncWarned = ''; // one warning per kind of problem and window, not one per refresh
+  /** Bring the copy up to date (fast-forward only, in the binary), and say only what the person needs to hear. */
+  async function syncCopy(quiet = true): Promise<SyncResult | undefined> {
+    const cwd = folder();
+    if (!cwd) return undefined;
+    try {
+      const r = await sdkitJson<SyncResult>(binary(), cwd, ['sync']);
+      const n = syncNotice(r);
+      if (n?.level === 'info') vscode.window.setStatusBarMessage(`$(sync) ${n.text}`, 5000);
+      if (n?.level === 'warn' && (!quiet || syncWarned !== r.state)) {
+        syncWarned = r.state;
+        void vscode.window.showWarningMessage(n.text);
+      }
+      return r;
+    } catch { return undefined; } // an old binary or no server must not stop the page
+  }
+
   async function refresh() {
     const cwd = folder();
     if (!cwd) return;
@@ -235,6 +252,11 @@ export function activate(ctx: vscode.ExtensionContext) {
         { modal: true }, 'Karşılama ekranını aç', 'Yine de başlat');
       if (pick === 'Karşılama ekranını aç') return void openWelcome();
       if (pick !== 'Yine de başlat') return;
+    }
+    const synced = await vscode.window.withProgress({ location: vscode.ProgressLocation.Window, title: 'Güncel hâle getiriliyor…' }, () => syncCopy(false));
+    if (staleBeforeRun(synced)) {
+      const c = await vscode.window.showWarningMessage(`${synced!.message}\nYine de başlatılsın mı?`, { modal: true }, 'Yine de başlat');
+      if (!c) return;
     }
     const cfg = vscode.workspace.getConfiguration('sdkit');
     view.stepper = new Stepper();
@@ -319,7 +341,7 @@ export function activate(ctx: vscode.ExtensionContext) {
     if (c) await startRun('generate-specs', id);
   }
 
-  void refresh().then(() => {
+  void syncCopy().then(() => refresh()).then(() => {
     // the very first time the extension runs, show the screen whatever the result, so the person knows where to look
     if (!ctx.globalState.get('sdkit.welcomed')) {
       void ctx.globalState.update('sdkit.welcomed', true);
@@ -327,7 +349,7 @@ export function activate(ctx: vscode.ExtensionContext) {
       void openWelcome();
     }
   });
-  ctx.subscriptions.push(vscode.commands.registerCommand('sdkit.refresh', refresh), vscode.commands.registerCommand('sdkit.connect', connect), vscode.commands.registerCommand('sdkit.chooseAgent', async () => { if (await chooseAgent()) void refresh(); }), vscode.commands.registerCommand('sdkit.fix', fix));
+  ctx.subscriptions.push(vscode.commands.registerCommand('sdkit.refresh', async () => { await syncCopy(false); await refresh(); }), vscode.commands.registerCommand('sdkit.connect', connect), vscode.commands.registerCommand('sdkit.chooseAgent', async () => { if (await chooseAgent()) void refresh(); }), vscode.commands.registerCommand('sdkit.fix', fix));
 
   const asker = {
     async pick(item: QuestionItem) {

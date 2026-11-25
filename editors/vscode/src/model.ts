@@ -124,3 +124,21 @@ export function blockers(d: HealthDoc): { check: string; title: string }[] {
       ?? { 'agent-login': "Ajana giriş yapılmamış", agent: 'Ajan kurulu değil' }[c as string] ?? c,
   }));
 }
+
+export interface SyncResult { state: 'current' | 'updated' | 'offline' | 'dirty' | 'other-branch' | 'diverged' | 'no-remote'; base: string; branch: string; behind: number; message: string }
+
+/**
+ * What the person is told after the copy was brought up to date. Good news is a passing line, a problem the person can act on is a
+ * warning, and what changes nothing for them (offline, another branch, a folder without a server) is not said at all.
+ */
+export function syncNotice(r: SyncResult): { text: string; level: 'info' | 'warn' } | undefined {
+  switch (r.state) {
+    case 'updated': return { text: r.message, level: 'info' };
+    case 'dirty':
+    case 'diverged': return { text: r.message, level: 'warn' };
+    default: return undefined;
+  }
+}
+
+/** A run on a copy that could not be brought up to date works on old state: the person decides, with the reason in front of them. */
+export const staleBeforeRun = (r: SyncResult | undefined) => !!r && (r.state === 'dirty' || r.state === 'diverged');

@@ -18,13 +18,14 @@ import (
 // sdkit ext specs                   every spec with its state, as JSON
 // sdkit ext spec <id>               the page of one spec, as JSON
 // sdkit ext prespec <id> [--overwrite]   store the pre-spec text from stdin as a new pre-spec; {"exists":true} when it is there already
+// sdkit ext sync                    fetch and fast-forward the base branch when that is safe; never discards or merges; JSON with a message for the person
 // sdkit ext connection [save]       the saved Jira/Bitbucket settings; `save` reads them from stdin as JSON, stores them and checks them
 //
 //	writes one JSON line per event or question to stdout and reads answers and "stop" lines from stdin; no server, no page.
 //	actions: generate-specs, update-specs, update-manual, merge-specs
 func init() { cli.Register("ext", runExt) }
 
-const extUsage = "usage: sdkit ext run <action> <id> [--fresh] [--host <cmd>] | health [--host <cmd>] | specs | spec <id> | connection [save] | prespec <id> [--overwrite]"
+const extUsage = "usage: sdkit ext run <action> <id> [--fresh] [--host <cmd>] | health [--host <cmd>] | specs | spec <id> | connection [save] | prespec <id> [--overwrite] | sync"
 
 func runExt(args []string) int {
 	if len(args) > 0 && args[0] != "run" {
@@ -95,6 +96,8 @@ func runExtRead(args []string) int {
 		err = ext.WriteSpec(os.Stdout, root, args[1])
 	case args[0] == "prespec" && (len(args) == 2 || (len(args) == 3 && args[2] == "--overwrite")):
 		err = ext.WritePrespec(os.Stdout, os.Stdin, root, args[1], len(args) == 3)
+	case args[0] == "sync" && len(args) == 1:
+		err = ext.WriteSync(context.Background(), os.Stdout, root)
 	case args[0] == "connection" && len(args) == 1:
 		err = ext.WriteConnection(os.Stdout, root)
 	case args[0] == "connection" && len(args) == 2 && args[1] == "save":
