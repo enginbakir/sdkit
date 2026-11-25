@@ -208,7 +208,7 @@ export function describeCliError(message: string): { title: string; fix?: string
     }
   }
   if (/unknown command ['"`]?ext/i.test(message)) {
-    return { title: 'Kurulu sdkit çok eski: bu eklenti sdkit 2.4 ya da yenisini ister', fix: 'binary-setting' };
+    return { title: 'Kurulu sdkit bu eklentiyle uyumlu değil (ext komutu yok): eklentiyle gelen sdkit sürümünü kullanın', fix: 'binary-setting' };
   }
   if (/\bspawn .+ ENOENT/.test(message)) return { title: 'sdkit başlatılamadı (dosya ya da klasör yok)', fix: 'binary-setting' };
   return { title: `sdkit çalıştırılamadı: ${message}` };

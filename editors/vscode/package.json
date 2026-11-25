@@ -123,7 +123,7 @@
         "sdkit.binaryPath": {
           "type": "string",
           "default": "sdkit",
-          "description": "sdkit komutunun yolu (2.4 ya da yenisi olmalı). Boşsa PATH'teki sdkit kullanılır; eskiyse eklenti bunu söyler."
+          "description": "Eklentiyle gelen sdkit'in yolu. Boşsa PATH'teki sdkit kullanılır; `sdkit ext` komutunu bilmiyorsa (yayımlanmış 2.3 ve 2.4 bilmez) eklenti bunu söyler."
         },
         "sdkit.hostCommand": {
           "type": "string",
