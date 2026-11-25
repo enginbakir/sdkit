@@ -68,9 +68,9 @@ func TestSpecBranchFromAnotherTree(t *testing.T) {
 		wt := filepath.Join(filepath.Dir(root), "repo-wt", "spec", "x")
 		git(t, root, "worktree", "add", "-q", wt, "spec/x")
 		code, msg := run(root, "x")
-		real, _ := filepath.EvalSymlinks(wt)
-		if code == 0 || (!strings.Contains(msg, wt) && !strings.Contains(msg, real)) || !strings.Contains(msg, "another folder") {
-			t.Errorf("exit %d, message %q: want a refusal naming %s", code, msg, wt)
+		// the path may come back with the other slash, or the long form of a short Windows name: the folder's own tail is what is compared
+		if code == 0 || !strings.Contains(filepath.ToSlash(msg), "repo-wt/spec/x") || !strings.Contains(msg, "another folder") {
+			t.Errorf("exit %d, message %q: want a refusal naming the folder that holds spec/x", code, msg)
 		}
 		if b := branch(t, root); b != "main" {
 			t.Errorf("the tree moved to %q", b)
