@@ -26,7 +26,7 @@ export function planFix(fix: string, env: Env): FixPlan | undefined {
     case 'connect':
       return { kind: 'connect' };
     case 'binary-setting':
-      return { kind: 'settings', query: 'sdkit.binaryPath', why: 'Eklentiyle gelen sdkit'in yolunu yazın (örneğin /Users/<siz>/sdkit-dev/sdkit).' };
+      return { kind: 'settings', query: 'sdkit.binaryPath', why: "Eklentiyle gelen sdkit'in yolunu yazın (örneğin /Users/<siz>/sdkit-dev/sdkit)." };
     case 'init-project':
       // copy mode puts the kit's skills in the repo, git-ignored: a run does not depend on a Claude Code plugin being fetched
       return { kind: 'terminal', name: 'SDKit kurulumu', line: command(env.binary, `init --env analyst --host ${env.agent} --mode copy --install-openspec`, env.win32) };
