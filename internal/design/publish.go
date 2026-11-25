@@ -22,23 +22,34 @@ type PublishOptions struct {
 	Out, Err                                    io.Writer
 }
 
-// Publish puts the design on its own branch `design/<id>`, cut from the base branch, commits only the design directory, pushes it
-// and opens a pull request. The spec's branch and its content hash are never touched. The push happens here, not in the agent's
-// shell, because the phase guard refuses an agent's own `git push` while no spec-driven task is open.
+// publishBranch is where a design goes. Right after `generate-specs` the session is on the spec's own branch, whose pull request is
+// still open: the design joins that one pull request, so the Tech Lead reviews spec and design together and nobody opens two. On any
+// other branch (the spec is merged, or the design is made alone) it has a branch of its own, cut from the base, and its own pull request.
+func publishBranch(cur, id string) (branch string, withSpec bool) {
+	if cur == "spec/"+id {
+		return cur, true
+	}
+	return "design/" + id, false
+}
+
+// Publish commits only the design directory and pushes it, either onto the spec's branch (and so into the spec's pull request) or on
+// its own branch `design/<id>` with a pull request of its own (see publishBranch). The spec's files and its content hash are never
+// touched. The push happens here, not in the agent's shell, because the phase guard refuses an agent's own `git push` while no
+// spec-driven task is open.
 func Publish(o PublishOptions) error {
 	g := func(a ...string) (string, error) { return gitx.Run(o.Dir, a...) }
 	ok := func(a ...string) bool { _, err := g(a...); return err == nil }
 	say := func(f string, a ...any) { fmt.Fprintf(o.Out, f+"\n", a...) }
 	die := func(f string, a ...any) error { return fmt.Errorf("design: "+f, a...) }
 
-	b := "design/" + o.ID
+	cur, _ := g("rev-parse", "--abbrev-ref", "HEAD")
+	b, withSpec := publishBranch(cur, o.ID)
 	for _, p := range append([]string{o.Base, "main", "master", "develop", "trunk"}, o.Protected...) {
 		if b == p {
 			return die("branch %s is protected", b)
 		}
 	}
 	_ = ok("fetch", "-q", "origin")
-	cur, _ := g("rev-parse", "--abbrev-ref", "HEAD")
 	if cur != b {
 		switch {
 		case ok("show-ref", "--verify", "-q", "refs/heads/"+b):
@@ -84,6 +95,10 @@ func Publish(o PublishOptions) error {
 	url := ""
 	if len(l) > 0 {
 		url = strings.TrimSpace(l[len(l)-1])
+	}
+	if withSpec {
+		say("design: added '%s' to the spec's pull request on %s -> %s", o.ID, b, url)
+		return nil
 	}
 	say("design: published '%s' on %s -> %s", o.ID, b, url)
 	return nil

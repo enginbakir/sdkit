@@ -3,7 +3,7 @@
 export interface HealthItem { check?: string; level: 'problem' | 'todo' | 'note' | 'ok' | string; title: string; help?: string; fix?: string; raw?: string; soft?: boolean; main?: boolean }
 export interface HealthDoc { ready: boolean; items: HealthItem[] }
 export interface FlowStep { key: string; label: string; status: 'done' | 'current' | 'todo' }
-export interface SpecItem { id: string; state: string; label: string; waiting: boolean; continue: boolean; update: boolean; merge: boolean; tasks: boolean; flow: FlowStep[] }
+export interface SpecItem { folder?: string; id: string; state: string; label: string; waiting: boolean; continue: boolean; update: boolean; merge: boolean; tasks: boolean; flow: FlowStep[] }
 
 /** What the checklist shows first: the items the person must act on (the kit marks them `main`), problems before todos. */
 export function mainItems(d: HealthDoc): HealthItem[] {

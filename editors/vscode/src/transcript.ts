@@ -11,12 +11,49 @@ export type Entry =
   | { kind: 'note'; text: string }
   | { kind: 'end'; failed: boolean; text?: string };
 
+/** One thing the agent was seen doing: what a person can follow, never a raw command. */
+export interface Activity { label: string; at: number }
+
 export interface Page {
   id: string;
   title: string; // what the run does, in plain words
   steps: Step[];
   entries: Entry[];
   running: boolean;
+  startedAt?: number;
+  /** newest last; the agent can work for minutes between two messages, and this is what shows it is alive */
+  activity?: Activity[];
+}
+
+/** A tool call in words for a person: what it is doing, and to what when that is a file or a subagent's task. Commands are not shown. */
+export function activityLabel(name: string, text = ''): string {
+  const file = text.split(/[\\/]/).pop() ?? '';
+  switch (name) {
+    case 'Read': return file ? `${file} okunuyor` : 'Dosya okunuyor';
+    case 'Write': case 'Edit': case 'MultiEdit': return file ? `${file} yazılıyor` : 'Dosya yazılıyor';
+    case 'Glob': case 'Grep': return 'Projede arama yapılıyor';
+    case 'Task': return text ? `Alt ajan çalışıyor: ${text}` : 'Alt ajan çalışıyor';
+    case 'Skill': return text ? `Yetenek yükleniyor: ${text}` : 'Yetenek yükleniyor';
+    case 'Bash': return 'Komut çalıştırılıyor';
+    default: return 'Çalışıyor';
+  }
+}
+
+/** "4 dk 12 sn": how long, without a clock to compare to. */
+export function duration(ms: number): string {
+  const s = Math.max(0, Math.round(ms / 1000));
+  return s < 60 ? `${s} sn` : `${Math.floor(s / 60)} dk ${String(s % 60).padStart(2, '0')} sn`;
+}
+
+export const MAX_ACTIVITY = 6;
+
+/** Record a move: the same thing again only refreshes its time (forty reads in a row are one line), and the list stays short. */
+export function pushActivity(p: Page, label: string, at: number): void {
+  const a = (p.activity ??= []);
+  const last = a[a.length - 1];
+  if (last?.label === label) last.at = at;
+  else a.push({ label, at });
+  if (a.length > MAX_ACTIVITY) a.splice(0, a.length - MAX_ACTIVITY);
 }
 
 const ACTION_TITLES: Record<string, string> = {
@@ -37,19 +74,19 @@ export function quote(text: string): string {
     .join('\n');
 }
 
-export function render(p: Page): string {
+export function render(p: Page, now = Date.now()): string {
   const out: string[] = [`# ${p.id} · ${p.title}`, ''];
   if (p.steps.length) {
     out.push(p.steps.map(s => `${stepIcon(s)} ${s.n}. ${s.name}`).join('  \n'), '');
   }
-  out.push('---', '', '## Şu an', '', now(p), '', '---', '', '## Konuşma', '');
+  out.push('---', '', '## Şu an', '', status(p, now), '', '---', '', '## Konuşma', '');
   if (!p.entries.length) out.push('_Ajan başlıyor…_', '');
   for (const e of p.entries) out.push(entry(e), '');
   return out.join('\n');
 }
 
 /** The box at the top, so the one thing that matters is seen without scrolling: a question waiting, the end, or the last message. */
-function now(p: Page): string {
+function status(p: Page, now: number): string {
   const waiting = [...p.entries].reverse().find(e => e.kind === 'question' && !e.answers) as Extract<Entry, { kind: 'question' }> | undefined;
   if (waiting) {
     const hint = waiting.dismissed ? 'Seçim kutusu kapandı: alttaki durum çubuğunda **SDKit: cevabınız bekleniyor** yazısına tıklayın.' : 'Pencerenin üstündeki seçim kutusundan cevaplayın.';
@@ -60,7 +97,21 @@ function now(p: Page): string {
   const last = [...p.entries].reverse().find(e => e.kind === 'agent') as Extract<Entry, { kind: 'agent' }> | undefined;
   const cur = p.steps.find(s => s.state === 'started');
   const head = p.running ? `🔄 **Ajan çalışıyor${cur ? `: ${cur.name}` : ''}.**` : '⏸ **Durdu.**';
-  return last ? `${head}\n\n${quote(firstLines(last.text, 4))}` : head;
+  const parts = [head];
+  if (p.running) parts.push(progress(p, now));
+  if (last) parts.push(quote(firstLines(last.text, 4)));
+  return parts.filter(Boolean).join('\n\n');
+}
+
+/** Time and the latest moves: a quiet agent is still seen working, and how long it has been quiet is plain. */
+function progress(p: Page, now: number): string {
+  const head: string[] = [];
+  if (p.startedAt !== undefined) head.push(`⏱ Süre: ${duration(now - p.startedAt)}`);
+  const a = p.activity ?? [];
+  if (!a.length) head.push('⚙️ Ajan hazırlanıyor…');
+  else head.push(`⚙️ Şimdi: ${a[a.length - 1].label} · ${duration(now - a[a.length - 1].at)} önce`);
+  const earlier = a.slice(0, -1).reverse().map(x => `- ${x.label}`);
+  return [head.join('  \n'), ...(earlier.length ? ['_Son hareketler:_\n' + earlier.join('\n')] : [])].join('\n\n');
 }
 
 function firstLines(t: string, n: number): string {

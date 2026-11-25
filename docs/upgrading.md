@@ -23,6 +23,10 @@ To see whether you are up to date: `<project-dir>/.scaffold-version` is the kit 
 
 There is no `<kit>/bin/upgrade.sh` any more: the kit is one binary and a checkout of it is not needed.
 
+## 3.0.0 -> 3.0.1: one pull request for spec and design
+
+No manual step. `generate-design` run right after `generate-specs` now puts `designs/<id>/` on the spec's own branch, so the spec's pull request carries both and the Tech Lead reviews one PR; made alone or after the spec is merged it still opens `design/<id>` with its own PR. In the VS Code extension the run page shows what the agent is doing and for how long between its messages, and a spec's Dosyalar can be opened from the Specs list and in the spec's own folder (see [design-vscode.md](design-vscode.md)); `sdkit spec branch` says where a spec's folder is when its branch is open in another one.
+
 ## 2.3.1 -> 3.0.0: the VS Code extension
 
 No manual step. New: the **Spec-Driven Kit** extension for VS Code (`editors/vscode`, id `sdkit.sdkit`; [design-vscode.md](design-vscode.md)) does what the `sdkit ui` panel does with native parts instead of a web page: a Readiness view and a welcome walkthrough that check what is set up (agent, OpenSpec, Jira, Bitbucket) and fix it with one button, the Connect form, the specs list by who acts next, new pre-spec, a run shown as a live page with the agent's questions as pick lists, editing a spec in the editor and sending it, and a copy kept current with the server by fast-forward only (no git commands for the person). It needs this version of `sdkit` (`brew upgrade sdkit` / `scoop update sdkit`): the extension talks to the new `sdkit ext` command and says so when the installed `sdkit` does not have it. Install the `.vsix` from the release page. Also new since 2.3.1 (2.4.0 was never tagged): `generate-design`, a BPMN process flow for the designer.

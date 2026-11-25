@@ -90,6 +90,17 @@
         "command": "sdkit.chooseAgent",
         "title": "Yapay zekâ ajanını seç",
         "category": "SDKit"
+      },
+      {
+        "command": "sdkit.openSpecFile",
+        "title": "Spec dosyasını aç",
+        "category": "SDKit"
+      },
+      {
+        "command": "sdkit.openSpecFolder",
+        "title": "Spec'in çalışma klasörünü yeni pencerede aç",
+        "category": "SDKit",
+        "icon": "$(folder-opened)"
       }
     ],
     "viewsContainers": {
@@ -196,12 +207,32 @@
         {
           "command": "sdkit.savePrespec",
           "when": "sdkit.prespecDraft"
+        },
+        {
+          "command": "sdkit.openSpecFile",
+          "when": "false"
+        },
+        {
+          "command": "sdkit.openSpecFolder",
+          "when": "false"
         }
       ],
       "editor/title": [
         {
           "command": "sdkit.savePrespec",
           "when": "sdkit.prespecDraft",
+          "group": "navigation"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "sdkit.openSpecFolder",
+          "when": "view == sdkit.specs && viewItem == specWorktree",
+          "group": "inline"
+        },
+        {
+          "command": "sdkit.openSpecFolder",
+          "when": "view == sdkit.specs && viewItem == specWorktree",
           "group": "navigation"
         }
       ]
