@@ -6,7 +6,7 @@
 
 **Make your coding agent follow a real engineering process, enforced by code instead of left to its good intentions.**
 
-![Version 2.3.1](https://img.shields.io/badge/version-2.3.1-blue)
+![Version 2.4.0](https://img.shields.io/badge/version-2.4.0-blue)
 ![License: MIT](https://img.shields.io/badge/license-MIT-blue)
 ![Claude Code](https://img.shields.io/badge/Claude%20Code-supported-informational)
 ![Codex](https://img.shields.io/badge/Codex-supported-informational)
@@ -340,7 +340,7 @@ More in [docs/developer-workflow.md](docs/developer-workflow.md) §7 and the one
 
 Your session is the *orchestrator*. It hands narrow jobs to *roles*, each run as a fresh agent. Roles declare a cost tier, never a model name. The `orchestrator` is not an agent file: it is your own session, playing the role defined in `core/roles/orchestrator.md`.
 
-Eight skills and twelve roles ship in this version.
+Nine skills and thirteen roles ship in this version.
 
 ### Roles
 
@@ -353,6 +353,7 @@ Eight skills and twelve roles ship in this version.
 | `verifier` | Medium/high: checks the diff against the DoD. Read-only |
 | `reviewer`, `security-auditor` | Required at high (security-auditor also for pipeline/infra). Read-only |
 | `spec-reviewer` | Analyst environment: reviews a PRD, ADR or feature spec against a rubric. Read-only |
+| `flow-modeler` | Analyst environment: models a published spec as lanes, steps and decisions (the input of `sdkit design build`, which makes the BPMN 2.0 file) so a designer gets a first picture before the real UI design. Edits its one model file only |
 | `prespec-gaps` | Analyst environment: scans a pre-spec before any draft and lists every open point as decision, fact or default, so the analyst answers once. Read-only, light tier |
 
 ### Skills
@@ -361,6 +362,7 @@ Eight skills and twelve roles ship in this version.
 |---|---|
 | `spec-driven-dev` | Run a task through the whole workflow above (the driver; it writes no spec and uses no OpenSpec skill) |
 | `generate-specs` | Analyst: turn a pre-spec into reviewed specs, an OpenSpec change and one PR |
+| `generate-design` | Analyst: after a spec exists, make a BPMN 2.0 process flow (with a Mermaid twin for the PR) as orientation for the designer; offered at the end of `generate-specs` when the feature has a UI, and opened as its own PR so the spec is untouched |
 | `update-specs` | Analyst: change a published spec after edits or Tech Lead change requests (after approval: write a change under `specs/<id>/changes/`) |
 | `merge-specs` | Analyst: merge sibling spec changes into the next revision (semantic merge, a person decides conflicts) |
 | `generate-tasks` | Analyst: split an approved spec into Jira subtasks |
@@ -478,7 +480,7 @@ Configured in `.sdkit/sdkit.local.env`. Cost, budget, routing and telemetry feat
 | `sdkit hook`, `guard` | Called by the hosts and git hooks, not by hand |
 | `sdkit dev adapters`, `sdkit dev scan` | Maintainers: regenerate the role files, check the tree is safe to publish |
 
-44 subcommands in all (`sdkit help`); the one-line usage of each is `sdkit <command>` with no arguments, the full list is in [docs/guide.md](docs/guide.md) §9.
+45 subcommands in all (`sdkit help`); the one-line usage of each is `sdkit <command>` with no arguments, the full list is in [docs/guide.md](docs/guide.md) §9.
 
 ---
 

@@ -367,3 +367,19 @@ func ACIDs(target string) []string {
 	}
 	return sortedKeys(acDefs(files, Config{}))
 }
+
+// ActiveACIDs lists the AC ids a document defines that are not withdrawn, sorted: the ones a design must account for.
+func ActiveACIDs(target string) []string {
+	files, err := load(target)
+	if err != nil {
+		return nil
+	}
+	var out []string
+	for id, ds := range acDefs(files, Config{}) {
+		if len(ds) > 0 && !ds[0].withdrawn {
+			out = append(out, id)
+		}
+	}
+	sort.Strings(out)
+	return out
+}
