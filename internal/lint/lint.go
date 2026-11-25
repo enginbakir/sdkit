@@ -61,6 +61,7 @@ func Run(target string, cfg Config) ([]Problem, error) {
 	defs := acDefs(files, cfg)
 	ps = append(ps, checkACs(files, defs)...)
 	ps = append(ps, checkTasksCoverage(files, defs)...)
+	ps = append(ps, checkTaskRoles(files, target)...)
 	if cfg.GatePrefix != "" {
 		ps = append(ps, checkGates(files, defs, cfg)...)
 	}

@@ -13,6 +13,7 @@
 {"ref":"A-fe","of":"A","area":"frontend","title":"Draft form","summary":"uses POST /drafts from A-be","acceptanceCriteria":["AC-1"],"dependsOn":["A-be"]}
 {"ref":"A-qa","of":"A","area":"qa","title":"Draft tests","acceptanceCriteria":["AC-1","AC-2"],"dependsOn":["A-be","A-fe"]}
 ```
+- `sdkit tasks outline` drafts these from the spec's `tasks.md` (refs `G1`, `G1-frontend`, ...; the group `risk` is left empty for the analyst).
 - `ref` is a local label for this draft; `dependsOn` uses refs. `render` maps them to `externalId`, then to Jira keys (`--keys map.json`), because the contract's `dependencies[]` holds Jira keys. Create in `sdkit tasks order` so a dependency's key exists first.
 - `externalId = <specId>:t<hash>`; the hash covers the sorted ACs and optional `slug`, never the title or the position. A rerun with the same ACs keeps the key; changing a task's ACs is a new task. Two tasks with identical ACs need distinct `slug`s (sdkit tasks says so).
 - Size: aim for `TASKS_TARGET_MIN`-`TASKS_TARGET_MAX` tasks (default 12-20), typically 4-12 ACs each; one rule or behaviour family is one task (e-mail rules V-4..V-7 are one task, not four). Split only for (i) a different gate (an AC marked pending/conditional on an open question is its own task, `blockedBy: ["Q1"]` puts "Blocked: Q1" in its summary), (ii) a different risk, (iii) independent delivery. `sdkit tasks plan-check` measures this.

@@ -53,3 +53,40 @@ func TestRun(t *testing.T) {
 		}
 	}
 }
+
+// The role structure of tasks.md: one row per way a model-written file can miss the shape generate-specs asks for.
+func TestTasksRoles(t *testing.T) {
+	ok := "## 1. Login Feature\n### UI\n- [ ] 1.1 Design the form (AC-login-1)\n### Frontend\n- [ ] 1.2 Build the form (AC-login-1) | after: 1.1\n### Backend\n- [ ] 1.3 Check the credentials (AC-login-2)\n"
+	picked := []string{"ui", "frontend", "backend"}
+	cases := []struct {
+		name, text string
+		picked     []string
+		want       string // "" = no problem
+	}{
+		{"valid", ok, picked, ""},
+		{"flat list written before roles", "## 1. Login\n- [ ] 1.1 Form (AC-login-1)\n", picked, ""},
+		{"no roles.json: not judged", strings.Replace(ok, "### UI", "### Whatever", 1), nil, ""},
+		{"role the analyst did not pick", ok + "### Mobil\n- [ ] 1.4 App (AC-login-1)\n", picked, "tasks-role-unknown"},
+		{"task before any role heading", strings.Replace(ok, "### UI\n", "- [ ] 1.0 Loose (AC-login-1)\n### UI\n", 1), picked, "tasks-no-role"},
+		{"task without an AC", strings.Replace(ok, "(AC-login-2)", "", 1), picked, "tasks-no-ac"},
+		{"after names a missing task", strings.Replace(ok, "after: 1.1", "after: 1.9", 1), picked, "tasks-after-undefined"},
+		{"after cycle", strings.Replace(ok, "(AC-login-1)\n### Frontend", "(AC-login-1) | after: 1.2\n### Frontend", 1), picked, "tasks-after-cycle"},
+		{"role listed twice in a feature", ok + "### UI\n- [ ] 1.4 Again (AC-login-1)\n", picked, "tasks-role-twice"},
+		{"role heading with no task", ok + "### DevOps\n", append([]string{"devops"}, picked...), "tasks-role-empty"},
+		{"duplicate task id", strings.Replace(ok, "1.3 Check", "1.2 Check", 1), picked, "tasks-duplicate-id"},
+		{"same id in another change is fine", ok + "## Change: lock\n\n## 1. Lockout\n### Backend\n- [ ] 1.1 Count (AC-login-3)\n", picked, ""},
+	}
+	for _, c := range cases {
+		got := ""
+		for _, p := range CheckTasksMD("tasks.md", c.text, c.picked) {
+			got += p.Code + " " + p.Msg + "\n"
+		}
+		if c.want == "" && got != "" || c.want != "" && !strings.Contains(got, c.want) {
+			t.Errorf("%s: want %q, got:\n%s", c.name, c.want, got)
+		}
+	}
+	d := ParseTasks(ok + "## Change: lock\n\n## 2. Lockout\n### Backend\n- [ ] 2.1 Count (AC-login-3, 4)\n")
+	if len(d.Features) != 2 || d.Features[1].Change != "lock" || d.Features[1].Title != "Lockout" || len(d.Features[1].Sections[0].Tasks[0].ACs) != 2 {
+		t.Errorf("parse: %+v", d.Features)
+	}
+}

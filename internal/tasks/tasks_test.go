@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+
+	"github.com/wecii/sdkit/internal/lint"
 )
 
 func TestCore(t *testing.T) {
@@ -147,5 +149,39 @@ func TestRoles(t *testing.T) {
 	}
 	if g, _ := d.Render("X", nil); !g.Group {
 		t.Fatal("a task with role subtasks is a group")
+	}
+}
+
+// The draft of generate-tasks from the role structure of tasks.md: group per feature, subtask per role, after: as dependencies.
+func TestOutline(t *testing.T) {
+	md := "## 1. Login\n### UI\n- [ ] 1.1 Design the form (AC-login-1)\n### Frontend\n- [ ] 1.2 Build the form (AC-login-1) | after: 1.1\n" +
+		"### QA\n- [ ] 1.3 Test the form (AC-login-1, AC-login-2)\n### Backend\n- [ ] 1.4 Check the credentials (AC-login-2)\n" +
+		"## 2. Lockout\n### Backend\n- [ ] 2.1 Count failures (AC-login-3) | after: 1.4\n" +
+		"## Change: reset\n\n## 1. Reset\n### Backend\n- [ ] 1.1 Send the link (AC-login-5)\n"
+	got := Outline(lint.ParseTasks(md), nil)
+	by := map[string]OutTask{}
+	for _, o := range got {
+		by[o.Ref] = o
+	}
+	for _, c := range []struct {
+		ref, deps, acs string
+	}{
+		{"G1", "", "AC-login-1,AC-login-2"},
+		{"G1-frontend", "G1-ui", "AC-login-1"},
+		{"G1-qa", "G1-ui,G1-frontend,G1-backend", "AC-login-1,AC-login-2"}, // qa last: after every other subtask of its group
+		{"G2", "G1", "AC-login-3"},                                         // an after: across features is a group dependency
+		{"G2-backend", "G1-backend", "AC-login-3"},
+	} {
+		o, ok := by[c.ref]
+		if !ok || strings.Join(o.DependsOn, ",") != c.deps || strings.Join(o.ACs, ",") != c.acs {
+			t.Errorf("%s: %+v", c.ref, o)
+		}
+	}
+	if _, ok := by["G3"]; ok || len(got) != 7 {
+		t.Errorf("the base outline leaves a change's tasks out: %d tasks", len(got))
+	}
+	ch := Outline(lint.ParseTasks(md), []string{"reset"})
+	if len(ch) != 2 || ch[0].Change != "reset" || ch[1].Area != "backend" || ch[0].Risk == nil {
+		t.Errorf("revision outline: %+v", ch)
 	}
 }
