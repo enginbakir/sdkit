@@ -19,7 +19,7 @@ test('the agent fixes follow the chosen agent', () => {
 
 test('the setup runs init in copy mode for the chosen agent, quoting a path with a space', () => {
   assert.equal((planFix('init-project', env({ agent: 'codex' })) as { line: string }).line, 'sdkit init --env analyst --host codex --mode copy --install-openspec');
-  assert.equal(command('/Users/a b/sdkit', 'init'), '"/Users/a b/sdkit" init');
+  assert.equal(command('/opt/my tools/sdkit', 'init'), '"/opt/my tools/sdkit" init');
   assert.equal(command('C:\\Program Files\\sdkit.exe', 'init', true), '& "C:\\Program Files\\sdkit.exe" init');
 });
 

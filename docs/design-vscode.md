@@ -1,6 +1,6 @@
 # Design: the VS Code extension
 
-Status: spike on `feat/vscode-extension` (separate branch until the v3 release; the version is not bumped before then).
+Status: first slice shipped in 3.0.0 (Readiness and welcome, Connect, specs list, new pre-spec, run page and questions, editing and sending, sync). Not done: Tasks, Reports, running with Codex, downloading the matching `sdkit` binary, Marketplace and Open VSX publishing.
 Extension: **Spec-Driven Kit**, id `sdkit.sdkit`, in `editors/vscode/`. Audience as the panel (`docs/design-ui.md`): analyst, PM, QA.
 
 ## Decisions
