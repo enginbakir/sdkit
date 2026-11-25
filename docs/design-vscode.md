@@ -52,6 +52,21 @@ The ask bridge that the session's `sdkit ui ask` calls is a loopback listener in
 
 Clicking a spec offers what its state allows (`specActions`: start or continue `generate-specs`, work in the Tech Lead's comments or start a change, merge); a spec waiting on the Tech Lead offers nothing and says so. A run refreshes the list when it ends. **New spec** asks for a name (the kit's rule: letters, digits, `-`, `_`), opens an untitled Markdown tab with a template, and the title-bar button "Ön-speci kaydet" sends the text on stdin to `sdkit ext prespec <id>` (it refuses when git would not ignore the pre-spec directory; an existing name comes back as `exists` and is replaced only after the person agrees). Saving offers to start `generate-specs` at once.
 
+## Seeing that the run is alive
+
+The agent can work for minutes between two messages (subagent reviews, long tool calls), and the page used to show only its messages, so it looked frozen. The "Şu an" box now has the elapsed time, what the agent is doing now ("design.md yazılıyor", "Alt ajan çalışıyor: <task>"; commands are never shown) and how long ago, and the last few moves. A 5-second heartbeat redraws the page, so the times move even when nothing new arrives. The tool events were already in the stream (`Kind: tool`); a subagent call now carries its description, not an empty path.
+
+## A spec's own folder
+
+A run for a spec works in a git worktree of its own (`../<repo>-wt/spec/<id>`): several specs can be in flight, and the main folder stays on the base branch. The cost: the spec's files and its branch are in that folder, not in the folder open in VS Code, so the Explorer does not show them and a session started in the main folder cannot find the spec (`sdkit spec branch` used to stop at "no spec directory"). Now:
+
+- the Specs list shows each spec's **files** under it (read when it is opened; editable or read-only), and opens them where they really are; a spec with a folder of its own has an inline button that opens that folder **in a new window**, where the Explorer, the Claude Code or Codex session and this extension all see the spec;
+- `sdkit ext specs` carries `folder`; `sdkit spec branch <id>` brings the spec's branch into a tree that has only the base, and when another folder holds the branch it says which one instead of failing.
+
+## One pull request for spec and design
+
+`sdkit design publish`, run on the spec's own branch (right after `generate-specs`), commits `designs/<id>/` onto that branch and pushes it: the spec's open PR carries both, and nothing is cut as `design/<id>`. Made alone or after the spec is merged, a design still has its own branch and PR. Not verified against a real PR host: the choice of branch is unit-tested, the push and PR reuse are the code that was already there.
+
 ## Git is not the person's job
 
 A non-technical person never types `add`, `commit`, `push`, `fetch` or `pull`. Creating and updating a spec is already the agent's: `sdkit spec publish` stages, commits, pushes and opens the PR, and the kit moves between `spec/<id>` branches itself (worktrees keep the main folder on the base branch). What was left was staying current with the server, so `sdkit ext sync` does it:

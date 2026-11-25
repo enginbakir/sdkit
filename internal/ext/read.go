@@ -27,13 +27,22 @@ func WriteHealth(ctx context.Context, w io.Writer, root string, getenv func(stri
 	return json.NewEncoder(w).Encode(HealthDoc{Ready: ui.Ready(items), Items: items})
 }
 
+// SpecRow is one line of `sdkit ext specs`: the panel's item, plus the folder the spec's files are in when that is not this one.
+// A spec worked on in its own worktree has its files, drafts and branch there, which the folder open in the editor does not show.
+type SpecRow struct {
+	ui.SpecItem
+	Folder string `json:"folder,omitempty"`
+}
+
 // WriteSpecs prints every spec with its state and flow position.
 func WriteSpecs(w io.Writer, root string) error {
 	items := ui.ListSpecs(root)
-	if items == nil {
-		items = []ui.SpecItem{}
+	wts := ui.Worktrees(root)
+	rows := make([]SpecRow, 0, len(items))
+	for _, it := range items {
+		rows = append(rows, SpecRow{SpecItem: it, Folder: wts[it.ID]})
 	}
-	return json.NewEncoder(w).Encode(items)
+	return json.NewEncoder(w).Encode(rows)
 }
 
 // SpecDoc is `sdkit ext spec <id>`: the panel's spec page, plus the folder its files live in (a spec in a worktree is not in the

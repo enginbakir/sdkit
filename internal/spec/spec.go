@@ -285,6 +285,39 @@ func (e *env) ensureBranch(id string) bool {
 	return e.gok("checkout", "-q", "-b", b)
 }
 
+// branchExists says whether the branch is here or on origin.
+func (e *env) branchExists(b string) bool {
+	return e.gok("show-ref", "--verify", "-q", "refs/heads/"+b) || e.gok("show-ref", "--verify", "-q", "refs/remotes/origin/"+b)
+}
+
+// heldElsewhere is the folder where the branch is checked out when that is not this one ("" when nowhere else): git refuses to
+// check one branch out twice, and a person who is told only "cannot switch" has no way to find the work.
+func (e *env) heldElsewhere(b string) string {
+	out, err := e.g("worktree", "list", "--porcelain")
+	if err != nil {
+		return ""
+	}
+	here, _ := filepath.EvalSymlinks(e.root)
+	path := ""
+	for _, l := range gitx.Lines(out) {
+		if p, ok := strings.CutPrefix(l, "worktree "); ok {
+			path = p
+		} else if r, ok := strings.CutPrefix(l, "branch refs/heads/"); ok && r == b {
+			if real, _ := filepath.EvalSymlinks(path); real != here {
+				return path
+			}
+		}
+	}
+	return ""
+}
+
+func (e *env) heldHint(b string) string {
+	if p := e.heldElsewhere(b); p != "" {
+		return "; it is checked out in " + p
+	}
+	return ""
+}
+
 type refChange struct{ ref, slug string }
 
 // refChanges: every change branch of the spec, remote ones first (a slug appears once).
@@ -534,10 +567,20 @@ func (e *env) dispatch(verb string, a []string) (rc int) {
 	case "changed":
 		return e.changed(id)
 	case "branch":
-		e.needDir(id)
-		if !e.ensureBranch(id) {
-			return int(e.die("cannot switch to spec/%s (never forced: resolve by hand)", id))
+		// the spec may exist only on its own branch (its pull request is open, this tree is on the base): bring that branch here, or say
+		// where it is open. Without this the first step of update-specs died with "no spec directory" from any tree but the spec's own.
+		if st, err := os.Stat(e.abs(id)); (err != nil || !st.IsDir()) && e.branchExists("spec/"+id) {
+			if p := e.heldElsewhere("spec/" + id); p != "" {
+				return int(e.die("spec/%s is checked out in another folder: %s. Work there (open the session in that folder); nothing was changed", id, p))
+			}
 		}
+		if st, err := os.Stat(e.abs(id)); (err != nil || !st.IsDir()) && !e.branchExists("spec/"+id) {
+			e.needDir(id) // no such spec anywhere: the usual refusal
+		}
+		if !e.ensureBranch(id) {
+			return int(e.die("cannot switch to spec/%s (never forced: resolve by hand)%s", id, e.heldHint("spec/"+id)))
+		}
+		e.needDir(id)
 		e.say("spec/%s", id)
 		return 0
 	case "next":
@@ -1079,7 +1122,7 @@ func (e *env) publish(id string, a []string) int {
 		}
 	}
 	if cst == "" && !e.ensureBranch(id) {
-		return int(e.die("cannot switch to spec/%s (never forced)", id))
+		return int(e.die("cannot switch to spec/%s (never forced)%s", id, e.heldHint("spec/"+id)))
 	}
 	if e.isProtected(b) {
 		return int(e.die("branch %s is protected", b))

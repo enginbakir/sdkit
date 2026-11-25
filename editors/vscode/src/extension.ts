@@ -4,7 +4,7 @@ import { Out, QuestionItem } from './protocol';
 import { collect } from './questions';
 import { Session } from './session';
 import { Stepper } from './steps';
-import { actionTitle, Entry, Page, pagePath, render } from './transcript';
+import { actionTitle, activityLabel, Entry, Page, pagePath, pushActivity, render } from './transcript';
 import { sdkitJson, sdkitJsonWithInput, sdkitJsonWithText } from './cli';
 import { Agent, agentName, planFix } from './fixes';
 import { Connection, ConnectionInput, ConnectResult, describeResult, fields } from './connect';
@@ -32,7 +32,7 @@ class StepsView implements vscode.TreeDataProvider<string> {
 
 type Node =
   | { kind: 'group'; label: string; collapsed?: boolean; children: Node[] }
-  | { kind: 'row'; label: string; icon: string; description?: string; tip?: string; spec?: SpecItem; fix?: string };
+  | { kind: 'row'; label: string; icon: string; description?: string; tip?: string; spec?: SpecItem; fix?: string; cmd?: vscode.Command; lazy?: () => Promise<Node[]> };
 
 /** One tree view over a list of nodes; the views only differ in the nodes they hold. */
 class NodeView implements vscode.TreeDataProvider<Node> {
@@ -44,21 +44,27 @@ class NodeView implements vscode.TreeDataProvider<Node> {
     if (n.kind === 'group') {
       return new vscode.TreeItem(`${n.label} (${n.children.length})`, n.collapsed ? vscode.TreeItemCollapsibleState.Collapsed : vscode.TreeItemCollapsibleState.Expanded);
     }
-    const item = new vscode.TreeItem(n.label);
+    // a row with `lazy` children (a spec's files) is read only when it is opened, not for every spec at every refresh
+    const item = new vscode.TreeItem(n.label, n.lazy ? vscode.TreeItemCollapsibleState.Collapsed : vscode.TreeItemCollapsibleState.None);
     item.iconPath = new vscode.ThemeIcon(n.icon);
     item.description = n.description;
     item.tooltip = n.tip;
     if (n.spec) {
-      item.contextValue = 'spec';
+      // a spec worked on in a folder of its own: that folder is what the person opens to see and change its files elsewhere
+      item.contextValue = n.spec.folder ? 'specWorktree' : 'spec';
       item.command = { command: 'sdkit.specAction', title: 'Aç', arguments: [n.spec.id] };
     }
+    if (n.cmd) item.command = n.cmd;
     if (n.fix) {
       item.description = 'Düzelt ▸';
       item.command = { command: 'sdkit.fix', title: 'Düzelt', arguments: [n.fix] };
     }
     return item;
   }
-  getChildren(n?: Node) { return n ? (n.kind === 'group' ? n.children : []) : this.nodes; }
+  getChildren(n?: Node): Node[] | Promise<Node[]> {
+    if (!n) return this.nodes;
+    return n.kind === 'group' ? n.children : n.lazy ? n.lazy() : [];
+  }
 }
 
 const healthIcon = (i: HealthItem) =>
@@ -72,11 +78,12 @@ function healthNodes(d: HealthDoc): Node[] {
   return [{ kind: 'row', label: healthSummary(d), icon: d.ready ? 'pass-filled' : 'warning' }, ...groups];
 }
 
-function specNodes(specs: SpecItem[]): Node[] {
+function specNodes(specs: SpecItem[], files: (id: string) => Promise<Node[]>): Node[] {
   if (!specs.length) return [{ kind: 'row', label: 'Henüz spec yok', icon: 'info', tip: 'Önce bir ön-spec ekleyin, sonra spec üretimini başlatın.' }];
   return groupSpecs(specs).map(g => ({
     kind: 'group' as const, label: g.label,
-    children: g.items.map(s => ({ kind: 'row' as const, label: s.id, description: s.label.trim(), tip: whereIs(s), spec: s,
+    children: g.items.map(s => ({ kind: 'row' as const, label: s.id, description: s.label.trim(), spec: s, lazy: () => files(s.id),
+      tip: s.folder ? `${whereIs(s)}\nÇalışma klasörü: ${s.folder}` : whereIs(s),
       icon: s.continue ? 'play-circle' : s.waiting ? 'watch' : 'check' })),
   }));
 }
@@ -187,7 +194,7 @@ export function activate(ctx: vscode.ExtensionContext) {
       setContexts(h);
       health.set(healthNodes(h));
       specList = await sdkitJson<SpecItem[]>(binary(), cwd, ['specs']);
-      specsView.set(specNodes(specList));
+      specsView.set(specNodes(specList, specFiles));
     } catch (e) {
       const err = describeCliError((e as Error).message);
       // which binary was tried is the first thing to know: an old one found on PATH and a wrong path look alike otherwise
@@ -275,7 +282,7 @@ export function activate(ctx: vscode.ExtensionContext) {
     view.status = 'Başlıyor…';
     view.refresh();
     out.clear(); // the raw log stays available under Output, the page is what the person reads
-    const page: Page = { id, title: actionTitle(action), steps: [], entries: [], running: true };
+    const page: Page = { id, title: actionTitle(action), steps: [], entries: [], running: true, startedAt: Date.now(), activity: [] };
     pages.set(id, page);
     lastRun = id;
     await showPage(id);
@@ -287,7 +294,10 @@ export function activate(ctx: vscode.ExtensionContext) {
       onLine: o => void onLine(s, page, o), onStderr: t => out.append(t),
     });
     session = s;
+    // the time and "n seconds ago" on the page move on their own, even when the agent says and does nothing new
+    const beat = setInterval(() => { if (page.running) redraw(page); }, 5000);
     await s.done;
+    clearInterval(beat);
     session = undefined;
     for (const [path, owner] of watched) if (owner === id) told.delete(path); // a sent edit can be followed by another
     void refresh(); // a run changes what the specs list says
@@ -328,17 +338,41 @@ export function activate(ctx: vscode.ExtensionContext) {
   const watched = new Map<string, string>(); // absolute path -> spec id
   const told = new Set<string>();
 
+  /** The files of a spec as tree rows, grouped as the kit groups them; clicking one opens it where it really is. */
+  async function specFiles(id: string): Promise<Node[]> {
+    try {
+      const d = await detailOf(id);
+      const groups: Node[] = [];
+      for (const l of fileItems(d)) {
+        if (l.separator) groups.push({ kind: 'group', label: l.label, children: [] });
+        else (groups[groups.length - 1] as Extract<Node, { kind: 'group' }>).children.push({
+          kind: 'row', label: l.label, icon: l.file!.editable ? 'edit' : 'lock', description: l.description, tip: l.file!.editable ? l.detail : `${l.detail}\n${l.file!.why ?? ''}`,
+          cmd: { command: 'sdkit.openSpecFile', title: 'Aç', arguments: [id, l.file!.path] },
+        });
+      }
+      return groups.length ? groups : [{ kind: 'row', label: 'Dosya yok', icon: 'info' }];
+    } catch (e) {
+      return [{ kind: 'row', label: `Dosyalar okunamadı: ${(e as Error).message}`, icon: 'error' }];
+    }
+  }
+
   async function openFiles(d: SpecDetail) {
     if (session && lastRun === d.id) return void vscode.window.showWarningMessage('Bu spec için bir çalışma sürüyor; bitmesini bekleyin ya da durdurun, sonra dosyaları düzenleyin.');
     const list = fileItems(d);
     const pick = await vscode.window.showQuickPick(list.map(l => l.separator ? { label: l.label, kind: vscode.QuickPickItemKind.Separator } : { label: l.label, description: l.description, detail: l.detail, file: l.file } as vscode.QuickPickItem & { file?: FileItem }), { title: `${d.id}: dosyalar`, placeHolder: 'Açılacak dosya' });
     const file = (pick as { file?: FileItem } | undefined)?.file;
-    if (!file) return;
+    if (file) await openFile(d, file);
+  }
+
+  async function openFile(d: SpecDetail, file: FileItem) {
+    if (session && lastRun === d.id) return void vscode.window.showWarningMessage('Bu spec için bir çalışma sürüyor; bitmesini bekleyin ya da durdurun, sonra dosyaları düzenleyin.');
     const b = blocked(d, file);
     if (b?.needsBranch) {
       // published files are edited on the spec's own branch: the kit moves there, the person does not need to know
       try { await sdkitJson(binary(), folder()!, ['spec', 'branch', d.id]); } catch (e) { return fail('Spec dalına geçilemedi', e); }
-      return openFiles(await detailOf(d.id));
+      d = await detailOf(d.id);
+      file = d.files.find(f => f.path === file.path) ?? file;
+      return openFile(d, file);
     }
     const uri = vscode.Uri.file(`${d.root}/${file.path}`);
     await vscode.window.showTextDocument(uri);
@@ -349,6 +383,21 @@ export function activate(ctx: vscode.ExtensionContext) {
       return;
     }
     watched.set(uri.fsPath, d.id);
+  }
+
+  /** From a row of the tree: the file of a spec, by its id and path. */
+  async function openSpecFile(id: string, path: string) {
+    let d: SpecDetail;
+    try { d = await detailOf(id); } catch (e) { return fail(`${id} açılamadı`, e); }
+    const file = d.files.find(f => f.path === path);
+    if (file) await openFile(d, file);
+  }
+
+  /** A spec's own folder in a window of its own: its files show in the Explorer there, and an agent session started there sees the spec. */
+  async function openSpecFolder(arg: unknown) {
+    const spec = (arg as { spec?: SpecItem })?.spec;
+    if (!spec?.folder) return void vscode.window.showInformationMessage('Bu spec ana klasörde; ayrı bir çalışma klasörü yok.');
+    await vscode.commands.executeCommand('vscode.openFolder', vscode.Uri.file(spec.folder), { forceNewWindow: true });
   }
 
   /** Straight to one kind of action (an offer made in a message), without the menu. */
@@ -455,6 +504,8 @@ export function activate(ctx: vscode.ExtensionContext) {
         page.steps = view.stepper.list();
       }
       if (e.kind === 'text' && e.text?.trim()) page.entries.push({ kind: 'agent', text: e.text });
+      // the agent can work minutes between two messages: what it is doing now is what keeps the page alive
+      if (e.kind === 'tool') pushActivity(page, activityLabel(e.name ?? '', e.text), Date.now());
       if (e.kind === 'status' && e.name?.startsWith('ask-')) page.entries.push({ kind: 'note', text: `Soru gösterilemedi: ${e.text ?? ''}` });
       if (e.kind === 'text' || e.kind === 'status') out.appendLine(e.text ?? '');
       // what the agent runs (raw commands) is for developers: shown only when asked for, as the panel keeps it under "details"
@@ -505,6 +556,8 @@ export function activate(ctx: vscode.ExtensionContext) {
     vscode.commands.registerCommand('sdkit.run', () => pickSpec()),
     vscode.commands.registerCommand('sdkit.specAction', (id: string) => pickAction(id)),
     vscode.commands.registerCommand('sdkit.newSpec', newSpec),
+    vscode.commands.registerCommand('sdkit.openSpecFile', openSpecFile),
+    vscode.commands.registerCommand('sdkit.openSpecFolder', openSpecFolder),
     vscode.commands.registerCommand('sdkit.savePrespec', savePrespec),
     vscode.commands.registerCommand('sdkit.stop', () => session?.stop()),
     vscode.commands.registerCommand('sdkit.answerPending', () => {
