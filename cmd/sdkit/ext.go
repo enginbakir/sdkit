@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"time"
 
 	"github.com/wecii/sdkit/internal/cli"
 	"github.com/wecii/sdkit/internal/ext"
@@ -16,7 +17,8 @@ import (
 // sdkit ext run <action> <id> [--fresh] [--host <cmd>]   one agent run for an editor extension (docs/design-vscode.md)
 // sdkit ext health [--host <cmd>]   the onboarding checklist as one JSON document
 // sdkit ext specs                   every spec with its state, as JSON
-// sdkit ext spec <id>               the page of one spec, as JSON
+// sdkit ext spec <id>               the page of one spec (state, actions, files and the folder they are in), as JSON
+// sdkit ext spec branch|change <id>  move to the spec's own branch / open a change on an approved spec (the panel's rules, no git for the person)
 // sdkit ext prespec <id> [--overwrite]   store the pre-spec text from stdin as a new pre-spec; {"exists":true} when it is there already
 // sdkit ext sync                    fetch and fast-forward the base branch when that is safe; never discards or merges; JSON with a message for the person
 // sdkit ext connection [save]       the saved Jira/Bitbucket settings; `save` reads them from stdin as JSON, stores them and checks them
@@ -25,7 +27,7 @@ import (
 //	actions: generate-specs, update-specs, update-manual, merge-specs
 func init() { cli.Register("ext", runExt) }
 
-const extUsage = "usage: sdkit ext run <action> <id> [--fresh] [--host <cmd>] | health [--host <cmd>] | specs | spec <id> | connection [save] | prespec <id> [--overwrite] | sync"
+const extUsage = "usage: sdkit ext run <action> <id> [--fresh] [--host <cmd>] | health [--host <cmd>] | specs | spec <id> | spec branch|change <id> | connection [save] | prespec <id> [--overwrite] | sync"
 
 func runExt(args []string) int {
 	if len(args) > 0 && args[0] != "run" {
@@ -92,6 +94,10 @@ func runExtRead(args []string) int {
 		err = ext.WriteHealth(context.Background(), os.Stdout, root, os.Getenv, host)
 	case args[0] == "specs" && len(args) == 1:
 		err = ext.WriteSpecs(os.Stdout, root)
+	case args[0] == "spec" && len(args) == 3 && args[1] == "branch":
+		err = ext.SpecBranch(os.Stdout, root, args[2])
+	case args[0] == "spec" && len(args) == 3 && args[1] == "change":
+		err = ext.SpecChange(os.Stdout, root, args[2], time.Now())
 	case args[0] == "spec" && len(args) == 2:
 		err = ext.WriteSpec(os.Stdout, root, args[1])
 	case args[0] == "prespec" && (len(args) == 2 || (len(args) == 3 && args[2] == "--overwrite")):

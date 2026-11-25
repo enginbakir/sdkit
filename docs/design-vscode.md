@@ -59,7 +59,17 @@ A non-technical person never types `add`, `commit`, `push`, `fetch` or `pull`. C
 - `git fetch` with the saved Bitbucket credential and no prompt; then, **only** when the folder is on the base branch, has no unsaved edits and is simply behind, `merge --ff-only`. It never discards, merges or rewrites anything.
 - Everything else is left alone with a reason in plain words (JSON `state`: `current`, `updated`, `offline`, `dirty`, `other-branch`, `diverged`, `no-remote`). The extension says only what the person can act on: new changes taken in (status bar), unsaved edits or a diverged copy (warning). Offline and another branch are silent.
 - It runs when the extension starts, on "Yenile", and before a run; a run on a copy that is dirty or diverged asks first.
-- Not built yet: hand-editing a spec's files in the editor with a "send" button (it would start `update-manual`, which publishes); a "diverged" copy is only reported, never repaired.
+- A "diverged" copy is only reported, never repaired.
+
+### Editing by hand and sending, without git
+
+Clicking a spec opens a menu built from the kit's own list for its stage (`Detail.Actions`, the panel's list: continue, process the Tech Lead's comments, start a change, edit a change by hand, merge). **Dosyaları aç** lists the spec's Markdown files by group, each marked editable or read-only with the kit's reason, and opens the real file in VS Code's editor (undo, search, autosave). Where the kit says the file lives (a worktree) is `root` in `sdkit ext spec <id>`.
+
+- A published spec's files are edited on its own branch: when the kit says so (`wantBranch`), `sdkit ext spec branch <id>` moves there first; the person is not asked.
+- An approved spec is read-only and says "Değişiklik başlatın"; the message carries that button: `sdkit ext spec change <id>` opens a change (named by who is connected and the time), then the agent asks what changes (`update-specs`).
+- Saving a listed file offers **Gönder**: it starts `update-manual` (the agent reads the diff, reviews, publishes, opens or updates the PR) or, on a draft, carries on `generate-specs`; "Tech Lead yorumlarını işle" (`update-specs`) is offered beside it when the stage has it. The agent does every `add`, `commit` and `push`.
+- No file is edited while a run for the same spec goes on. Read-only files are marked read-only in the editor for the session; the kit, not the editor, is what refuses a change that does not belong to the stage.
+- Not offered yet: `generate-tasks` (needs a Jira parent and a version), reading the Tech Lead's PR comments in the page.
 
 ## The welcome screen
 

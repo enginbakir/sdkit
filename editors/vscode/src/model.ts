@@ -81,15 +81,64 @@ export function needsAttention(d: HealthDoc): boolean {
   return d.items.some(i => (i.level === 'problem' || i.level === 'todo') && !i.soft);
 }
 
-export interface SpecAction { action: 'generate-specs' | 'update-specs' | 'merge-specs'; label: string }
+export interface ActionItem { key: string; label: string; hint?: string; primary?: boolean }
+export interface FileItem { path: string; group: string; editable: boolean; why?: string }
+/** `sdkit ext spec <id>`: the panel's spec page. `root` is the folder the files are in (a worktree, for a spec worked on in one). */
+export interface SpecDetail { id: string; state: string; label: string; actions: ActionItem[]; branch: string; wantBranch?: string; files: FileItem[]; root: string }
 
-/** What the person can start on a spec, worded for its state; nothing while only someone else can act (the Tech Lead's review). */
-export function specActions(s: SpecItem): SpecAction[] {
-  const a: SpecAction[] = [];
-  if (s.continue) a.push({ action: 'generate-specs', label: s.state === 'new' ? 'Spec üretimini başlat' : 'Kaldığı yerden devam et' });
-  if (s.update) a.push({ action: 'update-specs', label: s.state === 'approved' ? 'Değişiklik yap' : 'Tech Lead yorumlarını işle' });
-  if (s.merge) a.push({ action: 'merge-specs', label: 'Değişiklikleri birleştir' });
-  return a;
+export type MenuKind = 'run' | 'startChange' | 'editChange' | 'files';
+export interface MenuItem { kind: MenuKind; label: string; detail?: string; action?: string }
+
+/** The agent runs a run action can start. `generate-tasks` needs a Jira parent and a version the extension does not ask for yet. */
+const RUN_ACTIONS = ['generate-specs', 'update-specs', 'update-manual', 'merge-specs'];
+
+/**
+ * What the person can do with a spec, from the kit's own list for its stage (the same one the panel shows), nothing else. Files come
+ * last: reading and editing is always possible where the kit allows it.
+ */
+export function menu(d: SpecDetail): MenuItem[] {
+  const out: MenuItem[] = [];
+  for (const a of [...d.actions].sort((x, y) => Number(!!y.primary) - Number(!!x.primary))) {
+    if (RUN_ACTIONS.includes(a.key)) out.push({ kind: 'run', label: a.label, detail: a.hint, action: a.key });
+    else if (a.key === 'start-change') out.push({ kind: 'startChange', label: a.label, detail: a.hint });
+    else if (a.key === 'edit-change') out.push({ kind: 'editChange', label: a.label, detail: a.hint });
+  }
+  if (d.files.length) out.push({ kind: 'files', label: 'Dosyaları aç', detail: 'Spec dosyalarını okuyun ya da düzenleyin' });
+  return out;
+}
+
+/** Why a file cannot be edited is the kit's wording; an approved spec is the case where the right next step is to start a change. */
+export type Blocked = { reason: string; needsBranch: boolean; suggestChange: boolean };
+export function blocked(d: SpecDetail, f: FileItem): Blocked | undefined {
+  if (f.editable) return undefined;
+  const hasChange = d.actions.some(a => a.key === 'start-change' || a.key === 'edit-change');
+  return {
+    reason: f.why ?? 'Bu dosya düzenlenemez.',
+    needsBranch: !!d.wantBranch && /dalına geçin/.test(f.why ?? ''),
+    suggestChange: d.state === 'approved' && hasChange && /salt okunur/.test(f.why ?? ''),
+  };
+}
+
+/** What sending the person's own edits means at this stage: the kit reviews the diff and publishes (`update-manual`), or carries on a draft. */
+export function sendActions(d: SpecDetail): ActionItem[] {
+  const send = d.actions.find(a => a.key === 'update-manual') ?? d.actions.find(a => a.key === 'generate-specs');
+  // the agent can also work the Tech Lead's comments in with the edits: offered next to sending, never instead of it
+  const also = d.actions.find(a => a.key === 'update-specs');
+  return [send, also].filter((a): a is ActionItem => !!a);
+}
+
+/** The files by group, for one pick list; a file that cannot be edited says so in the list, not after the click. */
+export function fileItems(d: SpecDetail): { label: string; description: string; detail?: string; file?: FileItem; separator?: boolean }[] {
+  const out: { label: string; description: string; detail?: string; file?: FileItem; separator?: boolean }[] = [];
+  let group = '';
+  for (const f of d.files) {
+    if (f.group !== group) {
+      group = f.group;
+      out.push({ label: group, description: '', separator: true });
+    }
+    out.push({ label: f.path.split('/').pop() ?? f.path, description: f.editable ? 'düzenlenebilir' : 'salt okunur', detail: f.path, file: f });
+  }
+  return out;
 }
 
 /** The pre-spec name becomes a file, a branch and a Jira link, so the kit allows letters, digits, - and _ only. Mirrors ui.ValidID. */

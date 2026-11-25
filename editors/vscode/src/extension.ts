@@ -8,7 +8,7 @@ import { sdkitJson, sdkitJsonWithInput, sdkitJsonWithText } from './cli';
 import { Agent, agentName, planFix } from './fixes';
 import { Connection, ConnectionInput, ConnectResult, describeResult, fields } from './connect';
 import { execFile } from 'child_process';
-import { staleBeforeRun, SyncResult, syncNotice, blockers, PRESPEC_TEMPLATE, specActions, validSpecId, CHECKS, failingChecks, needsAttention, groupHealth, groupSpecs, healthSummary, HealthDoc, HealthItem, SpecItem, whereIs } from './model';
+import { blocked, fileItems, menu, sendActions, SpecDetail, FileItem, staleBeforeRun, SyncResult, syncNotice, blockers, PRESPEC_TEMPLATE, validSpecId, CHECKS, failingChecks, needsAttention, groupHealth, groupSpecs, healthSummary, HealthDoc, HealthItem, SpecItem, whereIs } from './model';
 
 
 class StepsView implements vscode.TreeDataProvider<string> {
@@ -277,24 +277,91 @@ export function activate(ctx: vscode.ExtensionContext) {
     session = s;
     await s.done;
     session = undefined;
+    for (const [path, owner] of watched) if (owner === id) told.delete(path); // a sent edit can be followed by another
     void refresh(); // a run changes what the specs list says
   }
 
+  const detailOf = (id: string) => sdkitJson<SpecDetail>(binary(), folder()!, ['spec', id]);
+  /** A failure of the kit comes with words for the person (it already says what to do); show them as they are. */
+  const fail = (what: string, e: unknown) => void vscode.window.showErrorMessage(`${what}: ${(e as Error).message}`);
+
   async function pickAction(id: string) {
-    const spec = specList.find(x => x.id === id);
-    if (!spec) return;
-    const actions = specActions(spec);
-    if (!actions.length) {
-      return void vscode.window.showInformationMessage(`${id}: ${spec.label.trim()}. Şu an sizin yapacağınız bir şey yok.`);
-    }
-    const pick = await vscode.window.showQuickPick(actions.map(a => ({ label: a.label, action: a.action })), { title: `${id}: ${spec.label.trim()}`, placeHolder: 'Ne yapmak istiyorsunuz?' });
-    if (pick) await startRun(pick.action, id);
+    const cwd = folder();
+    if (!cwd) return;
+    let d: SpecDetail;
+    try { d = await detailOf(id); } catch (e) { return fail(`${id} açılamadı`, e); }
+    const items = menu(d);
+    if (!items.length) return void vscode.window.showInformationMessage(`${id}: ${d.label.trim()}. Şu an yapılacak bir şey yok.`);
+    const pick = await vscode.window.showQuickPick(items.map(i => ({ label: i.label, detail: i.detail, item: i })), { title: `${id}: ${d.label.trim()}`, placeHolder: 'Ne yapmak istiyorsunuz?' });
+    if (!pick) return;
+    const it = pick.item;
+    if (it.kind === 'run') return startRun(it.action!, id);
+    if (it.kind === 'files') return openFiles(d);
+    if (!(await openChange(id))) return;
+    // "start a change" hands the run to the agent, which asks the person what changes; "edit by hand" opens the new, empty change's files
+    if (it.kind === 'startChange') return startRun('update-specs', id);
+    return openFiles(await detailOf(id));
   }
 
+  /** The kit opens the change (and moves to its branch); git's own refusal (unsaved edits) comes back in plain words. */
+  async function openChange(id: string): Promise<boolean> {
+    try {
+      await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: 'Değişiklik hazırlanıyor…' }, () => sdkitJson(binary(), folder()!, ['spec', 'change', id]));
+      void refresh();
+      return true;
+    } catch (e) { fail('Değişiklik açılamadı', e); return false; }
+  }
+
+  // files the person has been offered to edit: saving one is the moment to say how it is sent
+  const watched = new Map<string, string>(); // absolute path -> spec id
+  const told = new Set<string>();
+
+  async function openFiles(d: SpecDetail) {
+    if (session && lastRun === d.id) return void vscode.window.showWarningMessage('Bu spec için bir çalışma sürüyor; bitmesini bekleyin ya da durdurun, sonra dosyaları düzenleyin.');
+    const list = fileItems(d);
+    const pick = await vscode.window.showQuickPick(list.map(l => l.separator ? { label: l.label, kind: vscode.QuickPickItemKind.Separator } : { label: l.label, description: l.description, detail: l.detail, file: l.file } as vscode.QuickPickItem & { file?: FileItem }), { title: `${d.id}: dosyalar`, placeHolder: 'Açılacak dosya' });
+    const file = (pick as { file?: FileItem } | undefined)?.file;
+    if (!file) return;
+    const b = blocked(d, file);
+    if (b?.needsBranch) {
+      // published files are edited on the spec's own branch: the kit moves there, the person does not need to know
+      try { await sdkitJson(binary(), folder()!, ['spec', 'branch', d.id]); } catch (e) { return fail('Spec dalına geçilemedi', e); }
+      return openFiles(await detailOf(d.id));
+    }
+    const uri = vscode.Uri.file(`${d.root}/${file.path}`);
+    await vscode.window.showTextDocument(uri);
+    if (b) {
+      await vscode.commands.executeCommand('workbench.action.files.setActiveEditorReadonlyInSession');
+      const c = await vscode.window.showInformationMessage(b.reason, ...(b.suggestChange ? ['Değişiklik başlat'] : []));
+      if (c) await pickActionKind(d.id, 'startChange');
+      return;
+    }
+    watched.set(uri.fsPath, d.id);
+  }
+
+  /** Straight to one kind of action (an offer made in a message), without the menu. */
+  async function pickActionKind(id: string, kind: 'startChange') {
+    if (kind === 'startChange' && (await openChange(id))) await startRun('update-specs', id);
+  }
+
+  /** A saved edit of a listed file: say what comes next, with the kit's own list of what is possible at this stage. */
+  async function offerSend(doc: vscode.TextDocument) {
+    const id = watched.get(doc.uri.fsPath);
+    if (!id || told.has(doc.uri.fsPath)) return;
+    told.add(doc.uri.fsPath);
+    let d: SpecDetail;
+    try { d = await detailOf(id); } catch { return; }
+    const acts = sendActions(d);
+    if (!acts.length) return;
+    const c = await vscode.window.showInformationMessage(`Değişikliğiniz kaydedildi. Hazır olunca gönderebilirsiniz: ajan farkı gözden geçirip PR'a gönderir. Dosya sayısı fark etmez, hepsi birlikte gider.`, ...acts.map(a => a.label), 'Sonra');
+    const chosen = acts.find(a => a.label === c);
+    if (chosen) await startRun(chosen.key, id);
+  }
+  ctx.subscriptions.push(vscode.workspace.onDidSaveTextDocument(offerSend));
+
   async function pickSpec() {
-    const open = specList.filter(x => specActions(x).length);
-    if (!open.length) return void vscode.window.showInformationMessage('Başlatılacak bir spec yok. Önce yeni bir spec ekleyin.', 'Yeni spec').then(c => c && newSpec());
-    const pick = await vscode.window.showQuickPick(open.map(x => ({ label: x.id, description: x.label.trim() })), { title: 'Hangi spec?' });
+    if (!specList.length) return void vscode.window.showInformationMessage('Henüz spec yok. Önce yeni bir spec ekleyin.', 'Yeni spec').then(c => c && newSpec());
+    const pick = await vscode.window.showQuickPick(specList.map(x => ({ label: x.id, description: x.label.trim() })), { title: 'Hangi spec?' });
     if (pick) await pickAction(pick.label);
   }
 

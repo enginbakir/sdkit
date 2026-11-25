@@ -55,15 +55,7 @@ test('only what the person must do opens the welcome screen, not the Tech Lead\'
   assert.equal(needsAttention({ ready: false, items: [{ level: 'todo', title: 'jira', check: 'jira' }] }), true);
 });
 
-import { specActions, validSpecId } from '../model';
-
-test('a spec offers actions worded for its state', () => {
-  assert.deepEqual(specActions(spec({ continue: true, state: 'new' })).map(a => a.label), ['Spec üretimini başlat']);
-  assert.deepEqual(specActions(spec({ continue: true, state: 'draft' })).map(a => a.label), ['Kaldığı yerden devam et']);
-  assert.deepEqual(specActions(spec({ update: true, merge: true, state: 'approved' })).map(a => a.action), ['update-specs', 'merge-specs']);
-  assert.equal(specActions(spec({ update: true, state: 'approved' }))[0].label, 'Değişiklik yap');
-  assert.deepEqual(specActions(spec({ waiting: true, state: 'awaiting' })), []);
-});
+import { blocked, fileItems, menu, sendActions, SpecDetail, validSpecId } from '../model';
 
 test('spec names follow the kit: no space, no dot, at most 60 characters', () => {
   assert.equal(validSpecId('odeme-akisi_2'), true);
@@ -98,4 +90,34 @@ test('a run is questioned only when the copy is stale for a reason the person ca
   assert.equal(staleBeforeRun(sync('diverged')), true);
   assert.equal(staleBeforeRun(sync('offline')), false);
   assert.equal(staleBeforeRun(undefined), false);
+});
+
+const detail = (o: Partial<SpecDetail>): SpecDetail => ({ id: 'a', state: 'draft', label: 'L', actions: [], branch: 'main', files: [], root: '/r', ...o });
+
+test('the menu is the kit\'s list for the stage: run actions, change actions, then the files', () => {
+  const m = menu(detail({ state: 'approved', files: [{ path: 'specs/a/spec.md', group: 'Spec', editable: false }], actions: [
+    { key: 'start-change', label: 'Değişiklik başlat', primary: true }, { key: 'edit-change', label: 'Elle düzenle' },
+    { key: 'generate-tasks', label: 'Task üret' }, { key: 'merge-specs', label: 'Birleştir' }] }));
+  assert.deepEqual(m.map(x => x.kind), ['startChange', 'editChange', 'run', 'files']); // tasks are not offered: they need a Jira key
+});
+
+test('a read-only file says why, and an approved spec suggests a change instead of a dead end', () => {
+  const d = detail({ state: 'approved', actions: [{ key: 'start-change', label: 'x' }] });
+  const b = blocked(d, { path: 'p', group: 'Spec', editable: false, why: 'Onaylı sürüm salt okunur. Değişiklik başlatın.' })!;
+  assert.equal(b.suggestChange, true);
+  assert.equal(b.needsBranch, false);
+  const c = blocked(detail({ wantBranch: 'spec/a' }), { path: 'p', group: 'Spec', editable: false, why: 'Düzenlemek için önce spec dalına geçin.' })!;
+  assert.equal(c.needsBranch, true);
+  assert.equal(blocked(d, { path: 'p', group: 'Spec', editable: true }), undefined);
+});
+
+test('sending edits means update-manual, or carrying on the draft; the Tech Lead\'s comments are offered next to it', () => {
+  assert.deepEqual(sendActions(detail({ state: 'awaiting', actions: [{ key: 'update-specs', label: 'a' }, { key: 'update-manual', label: 'b' }] })).map(a => a.key), ['update-manual', 'update-specs']);
+  assert.deepEqual(sendActions(detail({ actions: [{ key: 'generate-specs', label: 'c' }] })).map(a => a.key), ['generate-specs']);
+  assert.deepEqual(sendActions(detail({ actions: [] })), []);
+});
+
+test('files are listed by group, each saying whether it can be edited', () => {
+  const l = fileItems(detail({ files: [{ path: 'prespec/a.md', group: 'Ön-spec', editable: true }, { path: 'specs/a/spec.md', group: 'Spec', editable: false }] }));
+  assert.deepEqual(l.map(x => [x.label, x.separator ? 'group' : x.description]), [['Ön-spec', 'group'], ['a.md', 'düzenlenebilir'], ['Spec', 'group'], ['spec.md', 'salt okunur']]);
 });

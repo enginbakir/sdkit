@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"time"
 
 	"github.com/wecii/sdkit/internal/ui"
 )
@@ -35,13 +36,38 @@ func WriteSpecs(w io.Writer, root string) error {
 	return json.NewEncoder(w).Encode(items)
 }
 
+// SpecDoc is `sdkit ext spec <id>`: the panel's spec page, plus the folder its files live in (a spec in a worktree is not in the
+// main folder), so an editor can open them where they are.
+type SpecDoc struct {
+	ui.Detail
+	Root string `json:"root"`
+}
+
 // WriteSpec prints the page of one spec: what was done, what can be done now, its files.
 func WriteSpec(w io.Writer, root, id string) error {
-	d, err := ui.GetDetail(ui.RootFor(root, id), id)
+	r := ui.RootFor(root, id)
+	d, err := ui.GetDetail(r, id)
 	if err != nil {
 		return err
 	}
-	return json.NewEncoder(w).Encode(d)
+	return json.NewEncoder(w).Encode(SpecDoc{Detail: d, Root: r})
+}
+
+// SpecBranch moves a spec's tree to the spec's own branch, which is where its published files are edited (the kit's `spec branch`).
+func SpecBranch(w io.Writer, root, id string) error {
+	if err := ui.SwitchBranch(ui.RootFor(root, id), id); err != nil {
+		return err
+	}
+	return json.NewEncoder(w).Encode(map[string]bool{"ok": true})
+}
+
+// SpecChange opens a change on an approved spec; its name is who is connected and the time, never the caller's text.
+func SpecChange(w io.Writer, root, id string, now time.Time) error {
+	slug, err := ui.StartChange(ui.RootFor(root, id), id, ui.ReadConnection(root).JiraUser, now)
+	if err != nil {
+		return err
+	}
+	return json.NewEncoder(w).Encode(map[string]string{"slug": slug})
 }
 
 // PrespecResult is what saving a pre-spec answers. Exists is true (and nothing was written) when the pre-spec is already there and
