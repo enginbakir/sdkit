@@ -37,7 +37,7 @@ The ask bridge that the session's `sdkit ui ask` calls is a loopback listener in
 | Panel | Extension |
 |---|---|
 | Stepper | TreeView "Run", built from the step banners (`steps.ts`) |
-| Conversation | Output channel "Spec-Driven Kit" (spike); a Chat view is the open alternative |
+| Conversation | The run page: a virtual Markdown document (`sdkit-run:/<id>.md`, `transcript.ts`) drawn by VS Code's own Markdown preview in the main editor area and redrawn on every event. A "Şu an" box at the top says what matters now (a question waiting, the end, the last message); the conversation follows, with each question and the person's answer. View-only: questions are answered in the QuickPick, and the status bar brings a closed one back. The raw log stays in the Output channel. |
 | Question form | QuickPick (single or multi), InputBox for free text; `ignoreFocusOut`, because the agent waits |
 | Finding card, plan gate | Not in the spike: asked as a plain choice; later a diff editor and a Markdown preview |
 | Waiting badge | Status bar item and a warning notification |

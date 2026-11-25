@@ -67,6 +67,23 @@
         "command": "sdkit.specAction",
         "title": "Spec eylemi",
         "category": "SDKit"
+      },
+      {
+        "command": "sdkit.showRun",
+        "title": "Çalışma sayfasını aç",
+        "category": "SDKit",
+        "icon": "$(preview)"
+      },
+      {
+        "command": "sdkit.showLog",
+        "title": "Ham günlüğü göster",
+        "category": "SDKit",
+        "icon": "$(output)"
+      },
+      {
+        "command": "sdkit.answerPending",
+        "title": "Bekleyen soruyu cevapla",
+        "category": "SDKit"
       }
     ],
     "viewsContainers": {
@@ -134,6 +151,16 @@
         {
           "command": "sdkit.connect",
           "when": "view == sdkit.health",
+          "group": "navigation@1"
+        },
+        {
+          "command": "sdkit.showRun",
+          "when": "view == sdkit.steps",
+          "group": "navigation@0"
+        },
+        {
+          "command": "sdkit.showLog",
+          "when": "view == sdkit.steps",
           "group": "navigation@1"
         }
       ],

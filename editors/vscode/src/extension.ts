@@ -3,6 +3,7 @@ import { Out, QuestionItem } from './protocol';
 import { collect } from './questions';
 import { Session } from './session';
 import { Stepper } from './steps';
+import { actionTitle, Entry, Page, pagePath, render } from './transcript';
 import { sdkitJson, sdkitJsonWithInput, sdkitJsonWithText } from './cli';
 import { planFix } from './fixes';
 import { Connection, ConnectionInput, ConnectResult, describeResult, fields } from './connect';
@@ -89,6 +90,31 @@ export function activate(ctx: vscode.ExtensionContext) {
   const bar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left);
   let session: Session | undefined;
   let waiting = 0;
+
+  // the run page: a virtual Markdown document drawn by VS Code's own preview in the middle of the window, redrawn on every event
+  const pages = new Map<string, Page>();
+  const changed = new vscode.EventEmitter<vscode.Uri>();
+  const uriOf = (id: string) => vscode.Uri.from({ scheme: 'sdkit-run', path: pagePath(id) });
+  ctx.subscriptions.push(changed, vscode.workspace.registerTextDocumentContentProvider('sdkit-run', {
+    onDidChange: changed.event,
+    provideTextDocumentContent: uri => {
+      const p = pages.get(uri.path.replace(/^\/|\.md$/g, ''));
+      return p ? render(p) : '# Bu çalışma artık açık değil\n';
+    },
+  }));
+  let redrawTimer: NodeJS.Timeout | undefined;
+  /** Events come in bursts; one redraw per burst keeps the preview from flickering. */
+  function redraw(p: Page) {
+    if (redrawTimer) return;
+    redrawTimer = setTimeout(() => { redrawTimer = undefined; changed.fire(uriOf(p.id)); }, 150);
+  }
+  async function showPage(id: string) {
+    // the preview opens the document itself; showPreview (not ToSide) puts it in the main editor area
+    await vscode.commands.executeCommand('markdown.showPreview', uriOf(id));
+  }
+  // questions still waiting, so the status bar can bring one back after the person closed the box
+  const pending = new Map<number, () => void>();
+  let lastRun: string | undefined;
 
   ctx.subscriptions.push(out, bar, vscode.window.registerTreeDataProvider('sdkit.steps', view),
     vscode.window.registerTreeDataProvider('sdkit.specs', specsView));
@@ -198,14 +224,17 @@ export function activate(ctx: vscode.ExtensionContext) {
     view.stepper = new Stepper();
     view.status = 'Başlıyor…';
     view.refresh();
-    out.clear();
-    out.show(true);
-    void vscode.commands.executeCommand('sdkit.steps.focus');
+    out.clear(); // the raw log stays available under Output, the page is what the person reads
+    const page: Page = { id, title: actionTitle(action), steps: [], entries: [], running: true };
+    pages.set(id, page);
+    lastRun = id;
+    await showPage(id);
     bar.text = '$(sync~spin) SDKit çalışıyor';
+    bar.command = 'sdkit.showRun';
     bar.show();
     const s = new Session({
       binary: binary(), cwd, action, id, host: cfg.get<string>('hostCommand') || undefined,
-      onLine: o => void onLine(s, o), onStderr: t => out.append(t),
+      onLine: o => void onLine(s, page, o), onStderr: t => out.append(t),
     });
     session = s;
     await s.done;
@@ -301,25 +330,54 @@ export function activate(ctx: vscode.ExtensionContext) {
     text: (item: QuestionItem) => Promise.resolve(vscode.window.showInputBox({ title: item.header, prompt: item.question, ignoreFocusOut: true })),
   };
 
-  async function onLine(s: Session, o: Out) {
+  async function onLine(s: Session, page: Page, o: Out) {
     if (o.type === 'event') {
       const e = o.event;
-      if (view.stepper.apply(e)) view.refresh();
+      if (view.stepper.apply(e)) {
+        view.refresh();
+        page.steps = view.stepper.list();
+      }
+      if (e.kind === 'text' && e.text?.trim()) page.entries.push({ kind: 'agent', text: e.text });
+      if (e.kind === 'status' && e.name?.startsWith('ask-')) page.entries.push({ kind: 'note', text: `Soru gösterilemedi: ${e.text ?? ''}` });
       if (e.kind === 'text' || e.kind === 'status') out.appendLine(e.text ?? '');
       // what the agent runs (raw commands) is for developers: shown only when asked for, as the panel keeps it under "details"
       if (e.kind === 'tool' && vscode.workspace.getConfiguration('sdkit').get<boolean>('showToolActivity')) out.appendLine(`  · ${e.text ?? e.name ?? ''}`);
       if (e.kind === 'result' && e.failed) out.appendLine(`FAILED: ${e.text ?? ''}`);
+      redraw(page);
     } else if (o.type === 'question') {
+      let entry = page.entries.find(x => x.kind === 'question' && x.id === o.id) as Extract<Entry, { kind: 'question' }> | undefined;
+      if (!entry) {
+        entry = { kind: 'question', id: o.id, items: o.questions.questions };
+        page.entries.push(entry);
+      }
+      entry.dismissed = false;
+      pending.delete(o.id);
       waiting++;
       bar.text = `$(question) SDKit: cevabınız bekleniyor`;
+      bar.command = 'sdkit.answerPending';
+      redraw(page);
       out.appendLine(`? ${o.questions.questions.map(q => q.question).join(' / ')}`);
       const answers = await collect(o.questions.questions, asker);
       waiting--;
-      bar.text = '$(sync~spin) SDKit çalışıyor';
-      if (answers) s.answer(o.id, answers);
-      else vscode.window.showWarningMessage('SDKit cevabınızı bekliyor.', 'Cevapla').then(c => c && onLine(s, o));
+      if (answers) {
+        entry.answers = answers;
+        s.answer(o.id, answers);
+      } else {
+        entry.dismissed = true;
+        pending.set(o.id, () => void onLine(s, page, o));
+        vscode.window.showWarningMessage('SDKit cevabınızı bekliyor.', 'Cevapla').then(c => c && pending.get(o.id)?.());
+      }
+      if (!pending.size) {
+        bar.text = '$(sync~spin) SDKit çalışıyor';
+        bar.command = 'sdkit.showRun';
+      }
+      redraw(page);
     } else if (o.type === 'end') {
       bar.hide();
+      pending.clear();
+      page.running = false;
+      page.entries.push({ kind: 'end', failed: !!o.failed, text: o.error });
+      redraw(page);
       view.status = o.failed ? `Başarısız: ${o.error ?? ''}` : 'Bitti';
       view.refresh();
       if (o.failed) vscode.window.showErrorMessage(`SDKit: ${o.error ?? 'çalışma başarısız oldu'}`);
@@ -332,6 +390,13 @@ export function activate(ctx: vscode.ExtensionContext) {
     vscode.commands.registerCommand('sdkit.newSpec', newSpec),
     vscode.commands.registerCommand('sdkit.savePrespec', savePrespec),
     vscode.commands.registerCommand('sdkit.stop', () => session?.stop()),
+    vscode.commands.registerCommand('sdkit.answerPending', () => {
+      const first = pending.values().next().value;
+      if (first) first();
+      else if (lastRun) void showPage(lastRun);
+    }),
+    vscode.commands.registerCommand('sdkit.showRun', () => lastRun && showPage(lastRun)),
+    vscode.commands.registerCommand('sdkit.showLog', () => out.show()),
   );
 }
 
