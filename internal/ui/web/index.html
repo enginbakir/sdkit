@@ -347,7 +347,7 @@ async function loadHealth() {
     const tx = document.createElement('div');
     const t = document.createElement('div'); t.className = 't'; t.textContent = it.title; tx.appendChild(t);
     if (it.help) { const p = document.createElement('div'); p.className = 'h'; p.textContent = it.help; tx.appendChild(p); }
-    if (it.fix) {
+    if (it.fix === 'connect') { // the other fixes are commands only the editor extension runs
       const b = document.createElement('button'); b.className = 'btn'; b.style.marginTop = '.4rem'; b.textContent = 'Düzelt';
       b.onclick = () => show(it.fix); tx.appendChild(b);
     }

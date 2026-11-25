@@ -25,12 +25,23 @@ const (
 // Fix names the screen that solves an item; empty means the person cannot fix it themselves and should tell the tech team.
 const FixConnect = "connect"
 
+// The other fixes are things a person can start themselves where the page that shows the item can run a command (the editor
+// extension does; the web panel only offers FixConnect).
+const (
+	FixInstallOpenSpec = "install-openspec"
+	FixInstallClaude   = "install-claude"
+	FixLoginClaude     = "login-claude"
+)
+
 // Item is one line of the Health screen.
 type Item struct {
 	Level string `json:"level"`
 	Title string `json:"title"`          // what is wrong or fine, in plain words
 	Help  string `json:"help,omitempty"` // what to do
 	Fix   string `json:"fix,omitempty"`
+	// Check names what was checked (claude, claude-login, openspec, jira, bitbucket, project, setup), so a page can tell which
+	// check failed without reading the words of the title. A check fails when an item with its name is a problem or a todo.
+	Check string `json:"check,omitempty"`
 	Raw   string `json:"raw,omitempty"` // the original `sdkit doctor` line, under "details"
 	// Soft marks a problem the person cannot fix and that does not stop the work (the Tech Lead's to do); Ready ignores it.
 	Soft bool `json:"soft,omitempty"`
@@ -42,9 +53,10 @@ type Item struct {
 var goodNews = []struct {
 	re    *regexp.Regexp
 	title string
+	check string
 }{
-	{regexp.MustCompile(`Jira reachable and the credentials work`), "Jira bağlantısı çalışıyor"},
-	{regexp.MustCompile(`openspec CLI installed`), "OpenSpec kurulu"},
+	{regexp.MustCompile(`Jira reachable and the credentials work`), "Jira bağlantısı çalışıyor", "jira"},
+	{regexp.MustCompile(`openspec CLI installed`), "OpenSpec kurulu", "openspec"},
 }
 
 // rule maps a doctor line to plain words. The first rule that matches wins; a rule with an empty Title hides the line from the
@@ -56,18 +68,19 @@ type rule struct {
 	fix   string
 	level string // forces a level; empty keeps the one doctor gave
 	soft  bool
+	check string // see Item.Check
 }
 
 var rules = []rule{
-	{regexp.MustCompile(`server-side gate|scaffold-version|scaffold-shared|drift|upgrade`), "", "", "", LevelNote, false},
+	{regexp.MustCompile(`server-side gate|scaffold-version|scaffold-shared|drift|upgrade`), "", "", "", LevelNote, false, ""},
 	// the network being down is not something the person can fix on the Connect page, and spec writing does not need Jira
-	{regexp.MustCompile(`Jira (is )?not reachable|Jira answered`), "Jira'ya şu an ulaşılamıyor", "İnternet bağlantınızı kontrol edin. Spec yazmayı etkilemez, görev üretmek için gerekir.", "", LevelProblem, true},
-	{regexp.MustCompile(`JIRA_|TRACKER is not jira|Jira refused`), "Jira bağlantısı eksik veya çalışmıyor", "Configuration sayfasında Jira bilgilerini girin.", FixConnect, LevelTodo, false},
-	{regexp.MustCompile(`(?i)bitbucket (api )?token|bitbucket account|BITBUCKET_|Bitbucket (rejected|not reachable)`), "Bitbucket bağlantısı eksik veya çalışmıyor", "Configuration sayfasında Bitbucket bilgilerini girin.", FixConnect, LevelTodo, false},
-	{regexp.MustCompile(`project\.md still has TODO`), "Proje profili (project.md) doldurulmamış", "Bunu Tech Lead'in doldurması gerekir.", "", LevelProblem, true},
-	{regexp.MustCompile(`openspec CLI`), "OpenSpec kurulu değil", "Spec üretimi için gerekli. Teknik ekipten kurmasını isteyin.", "", LevelProblem, false},
-	{regexp.MustCompile(`not a git repository`), "Bu klasör bir git deposu değil", "sdkit'i deponun içinden başlatın.", "", LevelProblem, false},
-	{regexp.MustCompile(`settings\.local\.json .*missing`), "Bu bilgisayarda kurulum tamamlanmamış", "Teknik ekipten bu depoda `sdkit init` çalıştırmasını isteyin.", "", LevelProblem, false},
+	{regexp.MustCompile(`Jira (is )?not reachable|Jira answered`), "Jira'ya şu an ulaşılamıyor", "İnternet bağlantınızı kontrol edin. Spec yazmayı etkilemez, görev üretmek için gerekir.", "", LevelProblem, true, "jira"},
+	{regexp.MustCompile(`JIRA_|TRACKER is not jira|Jira refused`), "Jira bağlantısı eksik veya çalışmıyor", "Configuration sayfasında Jira bilgilerini girin.", FixConnect, LevelTodo, false, "jira"},
+	{regexp.MustCompile(`(?i)bitbucket (api )?token|bitbucket account|BITBUCKET_|Bitbucket (rejected|not reachable)`), "Bitbucket bağlantısı eksik veya çalışmıyor", "Configuration sayfasında Bitbucket bilgilerini girin.", FixConnect, LevelTodo, false, "bitbucket"},
+	{regexp.MustCompile(`project\.md still has TODO`), "Proje profili (project.md) doldurulmamış", "Bunu Tech Lead'in doldurması gerekir.", "", LevelProblem, true, "project"},
+	{regexp.MustCompile(`openspec CLI`), "OpenSpec kurulu değil", "Spec üretimi için gerekli. Teknik ekipten kurmasını isteyin.", FixInstallOpenSpec, LevelProblem, false, "openspec"},
+	{regexp.MustCompile(`not a git repository`), "Bu klasör bir git deposu değil", "sdkit'i deponun içinden başlatın.", "", LevelProblem, false, "setup"},
+	{regexp.MustCompile(`settings\.local\.json .*missing`), "Bu bilgisayarda kurulum tamamlanmamış", "Teknik ekipten bu depoda `sdkit init` çalıştırmasını isteyin.", "", LevelProblem, false, "setup"},
 }
 
 var doctorLine = regexp.MustCompile(`^\s*(ok|warn|FAIL|TODO\s+\d+\.)\s+(.*)$`)
@@ -90,13 +103,13 @@ func ParseDoctor(out string) []Item {
 		if level == LevelOK {
 			for _, g := range goodNews {
 				if g.re.MatchString(text) {
-					it.Title, it.Main = g.title, true
+					it.Title, it.Main, it.Check = g.title, true, g.check
 				}
 			}
 		}
 		for _, r := range rules {
 			if r.re.MatchString(text) && level != LevelOK {
-				it.Title, it.Help, it.Fix, it.Soft = r.title, r.help, r.fix, r.soft
+				it.Title, it.Help, it.Fix, it.Soft, it.Check = r.title, r.help, r.fix, r.soft, r.check
 				if r.level != "" {
 					it.Level = r.level
 				}
@@ -148,7 +161,7 @@ func hostItem(ctx context.Context, host string) []Item {
 		host = "claude"
 	}
 	if _, err := proc.LookPath(host); err != nil {
-		return []Item{{Level: LevelProblem, Main: true, Title: "Claude Code kurulu değil", Help: "Spec üretimi Claude Code ile çalışır. Teknik ekipten kurmasını isteyin."}}
+		return []Item{{Level: LevelProblem, Main: true, Check: "claude", Title: "Claude Code kurulu değil", Help: "Spec üretimi Claude Code ile çalışır. Teknik ekipten kurmasını isteyin.", Fix: FixInstallClaude}}
 	}
 	if host != "claude" {
 		return []Item{{Level: LevelOK, Title: host + " kurulu", Main: true}}
@@ -160,7 +173,7 @@ func hostItem(ctx context.Context, host string) []Item {
 		LoggedIn bool `json:"loggedIn"`
 	}
 	if err != nil || json.Unmarshal(out, &st) != nil || !st.LoggedIn {
-		return []Item{{Level: LevelProblem, Main: true, Title: "Claude Code'a giriş yapılmamış", Help: "Teknik ekipten bu bilgisayarda Claude Code'a giriş yapmasını isteyin."}}
+		return []Item{{Level: LevelProblem, Main: true, Check: "claude-login", Title: "Claude Code'a giriş yapılmamış", Help: "Teknik ekipten bu bilgisayarda Claude Code'a giriş yapmasını isteyin.", Fix: FixLoginClaude}}
 	}
-	return []Item{{Level: LevelOK, Title: "Claude Code hazır", Main: true}}
+	return []Item{{Level: LevelOK, Title: "Claude Code hazır", Main: true, Check: "claude-login"}}
 }

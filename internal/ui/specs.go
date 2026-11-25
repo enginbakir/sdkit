@@ -79,6 +79,9 @@ func ValidID(id string) bool { return reID.MatchString(id) }
 
 const maxPrespec = 200 << 10
 
+// ErrPrespecExists is what WritePrespec wraps when the pre-spec is there and was not to be replaced, so a caller can ask the person.
+var ErrPrespecExists = errors.New("pre-spec exists")
+
 // WritePrespec saves the person's text as the pre-spec <id> in the project's pre-spec directory. The pre-spec is working input and
 // is never committed, so it refuses when git would not ignore the file. An existing pre-spec is only replaced on request.
 func WritePrespec(root, id, text string, overwrite bool) error {
@@ -103,7 +106,7 @@ func WritePrespec(root, id, text string, overwrite bool) error {
 		return fmt.Errorf("%s git tarafından yok sayılmıyor; ön-spec yanlışlıkla paylaşılmasın diye kaydedilmedi", dir)
 	}
 	if _, err := os.Stat(path); err == nil && !overwrite {
-		return fmt.Errorf("%q adında bir ön-spec zaten var", id)
+		return fmt.Errorf("%q adında bir ön-spec zaten var: %w", id, ErrPrespecExists)
 	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err

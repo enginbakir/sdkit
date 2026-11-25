@@ -1,0 +1,373 @@
+{
+  "name": "sdkit",
+  "displayName": "Spec-Driven Kit",
+  "description": "Write, review and publish specs with an AI agent, without a terminal.",
+  "publisher": "sdkit",
+  "version": "0.0.1",
+  "private": true,
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "main": "./out/extension.js",
+  "activationEvents": [
+    "workspaceContains:.sdkit/sdkit.env"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "sdkit.run",
+        "title": "Spec üzerinde çalış",
+        "category": "SDKit"
+      },
+      {
+        "command": "sdkit.stop",
+        "title": "Çalışan adımı durdur",
+        "category": "SDKit"
+      },
+      {
+        "command": "sdkit.refresh",
+        "title": "Yenile",
+        "category": "SDKit",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "sdkit.connect",
+        "title": "Jira ve Bitbucket bağlantısı",
+        "category": "SDKit",
+        "icon": "$(plug)"
+      },
+      {
+        "command": "sdkit.fix",
+        "title": "Düzelt",
+        "category": "SDKit"
+      },
+      {
+        "command": "sdkit.welcome",
+        "title": "Karşılama ekranını aç",
+        "category": "SDKit",
+        "icon": "$(checklist)"
+      },
+      {
+        "command": "sdkit.newSpec",
+        "title": "Yeni spec",
+        "category": "SDKit",
+        "icon": "$(add)"
+      },
+      {
+        "command": "sdkit.savePrespec",
+        "title": "Ön-speci kaydet",
+        "category": "SDKit",
+        "icon": "$(save)"
+      },
+      {
+        "command": "sdkit.specAction",
+        "title": "Spec eylemi",
+        "category": "SDKit"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "sdkit",
+          "title": "Spec-Driven Kit",
+          "icon": "$(book)"
+        }
+      ]
+    },
+    "views": {
+      "sdkit": [
+        {
+          "id": "sdkit.health",
+          "name": "Hazırlık"
+        },
+        {
+          "id": "sdkit.specs",
+          "name": "Specler"
+        },
+        {
+          "id": "sdkit.steps",
+          "name": "Çalışma"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Spec-Driven Kit",
+      "properties": {
+        "sdkit.binaryPath": {
+          "type": "string",
+          "default": "sdkit",
+          "description": "The sdkit binary. Spike: taken from PATH; later the extension fetches the right one."
+        },
+        "sdkit.hostCommand": {
+          "type": "string",
+          "default": "",
+          "description": "Agent host executable (default: claude). For tests."
+        },
+        "sdkit.showToolActivity": {
+          "type": "boolean",
+          "default": false,
+          "description": "Ajanın çalıştırdığı komutları da Output kanalında göster (geliştiriciler için)."
+        }
+      }
+    },
+    "menus": {
+      "view/title": [
+        {
+          "command": "sdkit.newSpec",
+          "when": "view == sdkit.specs",
+          "group": "navigation@0"
+        },
+        {
+          "command": "sdkit.welcome",
+          "when": "view == sdkit.health",
+          "group": "navigation@0"
+        },
+        {
+          "command": "sdkit.refresh",
+          "when": "view == sdkit.specs || view == sdkit.health",
+          "group": "navigation@2"
+        },
+        {
+          "command": "sdkit.connect",
+          "when": "view == sdkit.health",
+          "group": "navigation@1"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "sdkit.fix",
+          "when": "false"
+        },
+        {
+          "command": "sdkit.specAction",
+          "when": "false"
+        },
+        {
+          "command": "sdkit.savePrespec",
+          "when": "sdkit.prespecDraft"
+        }
+      ],
+      "editor/title": [
+        {
+          "command": "sdkit.savePrespec",
+          "when": "sdkit.prespecDraft",
+          "group": "navigation"
+        }
+      ]
+    },
+    "walkthroughs": [
+      {
+        "id": "onboarding",
+        "title": "Spec-Driven Kit'e hoş geldiniz",
+        "description": "Spec yazmaya başlamadan önce nelerin hazır, nelerin eksik olduğunu görün.",
+        "steps": [
+          {
+            "id": "checking",
+            "title": "Denetleniyor…",
+            "description": "Hazırlık denetleniyor, birkaç saniye sürer.",
+            "media": {
+              "markdown": "media/checking.md"
+            },
+            "when": "!sdkit.checked",
+            "completionEvents": [
+              "onContext:sdkit.never"
+            ]
+          },
+          {
+            "id": "setup.ok",
+            "title": "✓ Bu klasörde kurulum tamamlanmış",
+            "description": "Bu klasörde sdkit kurulumu eksik. Teknik ekipten `sdkit init` çalıştırmasını isteyin.",
+            "media": {
+              "markdown": "media/setup.md"
+            },
+            "when": "sdkit.checked && sdkit.ok.setup",
+            "completionEvents": [
+              "onContext:sdkit.ok.setup"
+            ]
+          },
+          {
+            "id": "setup.fail",
+            "title": "✗ Bu klasörde kurulum tamamlanmamış",
+            "description": "Bu klasörde sdkit kurulumu eksik. Teknik ekipten `sdkit init` çalıştırmasını isteyin.",
+            "media": {
+              "markdown": "media/setup.md"
+            },
+            "when": "sdkit.checked && sdkit.fail.setup",
+            "completionEvents": [
+              "onContext:sdkit.never"
+            ]
+          },
+          {
+            "id": "claude.ok",
+            "title": "✓ Claude Code kurulu",
+            "description": "Spec'leri yazan yapay zekâ ajanı Claude Code ile çalışır.",
+            "media": {
+              "markdown": "media/claude.md"
+            },
+            "when": "sdkit.checked && sdkit.ok.claude",
+            "completionEvents": [
+              "onContext:sdkit.ok.claude"
+            ]
+          },
+          {
+            "id": "claude.fail",
+            "title": "✗ Claude Code kurulu değil",
+            "description": "Spec'leri yazan yapay zekâ ajanı Claude Code ile çalışır.\n[Claude Code'u kur](command:sdkit.fix?%5B%22install-claude%22%5D)",
+            "media": {
+              "markdown": "media/claude.md"
+            },
+            "when": "sdkit.checked && sdkit.fail.claude",
+            "completionEvents": [
+              "onContext:sdkit.never"
+            ]
+          },
+          {
+            "id": "claude-login.ok",
+            "title": "✓ Claude Code'a giriş yapılmış",
+            "description": "Ajanın çalışabilmesi için bu bilgisayarda Claude hesabınızla giriş yapmalısınız.",
+            "media": {
+              "markdown": "media/claude-login.md"
+            },
+            "when": "sdkit.checked && sdkit.ok.claude-login",
+            "completionEvents": [
+              "onContext:sdkit.ok.claude-login"
+            ]
+          },
+          {
+            "id": "claude-login.fail",
+            "title": "✗ Claude Code'a giriş yapılmamış",
+            "description": "Ajanın çalışabilmesi için bu bilgisayarda Claude hesabınızla giriş yapmalısınız.\n[Giriş yap](command:sdkit.fix?%5B%22login-claude%22%5D)",
+            "media": {
+              "markdown": "media/claude-login.md"
+            },
+            "when": "sdkit.checked && sdkit.fail.claude-login",
+            "completionEvents": [
+              "onContext:sdkit.never"
+            ]
+          },
+          {
+            "id": "openspec.ok",
+            "title": "✓ OpenSpec kurulu",
+            "description": "Spec dosyalarını üreten araç. Bir kez kurulur.",
+            "media": {
+              "markdown": "media/openspec.md"
+            },
+            "when": "sdkit.checked && sdkit.ok.openspec",
+            "completionEvents": [
+              "onContext:sdkit.ok.openspec"
+            ]
+          },
+          {
+            "id": "openspec.fail",
+            "title": "✗ OpenSpec kurulu değil",
+            "description": "Spec dosyalarını üreten araç. Bir kez kurulur.\n[OpenSpec'i kur](command:sdkit.fix?%5B%22install-openspec%22%5D)",
+            "media": {
+              "markdown": "media/openspec.md"
+            },
+            "when": "sdkit.checked && sdkit.fail.openspec",
+            "completionEvents": [
+              "onContext:sdkit.never"
+            ]
+          },
+          {
+            "id": "jira.ok",
+            "title": "✓ Jira bağlantısı çalışıyor",
+            "description": "Görevlerin Jira'da oluşturulması ve spec'in Jira ile eşleşmesi için gerekir.",
+            "media": {
+              "markdown": "media/jira.md"
+            },
+            "when": "sdkit.checked && sdkit.ok.jira",
+            "completionEvents": [
+              "onContext:sdkit.ok.jira"
+            ]
+          },
+          {
+            "id": "jira.fail",
+            "title": "✗ Jira bağlantısı eksik veya çalışmıyor",
+            "description": "Görevlerin Jira'da oluşturulması ve spec'in Jira ile eşleşmesi için gerekir.\n[Bilgileri gir](command:sdkit.fix?%5B%22connect%22%5D)",
+            "media": {
+              "markdown": "media/jira.md"
+            },
+            "when": "sdkit.checked && sdkit.fail.jira",
+            "completionEvents": [
+              "onContext:sdkit.never"
+            ]
+          },
+          {
+            "id": "bitbucket.ok",
+            "title": "✓ Bitbucket bağlantısı çalışıyor",
+            "description": "Hazırlanan spec'in Tech Lead'e pull request olarak gitmesi için gerekir.",
+            "media": {
+              "markdown": "media/bitbucket.md"
+            },
+            "when": "sdkit.checked && sdkit.ok.bitbucket",
+            "completionEvents": [
+              "onContext:sdkit.ok.bitbucket"
+            ]
+          },
+          {
+            "id": "bitbucket.fail",
+            "title": "✗ Bitbucket bağlantısı eksik veya çalışmıyor",
+            "description": "Hazırlanan spec'in Tech Lead'e pull request olarak gitmesi için gerekir.\n[Bilgileri gir](command:sdkit.fix?%5B%22connect%22%5D)",
+            "media": {
+              "markdown": "media/bitbucket.md"
+            },
+            "when": "sdkit.checked && sdkit.fail.bitbucket",
+            "completionEvents": [
+              "onContext:sdkit.never"
+            ]
+          },
+          {
+            "id": "project.ok",
+            "title": "✓ Proje profili hazır",
+            "description": "Bunu Tech Lead'in doldurması gerekir; sizin işinizi engellemez.",
+            "media": {
+              "markdown": "media/project.md"
+            },
+            "when": "sdkit.checked && sdkit.ok.project",
+            "completionEvents": [
+              "onContext:sdkit.ok.project"
+            ]
+          },
+          {
+            "id": "project.fail",
+            "title": "✗ Proje profili doldurulmamış",
+            "description": "Bunu Tech Lead'in doldurması gerekir; sizin işinizi engellemez.",
+            "media": {
+              "markdown": "media/project.md"
+            },
+            "when": "sdkit.checked && sdkit.fail.project",
+            "completionEvents": [
+              "onContext:sdkit.never"
+            ]
+          },
+          {
+            "id": "start",
+            "title": "Spec yazmaya başlayın",
+            "description": "Hazırlık bitince Specler listesinden devam edin.\n[Specleri göster](command:sdkit.specs.focus)\n[Hazırlığı yeniden denetle](command:sdkit.refresh)",
+            "media": {
+              "markdown": "media/start.md"
+            },
+            "when": "sdkit.checked",
+            "completionEvents": [
+              "onContext:sdkit.never"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "scripts": {
+    "compile": "tsc -p .",
+    "test": "tsc -p . && node --test \"out/test/*.test.js\""
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/vscode": "^1.90.0",
+    "typescript": "^5.6.0"
+  }
+}
