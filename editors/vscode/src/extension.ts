@@ -5,7 +5,7 @@ import { Session } from './session';
 import { Stepper } from './steps';
 import { actionTitle, Entry, Page, pagePath, render } from './transcript';
 import { sdkitJson, sdkitJsonWithInput, sdkitJsonWithText } from './cli';
-import { planFix } from './fixes';
+import { Agent, agentName, planFix } from './fixes';
 import { Connection, ConnectionInput, ConnectResult, describeResult, fields } from './connect';
 import { execFile } from 'child_process';
 import { blockers, PRESPEC_TEMPLATE, specActions, validSpecId, CHECKS, failingChecks, needsAttention, groupHealth, groupSpecs, healthSummary, HealthDoc, HealthItem, SpecItem, whereIs } from './model';
@@ -145,12 +145,22 @@ export function activate(ctx: vscode.ExtensionContext) {
 
   const folder = () => vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   const binary = () => vscode.workspace.getConfiguration('sdkit').get<string>('binaryPath') || 'sdkit';
+  const agent = (): Agent => (vscode.workspace.getConfiguration('sdkit').get<string>('agent') === 'codex' ? 'codex' : 'claude');
+  /** The host the kit checks and drives: an explicit command (tests) wins over the chosen agent. */
+  const hostArg = () => vscode.workspace.getConfiguration('sdkit').get<string>('hostCommand') || agent();
+  async function chooseAgent(): Promise<boolean> {
+    const pick = await vscode.window.showQuickPick(
+      [{ label: 'Claude Code', description: 'Spec üretimi bu ajanla çalışır', id: 'claude' }, { label: 'Codex', description: 'Kurulum ve denetim hazır; spec üretimi henüz yok', id: 'codex' }],
+      { title: 'Hangi yapay zekâ ajanıyla çalışacaksınız?', placeHolder: agentName(agent()) });
+    if (!pick) return false;
+    await vscode.workspace.getConfiguration('sdkit').update('agent', pick.id, vscode.ConfigurationTarget.Global);
+    return true;
+  }
   async function refresh() {
     const cwd = folder();
     if (!cwd) return;
-    const host = vscode.workspace.getConfiguration('sdkit').get<string>('hostCommand');
     try {
-      const h = await sdkitJson<HealthDoc>(binary(), cwd, ['health'], host ? ['--host', host] : []);
+      const h = await sdkitJson<HealthDoc>(binary(), cwd, ['health'], ['--host', hostArg()]);
       lastHealth = h;
       setContexts(h);
       health.set(healthNodes(h));
@@ -192,7 +202,8 @@ export function activate(ctx: vscode.ExtensionContext) {
   }
 
   async function fix(key: string) {
-    const plan = planFix(key, { hasNpm: await hasNpm() });
+    if (key === 'init-project' && !(await chooseAgent())) return; // the setup depends on the agent: ask first
+    const plan = planFix(key, { hasNpm: await hasNpm(), agent: agent(), binary: binary(), win32: process.platform === 'win32' });
     if (!plan) return;
     if (plan.kind === 'connect') return connect();
     if (plan.kind === 'link') {
@@ -211,6 +222,11 @@ export function activate(ctx: vscode.ExtensionContext) {
     const cwd = folder();
     if (!cwd) return void vscode.window.showErrorMessage('Önce proje klasörünü açın.');
     if (session) return void vscode.window.showWarningMessage('Bir çalışma sürüyor; önce onu durdurun.');
+    if (agent() === 'codex' && !vscode.workspace.getConfiguration('sdkit').get<string>('hostCommand')) {
+      const c = await vscode.window.showWarningMessage('Spec üretimi şu an yalnızca Claude Code ile çalışıyor. Codex için kurulum ve denetim hazır, çalıştırma henüz yok.', 'Claude Code\'a geç');
+      if (c && await chooseAgent()) void refresh();
+      return;
+    }
     // the agent would not find the kit's skills and would offer to write the spec by hand, with none of the kit's checks
     const stop = lastHealth ? blockers(lastHealth) : [];
     if (stop.length) {
@@ -311,7 +327,7 @@ export function activate(ctx: vscode.ExtensionContext) {
       void openWelcome();
     }
   });
-  ctx.subscriptions.push(vscode.commands.registerCommand('sdkit.refresh', refresh), vscode.commands.registerCommand('sdkit.connect', connect), vscode.commands.registerCommand('sdkit.fix', fix));
+  ctx.subscriptions.push(vscode.commands.registerCommand('sdkit.refresh', refresh), vscode.commands.registerCommand('sdkit.connect', connect), vscode.commands.registerCommand('sdkit.chooseAgent', async () => { if (await chooseAgent()) void refresh(); }), vscode.commands.registerCommand('sdkit.fix', fix));
 
   const asker = {
     async pick(item: QuestionItem) {

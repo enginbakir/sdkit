@@ -63,16 +63,16 @@ export function groupSpecs(specs: SpecItem[]): Group<SpecItem>[] {
 }
 
 /** Every check the welcome screen shows, in its order. The names are `Item.Check` of the kit (internal/ui/health.go). */
-export const CHECKS = ['setup', 'claude', 'claude-login', 'openspec', 'jira', 'bitbucket', 'project'] as const;
+export const CHECKS = ['setup', 'agent', 'agent-login', 'openspec', 'jira', 'bitbucket', 'project'] as const;
 export type Check = (typeof CHECKS)[number];
 
 /**
- * The checks that fail: an item with the check's name that is a problem or a todo. Without Claude Code there is nothing to log in
+ * The checks that fail: an item with the check's name that is a problem or a todo. Without the agent there is nothing to log in
  * to, so a missing install fails the login too (the kit reports only the install then).
  */
 export function failingChecks(d: HealthDoc): Set<string> {
   const f = new Set(d.items.filter(i => i.check && (i.level === 'problem' || i.level === 'todo')).map(i => i.check as string));
-  if (f.has('claude')) f.add('claude-login');
+  if (f.has('agent')) f.add('agent-login');
   return f;
 }
 
@@ -114,13 +114,13 @@ export const PRESPEC_TEMPLATE = `# Ön-spec
 `;
 
 /** The checks without which a run cannot work: the agent would not find the skills or the tools (it then offers to write by hand, and the kit's gates do not run). */
-export const BLOCKING: readonly Check[] = ['setup', 'claude', 'claude-login', 'openspec'];
+export const BLOCKING: readonly Check[] = ['setup', 'agent', 'agent-login', 'openspec'];
 
 export function blockers(d: HealthDoc): { check: string; title: string }[] {
   const failing = failingChecks(d);
   return BLOCKING.filter(c => failing.has(c)).map(c => ({
     check: c,
     title: d.items.find(i => i.check === c && (i.level === 'problem' || i.level === 'todo'))?.title
-      ?? { 'claude-login': "Claude Code'a giriş yapılmamış", claude: 'Claude Code kurulu değil' }[c as string] ?? c,
+      ?? { 'agent-login': "Ajana giriş yapılmamış", agent: 'Ajan kurulu değil' }[c as string] ?? c,
   }));
 }

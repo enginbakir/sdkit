@@ -45,9 +45,9 @@ test('specs are grouped by who acts next, empty groups left out', () => {
 
 import { failingChecks, needsAttention } from '../model';
 
-test('a missing Claude Code install fails the login check as well', () => {
-  const f = failingChecks({ ready: false, items: [{ level: 'problem', title: 'x', check: 'claude' }, { level: 'ok', title: 'y', check: 'jira' }] });
-  assert.deepEqual([...f].sort(), ['claude', 'claude-login']);
+test('a missing agent install fails the login check as well', () => {
+  const f = failingChecks({ ready: false, items: [{ level: 'problem', title: 'x', check: 'agent' }, { level: 'ok', title: 'y', check: 'jira' }] });
+  assert.deepEqual([...f].sort(), ['agent', 'agent-login']);
 });
 
 test('only what the person must do opens the welcome screen, not the Tech Lead\'s share', () => {
@@ -75,9 +75,9 @@ import { blockers } from '../model';
 test('a run is blocked by setup, Claude Code and OpenSpec, not by Jira or the Tech Lead\'s profile', () => {
   const d = { ready: false, items: [
     { level: 'problem', title: 'kurulum eksik', check: 'setup' }, { level: 'todo', title: 'jira', check: 'jira' },
-    { level: 'problem', title: 'project', check: 'project', soft: true }, { level: 'problem', title: 'claude yok', check: 'claude' },
+    { level: 'problem', title: 'project', check: 'project', soft: true }, { level: 'problem', title: 'claude yok', check: 'agent' },
   ] };
-  assert.deepEqual(blockers(d).map(b => b.check), ['setup', 'claude', 'claude-login']);
-  assert.equal(blockers(d)[2].title, "Claude Code'a giriş yapılmamış");
+  assert.deepEqual(blockers(d).map(b => b.check), ['setup', 'agent', 'agent-login']);
+  assert.equal(blockers(d)[2].title, "Ajana giriş yapılmamış");
   assert.deepEqual(blockers({ ready: true, items: [] }), []);
 });

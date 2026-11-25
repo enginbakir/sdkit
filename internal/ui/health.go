@@ -29,8 +29,9 @@ const FixConnect = "connect"
 // extension does; the web panel only offers FixConnect).
 const (
 	FixInstallOpenSpec = "install-openspec"
-	FixInstallClaude   = "install-claude"
-	FixLoginClaude     = "login-claude"
+	FixInstallAgent    = "install-agent" // the agent host (Claude Code, Codex): which one is the page's to know
+	FixLoginAgent      = "login-agent"
+	FixInitProject     = "init-project" // `sdkit init` for this machine: the kit's files and skills
 )
 
 // Item is one line of the Health screen.
@@ -39,7 +40,7 @@ type Item struct {
 	Title string `json:"title"`          // what is wrong or fine, in plain words
 	Help  string `json:"help,omitempty"` // what to do
 	Fix   string `json:"fix,omitempty"`
-	// Check names what was checked (claude, claude-login, openspec, jira, bitbucket, project, setup), so a page can tell which
+	// Check names what was checked (agent, agent-login, openspec, jira, bitbucket, project, setup), so a page can tell which
 	// check failed without reading the words of the title. A check fails when an item with its name is a problem or a todo.
 	Check string `json:"check,omitempty"`
 	Raw   string `json:"raw,omitempty"` // the original `sdkit doctor` line, under "details"
@@ -79,8 +80,9 @@ var rules = []rule{
 	{regexp.MustCompile(`(?i)bitbucket (api )?token|bitbucket account|BITBUCKET_|Bitbucket (rejected|not reachable)`), "Bitbucket bağlantısı eksik veya çalışmıyor", "Configuration sayfasında Bitbucket bilgilerini girin.", FixConnect, LevelTodo, false, "bitbucket"},
 	{regexp.MustCompile(`project\.md still has TODO`), "Proje profili (project.md) doldurulmamış", "Bunu Tech Lead'in doldurması gerekir.", "", LevelProblem, true, "project"},
 	{regexp.MustCompile(`openspec CLI`), "OpenSpec kurulu değil", "Spec üretimi için gerekli. Teknik ekipten kurmasını isteyin.", FixInstallOpenSpec, LevelProblem, false, "openspec"},
+	{regexp.MustCompile(`no sdkit\.env|\.sdkit/[A-Za-z.\-]+ missing|run sdkit init`), "Bu klasörde kurulum yapılmamış", "Kurulum bir kez yapılır; düğme gerekenleri bu bilgisayara kurar.", FixInitProject, LevelProblem, false, "setup"},
 	{regexp.MustCompile(`not a git repository`), "Bu klasör bir git deposu değil", "sdkit'i deponun içinden başlatın.", "", LevelProblem, false, "setup"},
-	{regexp.MustCompile(`settings\.local\.json .*missing`), "Bu bilgisayarda kurulum tamamlanmamış", "Teknik ekipten bu depoda `sdkit init` çalıştırmasını isteyin.", "", LevelProblem, false, "setup"},
+	{regexp.MustCompile(`settings\.local\.json .*missing`), "Bu bilgisayarda kurulum tamamlanmamış", "Teknik ekipten bu depoda `sdkit init` çalıştırmasını isteyin.", FixInitProject, LevelProblem, false, "setup"},
 }
 
 var doctorLine = regexp.MustCompile(`^\s*(ok|warn|FAIL|TODO\s+\d+\.)\s+(.*)$`)
@@ -155,25 +157,43 @@ func Health(ctx context.Context, root string, getenv func(string) string, host s
 	return items
 }
 
-// hostItem checks the agent host the panel drives. Only Claude Code has a login check; another host is reported as present or not.
+// hostName is how the person knows the agent host, and the word that carries its Turkish case ending.
+func hostName(host string) (name, to string) {
+	switch host {
+	case "claude":
+		return "Claude Code", "Claude Code'a"
+	case "codex":
+		return "Codex", "Codex'e"
+	}
+	return host, host + " için"
+}
+
+// hostItem checks the agent host the run drives: installed, and logged in where the host has a login check (Claude Code and Codex);
+// another host is reported as present or not.
 func hostItem(ctx context.Context, host string) []Item {
 	if host == "" {
 		host = "claude"
 	}
+	name, to := hostName(host)
 	if _, err := proc.LookPath(host); err != nil {
-		return []Item{{Level: LevelProblem, Main: true, Check: "claude", Title: "Claude Code kurulu değil", Help: "Spec üretimi Claude Code ile çalışır. Teknik ekipten kurmasını isteyin.", Fix: FixInstallClaude}}
+		return []Item{{Level: LevelProblem, Main: true, Check: "agent", Title: name + " kurulu değil", Help: "Spec üretimi " + name + " ile çalışır. Teknik ekipten kurmasını isteyin.", Fix: FixInstallAgent}}
 	}
-	if host != "claude" {
-		return []Item{{Level: LevelOK, Title: host + " kurulu", Main: true}}
+	login := map[string][]string{"claude": {"auth", "status"}, "codex": {"login", "status"}}[host]
+	if login == nil {
+		return []Item{{Level: LevelOK, Title: host + " kurulu", Main: true, Check: "agent"}}
 	}
 	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
-	out, err := exec.CommandContext(ctx, host, "auth", "status").Output()
-	var st struct {
-		LoggedIn bool `json:"loggedIn"`
+	out, err := exec.CommandContext(ctx, host, login...).Output()
+	in := err == nil
+	if host == "claude" { // its status is JSON, and an exit code of 0 does not say the person is logged in
+		var st struct {
+			LoggedIn bool `json:"loggedIn"`
+		}
+		in = err == nil && json.Unmarshal(out, &st) == nil && st.LoggedIn
 	}
-	if err != nil || json.Unmarshal(out, &st) != nil || !st.LoggedIn {
-		return []Item{{Level: LevelProblem, Main: true, Check: "claude-login", Title: "Claude Code'a giriş yapılmamış", Help: "Teknik ekipten bu bilgisayarda Claude Code'a giriş yapmasını isteyin.", Fix: FixLoginClaude}}
+	if !in {
+		return []Item{{Level: LevelProblem, Main: true, Check: "agent-login", Title: to + " giriş yapılmamış", Help: "Teknik ekipten bu bilgisayarda " + to + " giriş yapmasını isteyin.", Fix: FixLoginAgent}}
 	}
-	return []Item{{Level: LevelOK, Title: "Claude Code hazır", Main: true, Check: "claude-login"}}
+	return []Item{{Level: LevelOK, Title: name + " hazır", Main: true, Check: "agent-login"}}
 }

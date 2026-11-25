@@ -14,7 +14,9 @@
   ],
   "main": "./out/extension.js",
   "activationEvents": [
-    "workspaceContains:.sdkit/sdkit.env"
+    "workspaceContains:.sdkit/sdkit.env",
+    "onView:sdkit.health",
+    "onView:sdkit.specs"
   ],
   "contributes": {
     "commands": [
@@ -84,6 +86,11 @@
         "command": "sdkit.answerPending",
         "title": "Bekleyen soruyu cevapla",
         "category": "SDKit"
+      },
+      {
+        "command": "sdkit.chooseAgent",
+        "title": "Yapay zekâ ajanını seç",
+        "category": "SDKit"
       }
     ],
     "viewsContainers": {
@@ -128,11 +135,25 @@
           "type": "boolean",
           "default": false,
           "description": "Ajanın çalıştırdığı komutları da Output kanalında göster (geliştiriciler için)."
+        },
+        "sdkit.agent": {
+          "type": "string",
+          "enum": [
+            "claude",
+            "codex"
+          ],
+          "default": "claude",
+          "description": "Çalışırken kullanılacak yapay zekâ ajanı. Spec üretimi şu an yalnızca Claude Code ile çalışır."
         }
       }
     },
     "menus": {
       "view/title": [
+        {
+          "command": "sdkit.chooseAgent",
+          "when": "view == sdkit.health",
+          "group": "navigation@3"
+        },
         {
           "command": "sdkit.newSpec",
           "when": "view == sdkit.specs",
@@ -206,7 +227,7 @@
           },
           {
             "id": "setup.ok",
-            "title": "✓ Bu klasörde kurulum tamamlanmış",
+            "title": "✓ Bu klasörde kurulum tamam",
             "description": "Bu klasörde sdkit kurulumu eksik. Teknik ekipten `sdkit init` çalıştırmasını isteyin.",
             "media": {
               "markdown": "media/setup.md"
@@ -218,8 +239,8 @@
           },
           {
             "id": "setup.fail",
-            "title": "✗ Bu klasörde kurulum tamamlanmamış",
-            "description": "Bu klasörde sdkit kurulumu eksik. Teknik ekipten `sdkit init` çalıştırmasını isteyin.",
+            "title": "✗ Bu klasörde kurulum yapılmamış",
+            "description": "Spec-Driven Kit'in bu klasörde çalışması için bir kez kurulması gerekir. Düğme gerekenleri sizin yerinize kurar.\n[Kurulumu başlat](command:sdkit.fix?%5B%22init-project%22%5D)",
             "media": {
               "markdown": "media/setup.md"
             },
@@ -229,49 +250,49 @@
             ]
           },
           {
-            "id": "claude.ok",
-            "title": "✓ Claude Code kurulu",
+            "id": "agent.ok",
+            "title": "✓ Yapay zekâ ajanı kurulu",
             "description": "Spec'leri yazan yapay zekâ ajanı Claude Code ile çalışır.",
             "media": {
-              "markdown": "media/claude.md"
+              "markdown": "media/agent.md"
             },
-            "when": "sdkit.checked && sdkit.ok.claude",
+            "when": "sdkit.checked && sdkit.ok.agent",
             "completionEvents": [
-              "onContext:sdkit.ok.claude"
+              "onContext:sdkit.ok.agent"
             ]
           },
           {
-            "id": "claude.fail",
-            "title": "✗ Claude Code kurulu değil",
-            "description": "Spec'leri yazan yapay zekâ ajanı Claude Code ile çalışır.\n[Claude Code'u kur](command:sdkit.fix?%5B%22install-claude%22%5D)",
+            "id": "agent.fail",
+            "title": "✗ Yapay zekâ ajanı kurulu değil",
+            "description": "Spec'leri yazan ajan (Claude Code ya da Codex) bu bilgisayarda kurulu olmalı.\n[Ajanı kur](command:sdkit.fix?%5B%22install-agent%22%5D)\n[Hangi ajan?](command:sdkit.chooseAgent)",
             "media": {
-              "markdown": "media/claude.md"
+              "markdown": "media/agent.md"
             },
-            "when": "sdkit.checked && sdkit.fail.claude",
+            "when": "sdkit.checked && sdkit.fail.agent",
             "completionEvents": [
               "onContext:sdkit.never"
             ]
           },
           {
-            "id": "claude-login.ok",
-            "title": "✓ Claude Code'a giriş yapılmış",
+            "id": "agent-login.ok",
+            "title": "✓ Ajana giriş yapılmış",
             "description": "Ajanın çalışabilmesi için bu bilgisayarda Claude hesabınızla giriş yapmalısınız.",
             "media": {
-              "markdown": "media/claude-login.md"
+              "markdown": "media/agent-login.md"
             },
-            "when": "sdkit.checked && sdkit.ok.claude-login",
+            "when": "sdkit.checked && sdkit.ok.agent-login",
             "completionEvents": [
-              "onContext:sdkit.ok.claude-login"
+              "onContext:sdkit.ok.agent-login"
             ]
           },
           {
-            "id": "claude-login.fail",
-            "title": "✗ Claude Code'a giriş yapılmamış",
-            "description": "Ajanın çalışabilmesi için bu bilgisayarda Claude hesabınızla giriş yapmalısınız.\n[Giriş yap](command:sdkit.fix?%5B%22login-claude%22%5D)",
+            "id": "agent-login.fail",
+            "title": "✗ Ajana giriş yapılmamış",
+            "description": "Ajanın çalışabilmesi için bu bilgisayarda hesabınızla giriş yapmalısınız.\n[Giriş yap](command:sdkit.fix?%5B%22login-agent%22%5D)",
             "media": {
-              "markdown": "media/claude-login.md"
+              "markdown": "media/agent-login.md"
             },
-            "when": "sdkit.checked && sdkit.fail.claude-login",
+            "when": "sdkit.checked && sdkit.fail.agent-login",
             "completionEvents": [
               "onContext:sdkit.never"
             ]
