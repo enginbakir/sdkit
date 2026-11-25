@@ -1,3 +1,4 @@
+import * as os from 'os';
 import * as vscode from 'vscode';
 import { Out, QuestionItem } from './protocol';
 import { collect } from './questions';
@@ -144,7 +145,11 @@ export function activate(ctx: vscode.ExtensionContext) {
   ctx.subscriptions.push(healthTree.onDidChangeVisibility(e => { if (e.visible) maybeWelcome(); }), vscode.commands.registerCommand('sdkit.welcome', openWelcome));
 
   const folder = () => vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-  const binary = () => vscode.workspace.getConfiguration('sdkit').get<string>('binaryPath') || 'sdkit';
+  /** The configured binary; `~` is the home folder (a shell would expand it, a spawned process does not). */
+  const binary = () => {
+    const p = (vscode.workspace.getConfiguration('sdkit').get<string>('binaryPath') ?? '').trim();
+    return !p ? 'sdkit' : p.startsWith('~/') ? os.homedir() + p.slice(1) : p;
+  };
   const agent = (): Agent => (vscode.workspace.getConfiguration('sdkit').get<string>('agent') === 'codex' ? 'codex' : 'claude');
   /** The host the kit checks and drives: an explicit command (tests) wins over the chosen agent. */
   const hostArg = () => vscode.workspace.getConfiguration('sdkit').get<string>('hostCommand') || agent();
@@ -185,7 +190,9 @@ export function activate(ctx: vscode.ExtensionContext) {
       specsView.set(specNodes(specList));
     } catch (e) {
       const err = describeCliError((e as Error).message);
-      health.set([{ kind: 'row', label: err.title, icon: 'error', fix: err.fix, tip: String((e as Error).message) }]);
+      // which binary was tried is the first thing to know: an old one found on PATH and a wrong path look alike otherwise
+      const used = binary() === 'sdkit' ? "PATH'teki sdkit (ayar boş)" : binary();
+      health.set([{ kind: 'row', label: err.title, icon: 'error', fix: err.fix, description: used, tip: `Denenen: ${used}\n\n${String((e as Error).message)}` }]);
     }
   }
 
