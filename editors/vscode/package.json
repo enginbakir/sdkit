@@ -4,7 +4,6 @@
   "description": "Write, review and publish specs with an AI agent, without a terminal.",
   "publisher": "sdkit",
   "version": "0.0.1",
-  "private": true,
   "license": "MIT",
   "engines": {
     "vscode": "^1.90.0"
@@ -417,5 +416,10 @@
     "@types/node": "^22.0.0",
     "@types/vscode": "^1.90.0",
     "typescript": "^5.6.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/wecii/sdkit.git",
+    "directory": "editors/vscode"
   }
 }
