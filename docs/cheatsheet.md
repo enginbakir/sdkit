@@ -77,6 +77,7 @@ sdkit usage prices                    # which price table is in force (pricing.j
 sdkit usage budget [slug]            # usage against TOKEN_BUDGET_TASK (exit 3 warning, 4 exceeded)
 sdkit usage context [transcript]     # which tool results a session carried and what carrying them cost (Claude Code)
 sdkit ui [--no-open] [--host <cmd>]  # local panel for non-technical roles (docs/design-ui.md); `sdkit ui ask` is the question bridge used inside its sessions
+sdkit ext run <action> <id> | health | specs | spec <id> | connection | prespec <id> | sync   # JSON lines for the VS Code extension (docs/design-vscode.md); no server
 sdkit capped -- <command>            # run tests/builds; keep failures + tail in the session, full log in work/<slug>/out/
 sdkit telemetry summary [slug] [--json]  # run summary: phase/agent durations, tokens (measured/total), retries, failures, verification (needs TELEMETRY=1)
 sdkit telemetry archive <slug>         # before closeout: move the events under work/_archive/

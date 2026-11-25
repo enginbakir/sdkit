@@ -6,7 +6,7 @@
 
 **Make your coding agent follow a real engineering process, enforced by code instead of left to its good intentions.**
 
-![Version 2.4.0](https://img.shields.io/badge/version-2.4.0-blue)
+![Version 3.0.0](https://img.shields.io/badge/version-3.0.0-blue)
 ![License: MIT](https://img.shields.io/badge/license-MIT-blue)
 ![Claude Code](https://img.shields.io/badge/Claude%20Code-supported-informational)
 ![Codex](https://img.shields.io/badge/Codex-supported-informational)
@@ -480,7 +480,7 @@ Configured in `.sdkit/sdkit.local.env`. Cost, budget, routing and telemetry feat
 | `sdkit hook`, `guard` | Called by the hosts and git hooks, not by hand |
 | `sdkit dev adapters`, `sdkit dev scan` | Maintainers: regenerate the role files, check the tree is safe to publish |
 
-45 subcommands in all (`sdkit help`); the one-line usage of each is `sdkit <command>` with no arguments, the full list is in [docs/guide.md](docs/guide.md) §9.
+46 subcommands in all (`sdkit help`); the one-line usage of each is `sdkit <command>` with no arguments, the full list is in [docs/guide.md](docs/guide.md) §9.
 
 ---
 

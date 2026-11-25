@@ -23,6 +23,12 @@ To see whether you are up to date: `<project-dir>/.scaffold-version` is the kit 
 
 There is no `<kit>/bin/upgrade.sh` any more: the kit is one binary and a checkout of it is not needed.
 
+## 2.3.1 -> 3.0.0: the VS Code extension
+
+No manual step. New: the **Spec-Driven Kit** extension for VS Code (`editors/vscode`, id `sdkit.sdkit`; [design-vscode.md](design-vscode.md)) does what the `sdkit ui` panel does with native parts instead of a web page: a Readiness view and a welcome walkthrough that check what is set up (agent, OpenSpec, Jira, Bitbucket) and fix it with one button, the Connect form, the specs list by who acts next, new pre-spec, a run shown as a live page with the agent's questions as pick lists, editing a spec in the editor and sending it, and a copy kept current with the server by fast-forward only (no git commands for the person). It needs this version of `sdkit` (`brew upgrade sdkit` / `scoop update sdkit`): the extension talks to the new `sdkit ext` command and says so when the installed `sdkit` does not have it. Install the `.vsix` from the release page. Also new since 2.3.1 (2.4.0 was never tagged): `generate-design`, a BPMN process flow for the designer.
+
+Things to know: running a spec with Codex is not built yet (setup and checks are); the extension sets a project up with `sdkit init --mode copy`, so the skills are copied into the repo (git-ignored) instead of coming from the Claude Code plugin; `sdkit ext` reads and writes only what the panel did and is not a stable interface for other tools.
+
 ## 2.3.0 -> 2.3.1: the panel grows up
 
 No manual step. `sdkit ui` is much more than the three screens of 2.3.0: a sidebar layout in a dark console look; a page per spec with a six-stage flow bar, what was done, what can be done now, and its files in a browser editor (hand edits, the pre-spec included); starting a change on an approved spec and continuing after hand edits; the tasks screen with the plan gate (Jira parent checked in Jira, the version listed from `main`); update and merge entries; Reports (tokens and estimated cost per session and per spec); "continue" resumes the earlier host session; several specs run at once, each in its own git worktree (`../<repo>-wt/spec/<id>`, up to 3 runs; see [design-ui.md](design-ui.md)); and questions that used to go missing (an apostrophe breaking the command, the host's two-minute command limit, a question with no owner) now reach the page.

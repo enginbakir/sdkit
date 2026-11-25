@@ -7,7 +7,7 @@ Orientation: `README.md` (overview), `docs/guide.md` (full guide), `CONTRIBUTING
 
 ## Layout
 
-Go module `github.com/wecii/sdkit`. `cmd/sdkit/` is dispatch only (one file per command, registered in `init()`); the logic is in `internal/<package>` (one package per command family; `internal/hook` has one file per guard; `internal/stack` one file per stack). `kit.go` embeds `core skills agents adapters stacks templates`, so the binary is the whole kit; those directories also stay in the repo as real files (the Claude Code plugin installs from git). Test data in `testdata/`, the Windows smoke script in `tests/windows-smoke.ps1`. The design is in `docs/go-port/` (`01-architecture.md` has the package map).
+Go module `github.com/wecii/sdkit`. `cmd/sdkit/` is dispatch only (one file per command, registered in `init()`); the logic is in `internal/<package>` (one package per command family; `internal/hook` has one file per guard; `internal/stack` one file per stack). `kit.go` embeds `core skills agents adapters stacks templates`, so the binary is the whole kit; those directories also stay in the repo as real files (the Claude Code plugin installs from git). `editors/vscode/` is the VS Code extension (TypeScript, `npm test`; `docs/design-vscode.md`); it only drives `sdkit ext`, the logic stays in Go. Test data in `testdata/`, the Windows smoke script in `tests/windows-smoke.ps1`. The design is in `docs/go-port/` (`01-architecture.md` has the package map).
 
 ## Rules for working here
 

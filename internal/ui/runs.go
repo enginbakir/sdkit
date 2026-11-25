@@ -342,3 +342,6 @@ func (s *Server) info(w http.ResponseWriter, r *http.Request) {
 		"user":   ReadConnection(s.cfg.Dir).JiraUser,
 	})
 }
+
+// TouchesSpecFiles reports whether the action writes the spec's files, so its run needs the spec's own tree.
+func TouchesSpecFiles(action string) bool { return touchesSpecFiles(action) }
