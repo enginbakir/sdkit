@@ -8,7 +8,7 @@ import { sdkitJson, sdkitJsonWithInput, sdkitJsonWithText } from './cli';
 import { Agent, agentName, planFix } from './fixes';
 import { Connection, ConnectionInput, ConnectResult, describeResult, fields } from './connect';
 import { execFile } from 'child_process';
-import { blocked, fileItems, menu, sendActions, SpecDetail, FileItem, staleBeforeRun, SyncResult, syncNotice, blockers, PRESPEC_TEMPLATE, validSpecId, CHECKS, failingChecks, needsAttention, groupHealth, groupSpecs, healthSummary, HealthDoc, HealthItem, SpecItem, whereIs } from './model';
+import { describeCliError, blocked, fileItems, menu, sendActions, SpecDetail, FileItem, staleBeforeRun, SyncResult, syncNotice, blockers, PRESPEC_TEMPLATE, validSpecId, CHECKS, failingChecks, needsAttention, groupHealth, groupSpecs, healthSummary, HealthDoc, HealthItem, SpecItem, whereIs } from './model';
 
 
 class StepsView implements vscode.TreeDataProvider<string> {
@@ -184,7 +184,8 @@ export function activate(ctx: vscode.ExtensionContext) {
       specList = await sdkitJson<SpecItem[]>(binary(), cwd, ['specs']);
       specsView.set(specNodes(specList));
     } catch (e) {
-      health.set([{ kind: 'row', label: `sdkit çalıştırılamadı: ${(e as Error).message}`, icon: 'error' }]);
+      const err = describeCliError((e as Error).message);
+      health.set([{ kind: 'row', label: err.title, icon: 'error', fix: err.fix, tip: String((e as Error).message) }]);
     }
   }
 
@@ -223,6 +224,10 @@ export function activate(ctx: vscode.ExtensionContext) {
     const plan = planFix(key, { hasNpm: await hasNpm(), agent: agent(), binary: binary(), win32: process.platform === 'win32' });
     if (!plan) return;
     if (plan.kind === 'connect') return connect();
+    if (plan.kind === 'settings') {
+      vscode.window.showInformationMessage(plan.why);
+      return void vscode.commands.executeCommand('workbench.action.openSettings', plan.query);
+    }
     if (plan.kind === 'link') {
       vscode.window.showInformationMessage(plan.why);
       return void vscode.env.openExternal(vscode.Uri.parse(plan.url));

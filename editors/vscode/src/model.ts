@@ -191,3 +191,15 @@ export function syncNotice(r: SyncResult): { text: string; level: 'info' | 'warn
 
 /** A run on a copy that could not be brought up to date works on old state: the person decides, with the reason in front of them. */
 export const staleBeforeRun = (r: SyncResult | undefined) => !!r && (r.state === 'dirty' || r.state === 'diverged');
+
+/**
+ * What a failed call of the binary means for the person. An older sdkit (it has no `ext`) and a missing one both end at the same
+ * place, the binary setting, so that is the fix offered; any other error is shown as the binary said it.
+ */
+export function describeCliError(message: string): { title: string; fix?: string } {
+  if (/unknown command ['"`]?ext/i.test(message)) {
+    return { title: 'Kurulu sdkit çok eski: bu eklenti sdkit 2.4 ya da yenisini ister', fix: 'binary-setting' };
+  }
+  if (/ENOENT|not found|bulunamad/i.test(message)) return { title: 'sdkit bulunamadı', fix: 'binary-setting' };
+  return { title: `sdkit çalıştırılamadı: ${message}` };
+}

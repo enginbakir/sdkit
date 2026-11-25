@@ -121,3 +121,11 @@ test('files are listed by group, each saying whether it can be edited', () => {
   const l = fileItems(detail({ files: [{ path: 'prespec/a.md', group: 'Ön-spec', editable: true }, { path: 'specs/a/spec.md', group: 'Spec', editable: false }] }));
   assert.deepEqual(l.map(x => [x.label, x.separator ? 'group' : x.description]), [['Ön-spec', 'group'], ['a.md', 'düzenlenebilir'], ['Spec', 'group'], ['spec.md', 'salt okunur']]);
 });
+
+import { describeCliError } from '../model';
+
+test('an old or missing sdkit points to the binary setting, any other error is shown as it is', () => {
+  assert.equal(describeCliError("sdkit: unknown command 'ext' (try: sdkit help)").fix, 'binary-setting');
+  assert.equal(describeCliError('Error: spawn sdkit ENOENT').fix, 'binary-setting');
+  assert.deepEqual(describeCliError('boom'), { title: 'sdkit çalıştırılamadı: boom' });
+});

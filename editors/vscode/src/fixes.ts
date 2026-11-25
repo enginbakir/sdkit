@@ -2,7 +2,8 @@
 export type FixPlan =
   | { kind: 'connect' }
   | { kind: 'terminal'; name: string; line: string }
-  | { kind: 'link'; url: string; why: string };
+  | { kind: 'link'; url: string; why: string }
+  | { kind: 'settings'; query: string; why: string };
 
 export type Agent = 'claude' | 'codex';
 export interface Env { hasNpm: boolean; agent: Agent; binary: string; win32?: boolean }
@@ -24,6 +25,8 @@ export function planFix(fix: string, env: Env): FixPlan | undefined {
   switch (fix) {
     case 'connect':
       return { kind: 'connect' };
+    case 'binary-setting':
+      return { kind: 'settings', query: 'sdkit.binaryPath', why: 'sdkit 2.4 ya da yenisinin yolunu yazın (örneğin /Users/<siz>/sdkit-dev/sdkit).' };
     case 'init-project':
       // copy mode puts the kit's skills in the repo, git-ignored: a run does not depend on a Claude Code plugin being fetched
       return { kind: 'terminal', name: 'SDKit kurulumu', line: command(env.binary, `init --env analyst --host ${env.agent} --mode copy --install-openspec`, env.win32) };
