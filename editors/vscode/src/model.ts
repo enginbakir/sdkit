@@ -197,9 +197,19 @@ export const staleBeforeRun = (r: SyncResult | undefined) => !!r && (r.state ===
  * place, the binary setting, so that is the fix offered; any other error is shown as the binary said it.
  */
 export function describeCliError(message: string): { title: string; fix?: string } {
+  const launch = /^LAUNCH:([a-z-]+):(.*)$/s.exec(message);
+  if (launch) {
+    const [, kind, what] = launch;
+    switch (kind) {
+      case 'cwd': return { title: 'Açık klasör bulunamadı', fix: undefined };
+      case 'missing': return { title: `Bu yolda sdkit yok: ${what}`, fix: 'binary-setting' };
+      case 'directory': return { title: `Bu yol bir klasör, dosya değil: ${what}`, fix: 'binary-setting' };
+      case 'not-executable': return { title: `sdkit dosyasının çalıştırma izni yok: ${what}`, fix: undefined };
+    }
+  }
   if (/unknown command ['"`]?ext/i.test(message)) {
     return { title: 'Kurulu sdkit çok eski: bu eklenti sdkit 2.4 ya da yenisini ister', fix: 'binary-setting' };
   }
-  if (/ENOENT|not found|bulunamad/i.test(message)) return { title: 'sdkit bulunamadı', fix: 'binary-setting' };
+  if (/\bspawn .+ ENOENT/.test(message)) return { title: 'sdkit başlatılamadı (dosya ya da klasör yok)', fix: 'binary-setting' };
   return { title: `sdkit çalıştırılamadı: ${message}` };
 }

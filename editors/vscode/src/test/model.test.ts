@@ -129,3 +129,15 @@ test('an old or missing sdkit points to the binary setting, any other error is s
   assert.equal(describeCliError('Error: spawn sdkit ENOENT').fix, 'binary-setting');
   assert.deepEqual(describeCliError('boom'), { title: 'sdkit çalıştırılamadı: boom' });
 });
+
+test('a message of sdkit itself that merely contains "not found" is not taken for a missing binary', () => {
+  assert.equal(describeCliError('sdkit ext: böyle bir spec bulunamadı').fix, undefined);
+  assert.equal(describeCliError('fatal: pathspec not found').fix, undefined);
+});
+
+test('a launch problem names what is missing: the file, the permission, or the open folder', () => {
+  assert.match(describeCliError('LAUNCH:missing:/x/sdkit').title, /Bu yolda sdkit yok: \/x\/sdkit/);
+  assert.match(describeCliError('LAUNCH:not-executable:/x/sdkit').title, /çalıştırma izni yok/);
+  assert.match(describeCliError('LAUNCH:cwd:/gone').title, /Açık klasör/);
+  assert.equal(describeCliError('LAUNCH:cwd:/gone').fix, undefined);
+});
