@@ -162,13 +162,16 @@ func textEvents(s string) []Event {
 // toolSummary is the one-line form of a tool call: the command for Bash, the path for file tools.
 func toolSummary(name string, input json.RawMessage) string {
 	var in struct {
-		Command  string `json:"command"`
-		FilePath string `json:"file_path"`
-		Path     string `json:"path"`
-		Pattern  string `json:"pattern"`
+		Command     string `json:"command"`
+		FilePath    string `json:"file_path"`
+		Path        string `json:"path"`
+		Pattern     string `json:"pattern"`
+		Description string `json:"description"` // a subagent's task: what it is for
+		Skill       string `json:"skill"`
 	}
 	json.Unmarshal(input, &in)
-	for _, v := range []string{in.Command, in.FilePath, in.Path, in.Pattern} {
+	// a subagent or a skill has no file or command; its description is what a person can follow
+	for _, v := range []string{in.Description, in.Skill, in.Command, in.FilePath, in.Path, in.Pattern} {
 		if v != "" {
 			if len(v) > 200 {
 				v = v[:200] + "..."

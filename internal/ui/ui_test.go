@@ -25,6 +25,8 @@ func TestParseLine(t *testing.T) {
 			[]Event{{Kind: KindText, Text: "Merhaba"}, {Kind: KindStep, Skill: "generate-specs", Step: 1, Total: 8, Name: "Girdiyi kontrol et", State: "done"}}},
 		{"tool call is a one-line summary", `{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Bash","input":{"command":"sdkit spec next x"}}]}}`,
 			[]Event{{Kind: KindTool, Name: "Bash", Text: "sdkit spec next x"}}},
+		{"a subagent call says what it is for, not a path", `{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Task","input":{"description":"Review the draft, round 1","subagent_type":"reviewer","prompt":"long text"}}]}}`,
+			[]Event{{Kind: KindTool, Name: "Task", Text: "Review the draft, round 1"}}},
 		{"error result is a failure", `{"type":"result","subtype":"error_max_turns","is_error":true,"result":""}`,
 			[]Event{{Kind: KindResult, Failed: true}}},
 		{"ok result carries no text, it was shown already", `{"type":"result","subtype":"success","result":"done"}`, []Event{{Kind: KindResult}}},
